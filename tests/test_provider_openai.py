@@ -419,6 +419,24 @@ def test_generic_api_error_message_is_secret_scrubbed():
     assert "BadRequestError" in msg  # class name + redaction marker still informative
 
 
+def test_model_id_is_scrubbed_in_error_message():
+    # A user who fat-fingers their API key into --to/--from must not have it echoed back:
+    # the model_id is scrubbed before it lands in the (otherwise key-safe) error message.
+    class BadRequestError(Exception):
+        pass
+
+    def _raise(**_):
+        raise BadRequestError("model does not exist")
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=_raise)))
+    adapter = OpenAIAdapter(client=client)
+    with pytest.raises(ProviderError) as exc_info:
+        adapter.run(_scenario(), "sk-proj-LEAKED1234567890")
+    msg = str(exc_info.value)
+    assert "LEAKED1234567890" not in msg
+    assert "[redacted]" in msg
+
+
 def test_non_list_tools_raises_provider_error():
     client = FakeClient(_response(_message(content="ok")))
     adapter = OpenAIAdapter(client=client)

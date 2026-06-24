@@ -84,48 +84,68 @@ runs:
 
     - name: Install Modelpin
       shell: bash
-      run: python -m pip install --upgrade pip && python -m pip install "${{ inputs.modelpin-spec }}"
+      env:
+        MP_SPEC: ${{ inputs.modelpin-spec }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "$MP_SPEC"
 
     - name: Record baseline (optional)
       if: ${{ inputs.baseline == 'true' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        # Pass every caller-controlled input as data through the environment — never
+        # interpolate it into the shell script text (prevents Actions script injection).
+        MP_FROM: ${{ inputs.from }}
+        MP_PROVIDER: ${{ inputs.provider }}
+        MP_CONFIG: ${{ inputs.config }}
+        MP_SCENARIOS_DIR: ${{ inputs.scenarios-dir }}
+        MP_RUNS: ${{ inputs.runs }}
       run: |
-        mp baseline \
-          ${{ inputs.from && format('--model "{0}"', inputs.from) || '' }} \
-          --provider "${{ inputs.provider }}" \
-          --config "${{ inputs.config }}" \
-          ${{ inputs.scenarios-dir && format('--scenarios-dir "{0}"', inputs.scenarios-dir) || '' }} \
-          ${{ inputs.runs && format('--runs {0}', inputs.runs) || '' }}
+        args=(--provider "$MP_PROVIDER" --config "$MP_CONFIG")
+        [ -n "$MP_FROM" ] && args+=(--model "$MP_FROM")
+        [ -n "$MP_SCENARIOS_DIR" ] && args+=(--scenarios-dir "$MP_SCENARIOS_DIR")
+        [ -n "$MP_RUNS" ] && args+=(--runs "$MP_RUNS")
+        mp baseline "${args[@]}"
 
     - name: Run mp check
       id: check
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        # Caller inputs flow as env data, never as inline script text (script-injection safe).
+        MP_TO: ${{ inputs.to }}
+        MP_FROM: ${{ inputs.from }}
+        MP_PROVIDER: ${{ inputs.provider }}
+        MP_MATCH: ${{ inputs.match }}
+        MP_CONFIG: ${{ inputs.config }}
+        MP_SCENARIOS_DIR: ${{ inputs.scenarios-dir }}
+        MP_RUNS: ${{ inputs.runs }}
+        MP_WORKDIR: ${{ inputs.working-directory }}
       run: |
         set +e
-        mp check \
-          --to "${{ inputs.to }}" \
-          ${{ inputs.from && format('--from "{0}"', inputs.from) || '' }} \
-          --provider "${{ inputs.provider }}" \
-          --match "${{ inputs.match }}" \
-          --config "${{ inputs.config }}" \
-          ${{ inputs.scenarios-dir && format('--scenarios-dir "{0}"', inputs.scenarios-dir) || '' }} \
-          ${{ inputs.runs && format('--runs {0}', inputs.runs) || '' }}
+        args=(--to "$MP_TO" --provider "$MP_PROVIDER" --match "$MP_MATCH" --config "$MP_CONFIG")
+        [ -n "$MP_FROM" ] && args+=(--from "$MP_FROM")
+        [ -n "$MP_SCENARIOS_DIR" ] && args+=(--scenarios-dir "$MP_SCENARIOS_DIR")
+        [ -n "$MP_RUNS" ] && args+=(--runs "$MP_RUNS")
+        mp check "${args[@]}"
         code=$?
         echo "code=$code" >> "$GITHUB_OUTPUT"
-        echo "report=${{ inputs.working-directory }}/.modelpin/last-report.md" >> "$GITHUB_OUTPUT"
+        echo "report=$MP_WORKDIR/.modelpin/last-report.md" >> "$GITHUB_OUTPUT"
         exit 0
 
     - name: Post PR comment
       if: ${{ inputs.comment == 'true' && github.event.pull_request.number }}
       uses: actions/github-script@v9
+      env:
+        REPORT_PATH: ${{ steps.check.outputs.report }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
           const fs = require('fs');
           const marker = '<!-- modelpin-report -->';
-          const path = `${{ steps.check.outputs.report }}`;
+          const path = process.env.REPORT_PATH;
           let body;
           if (fs.existsSync(path)) {
             body = `${marker}\n${fs.readFileSync(path, 'utf8')}`;
@@ -145,6 +165,8 @@ runs:
     - name: Fail on regression
       if: ${{ inputs.fail-on-regression == 'true' && steps.check.outputs.code != '0' }}
       shell: bash
+      env:
+        MP_TO: ${{ inputs.to }}
       run: |
-        echo "::error::Modelpin detected a behavioral regression migrating to '${{ inputs.to }}'. See the PR comment / report."
+        echo "::error::Modelpin detected a behavioral regression migrating to '$MP_TO'. See the PR comment / report."
         exit 1

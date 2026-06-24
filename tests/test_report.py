@@ -72,6 +72,24 @@ def test_pr_comment_header_warns_on_minor_only():
     assert "🚨" not in md
 
 
+def test_pr_comment_neutralizes_markdown_injection():
+    # `explanation` is assembled from MODEL-controlled tool names, and scenario_id is
+    # user-controlled. A crafted value must not inject Markdown structure (fake headers/lists)
+    # or an HTML comment (the sticky comment is found by `<!-- modelpin-report -->`) into the
+    # comment posted to GitHub.
+    evil = "tool-call changed\n## PWNED\n<!-- modelpin-report -->\n- [x] injected"
+    md = render_pr_comment([_r("scn\n# hijack", DiffVerdict.regression, evil)], "a", "b", 5)
+    out_lines = md.split("\n")
+    # newlines collapsed -> no injected line can START a Markdown block
+    assert not any(ln.lstrip().startswith("## PWNED") for ln in out_lines)
+    assert not any(ln.strip() == "- [x] injected" for ln in out_lines)
+    assert not any(ln.lstrip().startswith("# hijack") for ln in out_lines)
+    # the sticky-comment marker cannot be forged from model/user content
+    assert "<!-- modelpin-report -->" not in md
+    # content is preserved inline (neutralized, not silently dropped)
+    assert "PWNED" in md
+
+
 def test_render_cli_lists_changed_scenarios():
     out = render_cli([_r("reg1", DiffVerdict.regression, "boom")], "a", "b", 5)
     assert "reg1" in out and "boom" in out

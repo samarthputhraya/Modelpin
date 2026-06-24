@@ -74,7 +74,7 @@ def _explain_api_error(exc: Exception, model_id: str, label: str = "OpenAI") -> 
     """
     name = type(exc).__name__
     hint = _API_ERROR_HINTS.get(name, "the API call failed")
-    base = f"{label} call for model {model_id!r} failed: {hint}"
+    base = f"{label} call for model {scrub_secrets(model_id)!r} failed: {hint}"
     if name in _KEY_BEARING_ERRORS:
         return f"{base} [{name}]."
     detail = scrub_secrets(str(exc))[:300]

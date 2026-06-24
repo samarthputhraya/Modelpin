@@ -56,7 +56,7 @@ def _explain_api_error(exc: Exception, model_id: str) -> str:
     """Key-safe message for a Gemini SDK/network error (mirrors the OpenAI explainer)."""
     name = type(exc).__name__
     code = getattr(exc, "code", None)
-    base = f"Gemini call for model {model_id!r} failed"
+    base = f"Gemini call for model {scrub_secrets(model_id)!r} failed"
     if code in (401, 403):
         return f"{base}: API key rejected or lacks access [{name} {code}]."
     if code == 404:

@@ -44,10 +44,13 @@ _APOSTROPHE_VARIANTS: str = (
 _APOSTROPHE_MAP: dict[int, str] = {ord(ch): "'" for ch in _APOSTROPHE_VARIANTS}
 
 #: Key-shaped tokens to redact from ANY text before it is shown or logged. Covers OpenAI
-#: keys (``sk-``/``sk-proj-``), Google credentials in their several prefixes (``AIza...``
-#: API keys, ``ya29.`` / ``AQ.`` OAuth-style tokens), and raw ``Bearer`` headers.
+#: keys (``sk-``/``sk-proj-``) — which also matches Anthropic ``sk-ant-`` — Google
+#: credentials in their several prefixes (``AIza...`` API keys, ``ya29.`` / ``AQ.``
+#: OAuth-style tokens), Groq keys (``gsk_``, an OpenAI-compatible host we support), and raw
+#: ``Bearer`` headers.
 _SECRET_RE = re.compile(
     r"sk-[A-Za-z0-9_\-]{4,}"
+    r"|gsk_[A-Za-z0-9_\-]{10,}"
     r"|AIza[0-9A-Za-z_\-]{10,}"
     r"|ya29\.[A-Za-z0-9_.\-]{10,}"
     r"|AQ\.[A-Za-z0-9_.\-]{10,}"

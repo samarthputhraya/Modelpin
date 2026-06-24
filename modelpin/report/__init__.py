@@ -26,6 +26,17 @@ _MD_MARK = {
 }
 
 
+def _md_inline(text: Any) -> str:
+    """Neutralize model-controlled text (scenario ids, tool names inside ``explanation``)
+    for safe inline use in the Markdown PR comment posted to GitHub: collapse newlines so it
+    can't break out of its line, drop HTML-comment markers (the sticky comment is found by
+    one), and escape pipes. Defends the PR comment against Markdown injection via a crafted
+    tool name in a model's response."""
+    s = str(text).replace("\r", "").replace("\n", " ")
+    s = s.replace("<!--", "<! --").replace("-->", "-- >")
+    return s.replace("|", "\\|").strip()
+
+
 def _bucket(
     results: list[DiffResult],
 ) -> tuple[list[DiffResult], list[DiffResult], list[DiffResult]]:
@@ -54,13 +65,17 @@ def render_pr_comment(results: list[DiffResult], from_model: str, to_model: str,
     if regs:
         lines.append(f"**REGRESSIONS ({len(regs)})**")
         for r in regs:
-            lines.append(f"{_MD_MARK[r.verdict]} **{r.scenario_id}** — {r.explanation}")
+            lines.append(
+                f"{_MD_MARK[r.verdict]} **{_md_inline(r.scenario_id)}** — {_md_inline(r.explanation)}"
+            )
             lines.append(f"&nbsp;&nbsp;&nbsp;&nbsp;confidence {r.confidence:.2f}")
         lines.append("")
     if minors:
         lines.append(f"**MINOR CHANGES ({len(minors)})**")
         for r in minors:
-            lines.append(f"{_MD_MARK[r.verdict]} {r.scenario_id} — {r.explanation}")
+            lines.append(
+                f"{_MD_MARK[r.verdict]} {_md_inline(r.scenario_id)} — {_md_inline(r.explanation)}"
+            )
         lines.append("")
     lines.append(f"**UNCHANGED ({len(unchanged)})** ✅")
     lines.append("")

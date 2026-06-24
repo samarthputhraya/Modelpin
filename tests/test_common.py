@@ -9,6 +9,7 @@ from modelpin.providers._common import looks_like_refusal, scrub_secrets
     "secret",
     [
         "sk-proj-ABCDEF1234567890",  # OpenAI
+        "gsk_ABCDEF1234567890abcdef",  # Groq (OpenAI-compatible host we support)
         "AIzaSyABCDEF1234567890xyz",  # Google API key
         "ya29.A0ABCDEF1234567890",  # Google OAuth token
         "AQ.Ab8RN6ABCDEF1234567890",  # Google (AQ.-prefixed key, as in the wild)
