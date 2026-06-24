@@ -5,6 +5,35 @@
 
 ## ▶ Resume here (latest — 2026-06-24)
 
+**🧪 THESIS VALIDATED + v2 DISCRIMINATING SUITE (latest — PR #3, commit `596825c`).** Ran a
+multi-model **drift map** to answer the make-or-break question (*do model migrations break
+app-relevant behavior?*). Key finding sequence: the easy public suite returned **all-unchanged
+across 5 real migrations** (false comfort — easy tasks every model aces identically), so it
+could not test the thesis. A **hard, discriminating suite** (seams where models diverge) then
+surfaced **≥1 real change on every pair** (9 regressions + 1 minor / 60) while the engine stayed
+**~50/60 unchanged** — loud on real drift, quiet on equivalent behavior. Real verified catches:
+an agent that **hallucinated a flight booking** vs one that asked (gpt-3.5→4o-mini, tool
+trajectory); **prompt-injection behavior flipping across a version bump** (gpt-4o refused, gpt-4.1
+engaged — "PWNED"); a **reverse-alphabetical constraint breaking** on 4o→4.1. **Thesis holds: the
+wedge is real.** Landed via a **parallel multi-agent "org" operation** (4 departments: diff-eng,
+product/suite, editorial, GTM) + a **QA panel** (code-review + guardrail/FP audit + data
+fact-check); all QA findings integrated. Shipped:
+- **fix(diff):** refusal detector now folds apostrophe glyphs (U+2019 curly "can't" dodged the
+  ASCII markers → spurious refusal-rate "regression" on identical declines); dropped the truncated
+  `"i'm sorry, but i can"` marker (misfired on "I'm sorry, but I can help"). `providers/_common.py` + 5 tests.
+- **feat(suite):** `examples/report-suite` promoted to **v2** (`modelpin-public-v2` 2.0.0, hash
+  `sha256:ffd99774f681`, **14 scenarios**) — 12 discriminating + 2 quiet anchors; dropped the 8 easy
+  v1 scenarios. Golden-hash/count/manifest tests updated. The easy v1 suite gave false comfort.
+- **feat(harness):** `scripts/drift_map.py` (multi-model migration replay, cached/rate-paced/
+  cross-vendor + judge diff). `examples/drift-suite/` = the frozen 12-scenario Report-#1 fixture.
+- **docs:** **The Modelpin Drift Map #1** (`docs/reports/modelpin-drift-map-1.md`) + published raw
+  data (`docs/reports/data/`) + launch assets (`docs/launch/`). Measurement/opinion framed; honestly
+  discloses the refusal-detector bug we caught in our OWN measurement. Old gpt-4.1-vs-gpt-4o report
+  marked superseded (v1 easy suite). **167 tests pass; ruff+black clean.** PR #3 (open).
+- **Product insight (founder-level):** *scenario quality IS the product* — an easy suite reassures
+  you for the wrong reason; the tool's value is bounded by whether the user's scenarios hit their
+  app's seams. Onboarding (help users author discriminating scenarios) is the wedge.
+
 **🆕 `mp report` (the public Modelpin Report capability) is BUILT** — the last unbuilt box in
 the CLAUDE.md build order is done (uncommitted, on `main`; branch + commit next). `modelpin
 report --to <new> --from <incumbent>` runs an **open public suite** across both models (live,
