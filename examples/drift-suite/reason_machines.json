@@ -1,0 +1,16 @@
+{
+  "id": "reason_machines",
+  "name": "Rate reasoning trap (5 machines / 5 widgets / 5 minutes)",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Answer the question. Reply with only the number."},
+      {"role": "user", "content": "If 5 machines take 5 minutes to make 5 widgets, how many minutes do 100 machines take to make 100 widgets?"}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["5"],
+    "must_not_contain": ["100"]
+  }
+}

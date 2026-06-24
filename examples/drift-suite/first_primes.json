@@ -1,0 +1,15 @@
+{
+  "id": "first_primes",
+  "name": "First five primes, exact format",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Reply with only the requested numbers, space-separated, nothing else."},
+      {"role": "user", "content": "List the first five prime numbers in ascending order."}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["2 3 5 7 11"]
+  }
+}

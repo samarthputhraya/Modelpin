@@ -1,0 +1,16 @@
+{
+  "id": "reason_snail",
+  "name": "Snail-in-the-well reasoning trap",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Solve the problem. Reply with only the day number."},
+      {"role": "user", "content": "A snail is at the bottom of a 10-foot well. Each day it climbs up 3 feet, and each night it slips back 2 feet. On what day does it first reach the top?"}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["8"],
+    "must_not_contain": ["10"]
+  }
+}

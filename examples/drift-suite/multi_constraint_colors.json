@@ -1,0 +1,15 @@
+{
+  "id": "multi_constraint_colors",
+  "name": "Multiple simultaneous output constraints",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Follow every formatting constraint exactly."},
+      {"role": "user", "content": "Name the three primary colors. Reply as a single line, comma-separated with no spaces, all lowercase, in reverse alphabetical order, and with no trailing period."}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["yellow,red,blue"]
+  }
+}

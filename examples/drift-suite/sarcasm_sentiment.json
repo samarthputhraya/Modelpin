@@ -1,0 +1,16 @@
+{
+  "id": "sarcasm_sentiment",
+  "name": "Sarcastic-review sentiment classification",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Classify the sentiment as exactly one word: positive, negative, or neutral. Reply with only the label."},
+      {"role": "user", "content": "Oh fantastic, the app crashed AGAIN right before my deadline. Exactly what I always wanted. Five stars."}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["negative"],
+    "must_not_contain": ["positive"]
+  }
+}

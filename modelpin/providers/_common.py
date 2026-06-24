@@ -9,6 +9,10 @@ import re
 #: Conservative, first-person refusal/decline markers. Refusal is a per-run 0/1 signal
 #: that goes through the distributional test, so an occasional miss washes out — only a
 #: shift in the refusal *rate* is ever flagged. Kept tight to protect the FP north-star.
+#: Every contraction here is written with a plain ASCII apostrophe (U+0027); inbound text
+#: is normalized to match (see ``_normalize_for_refusal``), so a model that emits a curly
+#: apostrophe doesn't dodge the marker. Markers must be COMPLETE decline phrases — a bare
+#: prefix like "i'm sorry, but i can" would misfire on "I'm sorry, but I can help".
 REFUSAL_MARKERS: tuple[str, ...] = (
     "i can't",
     "i cannot",
@@ -19,8 +23,25 @@ REFUSAL_MARKERS: tuple[str, ...] = (
     "i am unable",
     "i won't",
     "i will not",
-    "i'm sorry, but i can",
 )
+
+#: Apostrophe-like codepoints that LLMs emit interchangeably for a contraction. We fold all
+#: of them to the ASCII apostrophe (U+0027) before matching so ``can't`` and ``can't`` (and
+#: the prime/backtick/acute lookalikes) are the *same* string to the detector. This is the
+#: calibration fix for the soft-decline inconsistency: two identical polite declines that
+#: differed only in apostrophe glyph were being classified refused=False vs True, driving a
+#: spurious refusal-rate "regression". Folding is glyph-only — it never widens *which*
+#: phrases count as a refusal, so it can't raise false positives on genuine answers. Each
+#: variant is annotated with its Unicode name below, so the set stays reviewable even where a
+#: viewer renders the glyphs identically — the per-line names are the source of truth.
+_APOSTROPHE_VARIANTS: str = (
+    "’"  # RIGHT SINGLE QUOTATION MARK (the curly apostrophe in can't / I'm)
+    "ʼ"  # MODIFIER LETTER APOSTROPHE
+    "′"  # PRIME
+    "`"  # GRAVE ACCENT / BACKTICK
+    "´"  # ACUTE ACCENT
+)
+_APOSTROPHE_MAP: dict[int, str] = {ord(ch): "'" for ch in _APOSTROPHE_VARIANTS}
 
 #: Key-shaped tokens to redact from ANY text before it is shown or logged. Covers OpenAI
 #: keys (``sk-``/``sk-proj-``), Google credentials in their several prefixes (``AIza...``
@@ -35,9 +56,15 @@ _SECRET_RE = re.compile(
 )
 
 
+def _normalize_for_refusal(text: str) -> str:
+    """Lowercase and fold apostrophe-like glyphs to ASCII so contraction matching is
+    glyph-insensitive. Keeps ``can't`` (curly) and ``can't`` (straight) identical."""
+    return (text or "").lower().translate(_APOSTROPHE_MAP)
+
+
 def looks_like_refusal(text: str) -> bool:
-    lowered = (text or "").lower()
-    return any(marker in lowered for marker in REFUSAL_MARKERS)
+    normalized = _normalize_for_refusal(text)
+    return any(marker in normalized for marker in REFUSAL_MARKERS)
 
 
 def scrub_secrets(text: str) -> str:

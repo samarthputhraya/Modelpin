@@ -232,8 +232,8 @@ def test_report_runs_the_default_public_suite(tmp_path):
     )
     assert r.exit_code == 0, r.output
     md = next(out.glob("*.md")).read_text(encoding="utf-8")
-    assert "modelpin-public-v1" in md
-    assert "sha256:1c25c111a296" in md  # the committed public suite's pinned hash
+    assert "modelpin-public-v2" in md
+    assert "sha256:ffd99774f681" in md  # the committed public suite's pinned hash
     assert "`unordered`" in md  # --match was threaded into the settings block
     assert "`disabled`" in md  # fake provider -> no judge -> labeled disabled
 

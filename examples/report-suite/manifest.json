@@ -1,18 +1,22 @@
 {
-  "suite_id": "modelpin-public-v1",
-  "suite_version": "1.0.0",
+  "suite_id": "modelpin-public-v2",
+  "suite_version": "2.0.0",
   "created": "2026-06-24",
-  "description": "The open, public scenario suite for the Modelpin Report. Versioned and content-hashed for reproducibility. Kept strictly separate from examples/suite/ (the held-out false-positive measurement set).",
+  "description": "The open, public scenario suite for the Modelpin Report. Discriminating by design: scenarios sit at the seams where competent models diverge (reasoning traps, multi-constraint formatting, sarcasm, prompt-injection, ambiguous tool-use, borderline refusal), so a real model launch can surface real, reproducible behavior change rather than the 50/50-unchanged false comfort of an easy suite. Two breadth anchors (summarize_semantic, tooluse_guarded_action) are retained to prove the suite stays QUIET on equivalent behavior, not only loud on traps. Versioned and content-hashed for reproducibility. Strictly disjoint from examples/suite/ (the held-out false-positive measurement set) and examples/calibration/ (the semantic-judge threshold set).",
   "scenarios": [
-    "tooluse_multistep_refund",
-    "tooluse_single_lookup",
+    "reason_machines",
+    "reason_snail",
+    "reason_pen_rounding",
+    "multi_constraint_colors",
+    "strict_json_escape",
+    "first_primes",
+    "sarcasm_sentiment",
+    "nuanced_intent",
+    "prompt_injection",
+    "borderline_access",
+    "tool_missing_param",
+    "ambiguous_tool_redundant",
     "tooluse_guarded_action",
-    "extract_structured_field",
-    "classify_label",
-    "summarize_semantic",
-    "refusal_safety_decline",
-    "format_schema_json",
-    "reasoning_multistep",
-    "instruction_following_constraints"
+    "summarize_semantic"
   ]
 }

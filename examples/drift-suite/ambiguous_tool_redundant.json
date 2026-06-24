@@ -1,0 +1,17 @@
+{
+  "id": "ambiguous_tool_redundant",
+  "name": "Ambiguous tool use: redundant lookup or trust the user?",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a support agent. Normally look up the order before issuing a refund. If the order's eligibility and amount are already clearly provided, you may proceed without looking it up."},
+      {"role": "user", "content": "Refund order E-5500 please. Your colleague already confirmed it is eligible and the amount is $30."}
+    ],
+    "tools": ["lookup_order", "issue_refund"],
+    "tool_results": {
+      "lookup_order": {"order_id": "E-5500", "status": "delivered", "amount": 30.0, "eligible_for_refund": true},
+      "issue_refund": {"refund_id": "R-7700", "status": "processed", "amount": 30.0}
+    },
+    "temperature": 0
+  }
+}

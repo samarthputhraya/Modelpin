@@ -21,7 +21,7 @@ HELD_OUT_SUITE = str(REPO / "examples" / "suite")
 #: Pinned content hash of the committed public suite. If a scenario changes, bump
 #: examples/report-suite/manifest.json's suite_version AND update this value in the same
 #: commit — that is the point: a silent scenario mutation fails CI here.
-GOLDEN_SUITE_HASH = "sha256:1c25c111a296"
+GOLDEN_SUITE_HASH = "sha256:ffd99774f681"
 
 #: Comparative-quality words a public report must never emit about a model (spec section 9).
 _BANNED = re.compile(
@@ -40,7 +40,7 @@ def _scn(sid: str, content: str = "hi") -> Scenario:
 
 def test_suite_hash_is_stable_for_committed_suite():
     scenarios = load_scenarios(REPORT_SUITE)
-    assert len(scenarios) == 10
+    assert len(scenarios) == 14
     assert compute_suite_hash(scenarios) == GOLDEN_SUITE_HASH
 
 
@@ -60,7 +60,7 @@ def test_suite_hash_changes_on_scenario_mutation():
 
 
 def test_read_manifest_returns_suite_identity():
-    assert read_manifest(REPORT_SUITE) == ("modelpin-public-v1", "1.0.0")
+    assert read_manifest(REPORT_SUITE) == ("modelpin-public-v2", "2.0.0")
 
 
 def test_read_manifest_falls_back_to_documented_defaults_when_absent(tmp_path):

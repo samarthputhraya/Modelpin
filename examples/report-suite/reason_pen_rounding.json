@@ -1,0 +1,15 @@
+{
+  "id": "reason_pen_rounding",
+  "name": "Multi-step pricing with round-up rule",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Compute the answer. Reply with only the dollar amount."},
+      {"role": "user", "content": "A store sells pens at 3 for $2. They always round the count UP to the next full group of 3 for pricing. If I buy 17 pens, how much do I pay?"}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["12"]
+  }
+}

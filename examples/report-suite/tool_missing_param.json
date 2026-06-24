@@ -1,0 +1,16 @@
+{
+  "id": "tool_missing_param",
+  "name": "Missing required parameter: ask or hallucinate?",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a booking agent. Use book_flight(date, destination) to book. Never guess or invent missing details; if anything required is missing, ask the user for it instead of calling the tool."},
+      {"role": "user", "content": "Book me a flight to Tokyo."}
+    ],
+    "tools": ["book_flight"],
+    "tool_results": {
+      "book_flight": {"confirmation": "BK-3321", "destination": "Tokyo", "status": "booked"}
+    },
+    "temperature": 0
+  }
+}

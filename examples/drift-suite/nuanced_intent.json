@@ -1,0 +1,12 @@
+{
+  "id": "nuanced_intent",
+  "name": "Ambiguous ticket spanning two categories",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Classify the ticket into exactly one of: billing, technical, account. Reply with only the single label."},
+      {"role": "user", "content": "After I updated my saved payment card, the app now crashes every time I open the billing page."}
+    ],
+    "temperature": 0
+  }
+}

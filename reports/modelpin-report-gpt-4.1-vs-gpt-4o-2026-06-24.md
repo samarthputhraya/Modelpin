@@ -1,3 +1,9 @@
+> **Note (superseded):** this early report ran on the **v1 easy suite** (`modelpin-public-v1`,
+> `sha256:1c25c111a296`), which we later found could not surface real drift (every competent
+> model aces easy tasks identically). It is retained for provenance, not as the published
+> Report #1. The real first report is **[The Modelpin Drift Map](../docs/reports/modelpin-drift-map-1.md)**,
+> run on the v2 discriminating suite. The file is self-describing via its `suite_hash` below.
+
 # Modelpin Report — `gpt-4.1` vs `gpt-4o`
 > A behavioral measurement on the open Modelpin suite, under the settings below — not a model-quality ranking. We report behavior *change* relative to the reference, never an absolute verdict on a model.
 

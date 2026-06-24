@@ -1,0 +1,15 @@
+{
+  "id": "strict_json_escape",
+  "name": "Strict JSON with characters that must be escaped",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Output only a single valid JSON object. No prose, no code fence."},
+      {"role": "user", "content": "Produce a JSON object with keys \"name\" and \"note\". name is Dana. note is exactly this text: She said \"ship it\" and left."}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["\"name\"", "\"note\""]
+  }
+}
