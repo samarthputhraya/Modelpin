@@ -32,7 +32,7 @@ Install (Python 3.12+):
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.1.0
+modelpin version                        # -> modelpin 0.1.1
 ```
 
 > **Windows PowerShell:** run `modelpin …`, not `mp …`. PowerShell ships a built-in `mp` alias
@@ -217,6 +217,20 @@ CI-failing `regression` (still 0/8).
 Planned before any high-stakes reliance: ≥30 pairs including real migration traces, and a
 non-OpenAI judge. We'd rather you know this than discover it.
 
+### Proof it actually *fires*: the Drift Map
+
+The 0/8 shows Modelpin stays quiet on equivalent behavior; the complement — that it catches
+*real* drift — is the **[Modelpin Drift Map #1](docs/reports/modelpin-drift-map-1.md)**. We replayed
+an open, deliberately-hard suite across **5 real migration pairs** (including cross-vendor), 5 runs
+each, judge on. The engine stayed quiet on ~50 of 60 comparisons but surfaced **≥1 genuine behavior
+change on every pair**: an agent that went from *asking for a missing date* to *hallucinating a
+flight booking*, prompt-injection resistance **flipping across a version bump**, and a
+multi-constraint format breaking on an upgrade. The exact raw traces and per-scenario verdicts are
+published in [`docs/reports/data/`](docs/reports/data/) — diff against ours without spending a cent.
+It also **discloses a false positive our own refusal detector produced** (a Unicode-apostrophe bug,
+since fixed): flagging our own measurement's soft spots is the whole point of being an independent
+voice. The same capability is wired behind `mp report` — point it at any model launch.
+
 ---
 
 ## Cross-vendor (including a free third vendor)
@@ -274,7 +288,7 @@ In CI, supply these as repo secrets (see the workflow above). Error text is scru
 | `mp baseline` | Record current model behavior for your scenarios (N runs). |
 | `mp check --to <model>` | Replay scenarios on a new model, diff vs baseline, write the PR-style report, fail CI on a regression. |
 | `mp version` | Print the Modelpin version. |
-| `mp report` | **Not built yet** — prints a "coming soon" notice. The public Modelpin Report suite is a stub. |
+| `mp report --to <new> --from <incumbent>` | Replay the **open public suite** (`examples/report-suite/`) across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. |
 
 Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--match`
 (`strict\|unordered\|subset\|superset`), `--config`, `--scenarios-dir`, `--store-dir`, and
@@ -321,21 +335,24 @@ is what keeps the false-positive promise honest and the tool small enough to tru
   observed…"* — **never** "Model X is worse." The harness and scenarios are open source so anyone
   can rerun and disagree. That's the whole point of being the independent voice.
 - We don't overclaim and we don't falsely undersell. The engine is real and cross-vendor proven;
-  *and* Anthropic is a stub, `mp report` isn't built, and the judge calibration is a documented
-  first pass. All true at once.
+  *and* Anthropic is still a stub and the judge calibration is a documented first pass. All true at
+  once.
 
 ---
 
 ## Status
 
-**Phase 0 (core engine MVP) — essentially complete; v0.1.0 published on PyPI.** Live-validated
-cross-vendor (OpenAI ↔ Google ↔ Groq/Llama); held-out false-positive rate **0/8**; multi-turn
-replay; a real GitHub Action; `pip install "modelpin[providers]"`; 132 tests passing, `ruff` +
-`black` clean. Stubs/TODOs (Anthropic adapter, `mp report`) are called out above. Not yet listed
-on the GitHub Marketplace.
+**Phase 0 (core engine MVP) — complete; `v0.1.1` live on PyPI.** Live-validated cross-vendor
+(OpenAI ↔ Google ↔ Groq/Llama); held-out false-positive rate **0/8**; multi-turn replay; a real
+GitHub Action; the public-report engine (`mp report`) + open suite; the
+[Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
+`pip install "modelpin[providers]"`; **167 tests passing**, `ruff` + `black` clean. The Anthropic
+adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
+Marketplace.
 
-The full engineering record and roadmap live in [`docs/STATUS.md`](docs/STATUS.md). Next up:
-publish, the first public Modelpin Report (gated on a real model launch), and the Anthropic adapter.
+The full engineering record and roadmap live in [`docs/STATUS.md`](docs/STATUS.md). Next up: the
+first public **Modelpin Report** on a real model launch (the harness is launch-ready), then the
+Anthropic adapter.
 
 ## License
 

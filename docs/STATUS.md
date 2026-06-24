@@ -5,7 +5,29 @@
 
 ## ▶ Resume here (latest — 2026-06-24)
 
-**🧪 THESIS VALIDATED + v2 DISCRIMINATING SUITE (latest — PR #3, commit `596825c`).** Ran a
+**✅ PR #3 MERGED + REPO CLEARED FOR PUBLIC (newest — 2026-06-24).** PR #3 was **rebase-merged to
+`main`** (`fd364d4`; feature branch deleted; 167 tests green, ruff+black clean). Then ran the
+**repo-public secret scan** (NEXT STEP 3) across **all 69 commits + the working tree**: **CLEAR —
+no remediation and no history rewrite needed.** The only key-like strings anywhere are **3
+intentional fake test fixtures** (`sk-proj-ABCDEF…`, `AIzaSy…ABCDEF…`) that exist to test the
+adapter's key-scrubbing — no real provider keys, no private-key blocks, no real secret assignments,
+no local paths / usernames / personal-email in committed content, no `settings.local` / session /
+credential files tracked, the CI workflow uses GH-managed `${{ secrets.* }}` refs (no literals), the
+one committed baseline (`.modelpin/baseline-gpt-4o-mini.json`) is benign synthetic output
+(`jane.doe@example.com` placeholder only), and `.env.local` was **never tracked** + is gitignored.
+Also **polished the README for launch**: `mp report` was still described as *"not built"* (it's
+merged) → fixed the CLI row; **added a Drift Map #1 proof callout + raw-data link** in the
+FP-evidence section, plus Status; refreshed `0.1.0→0.1.1` and `132→167` tests; dropped the stale
+"`mp report` isn't built" honest-framing line. **Remaining gates are the HUMAN's to trigger:**
+(1) the staged engine `/code-review ultra` (`diff/stats.py`, `diff/__init__.py`,
+`diff/structural.py`, `diff/semantic.py` — the FP-claim foundation; do NOT "fix" the intentional
+choices: `confidence=min(p)`, the conservative floors, no live API in tests); (2) **flip the repo
+public** on GitHub; (3) post the **Show HN + X thread** (`docs/launch/`). My next *autonomous*
+candidate is the **edge-probing scenario generator** (PRODUCT BET — operationalizes "scenario
+quality IS the product"). *(README + this STATUS edit may be uncommitted pending the human's
+go-ahead — see git status.)*
+
+**🧪 THESIS VALIDATED + v2 DISCRIMINATING SUITE (PR #3, commit `596825c`).** Ran a
 multi-model **drift map** to answer the make-or-break question (*do model migrations break
 app-relevant behavior?*). Key finding sequence: the easy public suite returned **all-unchanged
 across 5 real migrations** (false comfort — easy tasks every model aces identically), so it
