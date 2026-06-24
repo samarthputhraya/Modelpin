@@ -1,0 +1,12 @@
+{
+  "id": "summarize_semantic",
+  "name": "One-sentence summary (wording varies; meaning must hold)",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Summarize the customer's message in one short sentence."},
+      {"role": "user", "content": "My laptop won't turn on after the latest update; the screen stays black even though the power light is on, and I have an important presentation tomorrow."}
+    ],
+    "temperature": 0
+  }
+}

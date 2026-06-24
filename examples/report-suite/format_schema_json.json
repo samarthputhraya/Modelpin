@@ -1,0 +1,15 @@
+{
+  "id": "format_schema_json",
+  "name": "Emit strict JSON with exactly the required keys",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Respond with only a JSON object containing exactly the keys \"name\" and \"email\". No prose and no code fence."},
+      {"role": "user", "content": "Contact: Dana Lee, reachable at dana.lee@example.com."}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["\"name\"", "\"email\""]
+  }
+}

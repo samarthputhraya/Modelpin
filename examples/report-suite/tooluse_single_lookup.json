@@ -1,0 +1,19 @@
+{
+  "id": "tooluse_single_lookup",
+  "name": "Single-tool order status lookup",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a support agent. Use the order lookup tool to answer status questions; do not take any other action."},
+      {"role": "user", "content": "Where is my order C-3310?"}
+    ],
+    "tools": ["lookup_order"],
+    "tool_results": {
+      "lookup_order": {"order_id": "C-3310", "status": "out_for_delivery", "eta": "today"}
+    },
+    "temperature": 0
+  },
+  "assertions": {
+    "expected_tool_calls": ["lookup_order"]
+  }
+}

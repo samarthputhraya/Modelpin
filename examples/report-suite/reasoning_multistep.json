@@ -1,0 +1,15 @@
+{
+  "id": "reasoning_multistep",
+  "name": "Small multi-step arithmetic word problem",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Solve the problem and reply with only the final number."},
+      {"role": "user", "content": "A box has 3 trays. Each tray holds 4 cups. If 2 cups are removed from the box, how many cups remain?"}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["10"]
+  }
+}

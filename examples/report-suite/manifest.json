@@ -1,0 +1,18 @@
+{
+  "suite_id": "modelpin-public-v1",
+  "suite_version": "1.0.0",
+  "created": "2026-06-24",
+  "description": "The open, public scenario suite for the Modelpin Report. Versioned and content-hashed for reproducibility. Kept strictly separate from examples/suite/ (the held-out false-positive measurement set).",
+  "scenarios": [
+    "tooluse_multistep_refund",
+    "tooluse_single_lookup",
+    "tooluse_guarded_action",
+    "extract_structured_field",
+    "classify_label",
+    "summarize_semantic",
+    "refusal_safety_decline",
+    "format_schema_json",
+    "reasoning_multistep",
+    "instruction_following_constraints"
+  ]
+}

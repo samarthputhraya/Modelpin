@@ -17,12 +17,19 @@ class ScenarioError(Exception):
     """A scenario file is unreadable, not valid JSON, or fails validation."""
 
 
+#: Reserved filenames in a scenarios/suite directory that are NOT scenarios (e.g. the public
+#: report suite's manifest). Skipped so they don't fail validation as malformed scenarios.
+_RESERVED_FILES = {"manifest.json"}
+
+
 def load_scenarios(scenarios_dir: str | Path = "scenarios") -> list[Scenario]:
     d = Path(scenarios_dir)
     if not d.exists():
         return []
     out: list[Scenario] = []
     for f in sorted(d.glob("*.json")):
+        if f.name in _RESERVED_FILES:
+            continue
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
             out.append(Scenario(**data))

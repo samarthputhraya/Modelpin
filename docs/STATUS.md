@@ -5,6 +5,31 @@
 
 ## ▶ Resume here (latest — 2026-06-24)
 
+**🆕 `mp report` (the public Modelpin Report capability) is BUILT** — the last unbuilt box in
+the CLAUDE.md build order is done (uncommitted, on `main`; branch + commit next). `modelpin
+report --to <new> --from <incumbent>` runs an **open public suite** across both models (live,
+BYO-key) and writes a **reproducible, opinion-framed Markdown report + a JSON audit sidecar**
+under `reports/`. Built this pass (research→plan→TDD→4-reviewer adversarial pass→fixes):
+- **New public suite** `examples/report-suite/` (10 scenarios + `manifest.json` + README),
+  **strictly disjoint** from the held-out FP set `examples/suite/` (a CI test enforces id
+  disjointness, so the 0/8 FP claim stays independent). Versioned (`suite_version 1.0.0`) +
+  content-hashed (`sha256:1c25c111a296`, pinned by a golden test).
+- **`modelpin/report/__init__.py`**: `render_report_md(results, meta)` + `to_report_sidecar`
+  (both PURE — date/hash/version/thresholds injected via a frozen `ReportMeta`, golden-testable
+  offline) + `modelpin/report/suite.py` (`compute_suite_hash`/`slug`/`read_manifest`).
+- **`report()` wired in `cli.py`** reusing all of `check()`'s plumbing; **exits 0 even on a
+  regression** (it publishes, it doesn't gate CI); per-scenario `ProviderError` → skip + disclose.
+- **Guardrails enforced + tested:** measurement/opinion framing ("on our open suite … we
+  observed…"), a **banned-words** test over rendered output AND over the suite ids/names/tools,
+  reproducibility block (suite hash, models, runs, judge, thresholds, version, date, reproduce
+  cmd), mandatory limitations + disclaimer, skipped-scenario disclosure. **No new deps** (stdlib
+  hashlib/json + the existing renderer pattern; agentevals/jinja2/canonical-json all evaluated → skip).
+- **28 new offline tests (163 total pass; ruff + black clean).** Zero live API calls in tests.
+- **Still gated:** *publishing* Report #1 needs a real provider model launch — the capability is
+  now launch-ready ("published within hours of each major launch"). Prior-art for the format:
+  Artificial-Analysis methodology disclosure, lm-eval-harness task-versioning, HELM raw-data
+  release (see the research synthesis in this session's workflow).
+
 **🚀 PHASE 0 COMPLETE + LAUNCHED.** `modelpin 0.1.1` is **LIVE on PyPI**
 (`pip install "modelpin[providers]"`); PR #1 + PR #2 merged to `main`; tags `v0.1.1` **and**
 `v1` both point to the 0.1.1 commit (`40cb86f`, which has the root `action.yml`), so
@@ -65,18 +90,20 @@ comment) → fixed the alarmist PR-header (now ✅/⚠️/🚨 by outcome) + bum
 majors + fixed the `.modelpin/` gitignore (baselines are now committable) → **tagged `v0.1.1` + `v1`**
 (re-pointed a stale `v1`). The DoD (held-out FP 0/8) was met earlier this phase.
 
-**▶ NEXT STEP (per the rules — NOT optional): Modelpin Report #1 / build `mp report`.**
-This is the rule-defined next step, from three sources: `CLAUDE.md` "Current focus" (*"Phase 0 —
-core engine MVP + Modelpin Report #1"*); spec §11 Phase-0 **DoD** (its 2nd half — *"Publish Modelpin
-Report #1 on the next model release… **This is also the go/no-go signal**"* — the 1st half, regression
-detection + low FP, is ✅ done); and the `CLAUDE.md` build order (…→ **Reporter** → GitHub Action),
-where the public Reporter is the last unbuilt box — **`mp report` is still a TODO stub** (`cli.py`).
-Nuance: *publishing* Report #1 is gated on a real provider model launch, but *building* the capability
-(open public scenario suite + reproducible report generator behind `mp report`) is NOT gated — build
-it now to be launch-ready (spec: "published within hours of each major launch"). Approach per ECC
-**development-workflow**: research/reuse → **plan** (planner agent + planning docs) → TDD (golden /
-offline tests, no live calls) → code-review → commit. Honor the trust guardrails (reproducible;
-measurement/opinion framing — "on our open suite we observed…", never "Model X is worse").
+**▶ NEXT STEP: commit the `mp report` work, then publish Modelpin Report #1 on the next launch.**
+The *build* half of the rule-defined next step is now ✅ DONE (see the 🆕 block at the top): the
+public Reporter — the last unbuilt box in the `CLAUDE.md` build order — is implemented behind
+`mp report`, with the open suite + reproducible generator + trust guardrails, all TDD'd offline.
+What remains:
+1. **Commit** the uncommitted `mp report` work (branch off `main`, conventional commit, PR like #1/#2).
+2. **Publish Report #1** — *gated on a real provider model launch* (spec §11 DoD 2nd half / the
+   go/no-go signal: *"Publish Modelpin Report #1 on the next model release"*). When a major model
+   drops, run `modelpin report --to <new> --from <incumbent>` on the open suite (BYO-key), commit
+   the generated `reports/*.md`, and post it (HN / r/LocalLLaMA / X). The harness is launch-ready now.
+3. Optional report polish (do anytime): a `docs/reports/` archive + a static site later; a
+   `--baseline-from` flag to halve replay cost; richer per-signal rollups; expand the suite (bump
+   `suite_version` + the pinned hash together). Honor the trust guardrails throughout (reproducible;
+   measurement/opinion framing — "on our open suite we observed…", never "Model X is worse").
 
 **Optional polish (NOT in the roadmap — do anytime, none blocking):**
 1. **GitHub Marketplace** listing — publish from the `v1` release page (root `action.yml` ✓).

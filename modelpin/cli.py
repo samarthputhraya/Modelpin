@@ -11,6 +11,9 @@ Replays use the END USER's API key from the environment (BYO-key, spec section 9
 
 from __future__ import annotations
 
+import json
+import shlex
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn, Optional
 
@@ -22,12 +25,25 @@ from rich.table import Table
 from modelpin import __version__
 from modelpin.config import DEFAULT_PROVIDER, ConfigError, ModelpinConfig, load_config
 from modelpin.detector import scan_repo
-from modelpin.diff import diff_scenario
-from modelpin.models import DiffVerdict, Scenario
+from modelpin.diff import (
+    ALPHA,
+    MIN_REFUSAL_DELTA,
+    MIN_SEMANTIC_DELTA,
+    MIN_TOOL_TVD,
+    diff_scenario,
+)
+from modelpin.models import DiffResult, DiffVerdict, Scenario
 from modelpin.providers import ProviderAdapter, ProviderError, get_adapter
 from modelpin.providers.fake import FakeProvider
 from modelpin.replay import replay
-from modelpin.report import render_cli, render_pr_comment
+from modelpin.report import (
+    ReportMeta,
+    render_cli,
+    render_pr_comment,
+    render_report_md,
+    to_report_sidecar,
+)
+from modelpin.report.suite import compute_suite_hash, read_manifest, slug
 from modelpin.scenarios import ScenarioError, load_scenarios
 from modelpin.storage import STORE_DIRNAME, BaselineError, load_baseline, save_baseline
 
@@ -319,13 +335,141 @@ def check(
         raise typer.Exit(code=1)  # fail CI on a real regression
 
 
+#: Where rendered Modelpin Reports (.md + .json) are written by default.
+DEFAULT_REPORT_SUITE = "examples/report-suite"
+DEFAULT_REPORT_OUTPUT = "reports"
+
+
+def _report_basename(candidate: str, reference: str, date_iso: str) -> str:
+    """Deterministic report filename stem. Same-model runs drop the `-vs-` segment."""
+    if candidate == reference:
+        return f"modelpin-report-{slug(candidate)}-{date_iso}"
+    return f"modelpin-report-{slug(candidate)}-vs-{slug(reference)}-{date_iso}"
+
+
 @app.command()
-def report() -> None:
-    """Run the public standard suite and draft a Modelpin Report. (Coming soon.)"""
+def report(
+    to: str = typer.Option(..., "--to", help="The new/launching model id to report on."),
+    from_: str = typer.Option(
+        ...,
+        "--from",
+        help="Reference/incumbent model to compare against (pass the same id as --to for a "
+        "baseline characterization).",
+    ),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", help="openai | google | anthropic | groq | openrouter | fake."
+    ),
+    fixtures: Optional[str] = typer.Option(
+        None, "--fixtures", help="Canned traces for --provider fake (offline)."
+    ),
+    runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario per model."),
+    mode: str = typer.Option(
+        "strict", "--match", help="Tool-call match mode: strict|unordered|subset|superset."
+    ),
+    suite_dir: str = typer.Option(
+        DEFAULT_REPORT_SUITE, "--suite-dir", help="Public scenario suite directory."
+    ),
+    config_path: str = typer.Option("modelpin.yaml", "--config"),
+    output_dir: str = typer.Option(
+        DEFAULT_REPORT_OUTPUT, "--output-dir", help="Directory for the .md + .json report."
+    ),
+) -> None:
+    """Run the open public suite across two models and draft a reproducible Modelpin Report.
+
+    Unlike `mp check`, this never fails CI on a regression — it *publishes* findings. Both
+    models are replayed live with YOUR API key (BYO-key); the report is framed as
+    measurement/opinion ("on our open suite, under these settings, we observed…").
+    """
+    cfg = _load_config_or_fail(config_path)
+    scenarios = _load_scenarios_or_fail(suite_dir)
+    n = _resolve_runs(runs, cfg)
+    prov = _resolve_provider(provider, cfg)
+    adapter = _adapter(prov, fixtures)
     console.print(
-        "[yellow]TODO[/]: the public Modelpin Report suite is not implemented yet. "
-        "See docs/Modelpin-Engineering-Context-Pack.md section 7."
+        f"[dim]provider={prov} from={from_} to={to} runs={n} match={mode} suite={suite_dir}[/]"
     )
+    _preflight_or_fail(adapter, prov)
+    judge = _build_judge(prov, cfg)
+
+    results: list[DiffResult] = []
+    skipped: list[str] = []
+    for s in scenarios:
+        try:
+            base_traces = replay(s, from_, adapter, runs=n)
+            cand_traces = replay(s, to, adapter, runs=n)
+        except NotImplementedError:
+            _fail(
+                _unimplemented_msg(prov)
+            )  # an unimplemented adapter is a config error, not a skip
+        except ProviderError as exc:
+            # One scenario failing must not sink the whole report — it documents findings.
+            # ProviderError messages are already key-scrubbed by the adapters.
+            console.print(f"[yellow]note:[/] scenario {s.id!r} skipped: {exc}")
+            skipped.append(s.id)
+            continue
+        results.append(
+            diff_scenario(s.id, from_, to, base_traces, cand_traces, s, mode, judge=judge)
+        )
+
+    if not results:
+        _fail("no scenarios completed; nothing to report.")
+
+    console.print(render_cli(results, from_, to, n))
+
+    suite_id, suite_version = read_manifest(suite_dir)
+    date_iso = datetime.now(timezone.utc).date().isoformat()
+    # Shell-quote each value so the copy-paste reproduce command survives model ids or paths
+    # containing spaces/parentheses (POSIX quoting, for the bash/CI context the tool targets).
+    reproduce_cmd = (
+        f"modelpin report --to {shlex.quote(to)} --from {shlex.quote(from_)} "
+        f"--provider {shlex.quote(prov)} --runs {n} --match {shlex.quote(mode)} "
+        f"--suite-dir {shlex.quote(suite_dir)}"
+    )
+    meta = ReportMeta(
+        suite_id=suite_id,
+        suite_version=suite_version,
+        suite_hash=compute_suite_hash(scenarios),
+        suite_path=suite_dir,
+        candidate_model=to,
+        reference_model=from_,
+        provider=prov,
+        runs=n,
+        judge_model=cfg.judge_model if judge is not None else "disabled",
+        match_mode=mode,
+        modelpin_version=__version__,
+        diff_thresholds={
+            "alpha": ALPHA,
+            "min_tool_tvd": MIN_TOOL_TVD,
+            "min_refusal_delta": MIN_REFUSAL_DELTA,
+            "min_semantic_delta": MIN_SEMANTIC_DELTA,
+        },
+        date_iso=date_iso,
+        reproduce_cmd=reproduce_cmd,
+        scenario_ids=[s.id for s in scenarios],
+        skipped=skipped,
+    )
+
+    out = Path(output_dir)
+    base = _report_basename(to, from_, date_iso)
+    md_path = out / f"{base}.md"
+    json_path = out / f"{base}.json"
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        md_path.write_text(render_report_md(results, meta), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(to_report_sidecar(results, meta), indent=2), encoding="utf-8"
+        )
+        console.print(f"\n[green]Modelpin Report written[/] -> {md_path}")
+        console.print(f"[dim]raw results (JSON) -> {json_path}[/]")
+    except OSError as exc:
+        console.print(f"[yellow]warning:[/] could not write report to {out}: {exc}")
+
+    if skipped:
+        console.print(
+            f"[yellow]note:[/] {len(skipped)} scenario(s) skipped and excluded from the "
+            f"report counts: {', '.join(skipped)}."
+        )
+    # NB: report() never exits non-zero on a regression — it publishes findings, not a CI gate.
 
 
 def main() -> None:

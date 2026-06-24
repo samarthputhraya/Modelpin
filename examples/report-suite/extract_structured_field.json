@@ -1,0 +1,15 @@
+{
+  "id": "extract_structured_field",
+  "name": "Extract a specific field from noisy text",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Extract the requested field exactly. Reply with only the value."},
+      {"role": "user", "content": "From this note, what is the invoice due date? 'Hi team, invoice INV-88 for $1,240 was issued on 2026-01-03 and is due on 2026-02-02. Thanks!'"}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["2026-02-02"]
+  }
+}

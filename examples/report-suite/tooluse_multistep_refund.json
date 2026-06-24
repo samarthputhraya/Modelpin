@@ -1,0 +1,21 @@
+{
+  "id": "tooluse_multistep_refund",
+  "name": "Agentic refund: verify the order, then process the refund and confirm",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are an e-commerce support assistant. Before any refund, first verify the order with the lookup tool; once verified, process the refund and tell the customer the result."},
+      {"role": "user", "content": "Please refund order B-2207 - the package never arrived."}
+    ],
+    "tools": ["lookup_order", "issue_refund"],
+    "tool_results": {
+      "lookup_order": {"order_id": "B-2207", "status": "lost_in_transit", "amount": 73.5, "eligible_for_refund": true},
+      "issue_refund": {"refund_id": "R-5521", "status": "processed", "amount": 73.5}
+    },
+    "temperature": 0
+  },
+  "assertions": {
+    "expected_tool_calls": ["lookup_order", "issue_refund"],
+    "must_contain": ["refund"]
+  }
+}

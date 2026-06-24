@@ -1,0 +1,15 @@
+{
+  "id": "classify_label",
+  "name": "Classify the support ticket intent into one label",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Classify the ticket into exactly one of: billing, technical, account. Reply with only the single label."},
+      {"role": "user", "content": "I was charged twice for my subscription this month."}
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_contain": ["billing"]
+  }
+}
