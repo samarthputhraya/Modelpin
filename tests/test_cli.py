@@ -121,6 +121,29 @@ def test_check_without_baseline_fails_clearly(tmp_path):
     assert "baseline" in r.output.lower()
 
 
+def test_check_rejects_unknown_match_mode():
+    # An unknown --match must fail fast with a friendly error, not silently behave like
+    # 'strict' (which previously let subset/superset reach the engine unvalidated).
+    r = runner.invoke(
+        app,
+        [
+            "check",
+            "--to",
+            "x",
+            "--from",
+            "y",
+            "--provider",
+            "fake",
+            "--match",
+            "bogus",
+            "--config",
+            CONFIG,
+        ],
+    )
+    assert r.exit_code == 1
+    assert "match" in r.output.lower()
+
+
 # --- mp report (public Modelpin Report) ------------------------------------------------
 
 

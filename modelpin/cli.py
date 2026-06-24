@@ -51,6 +51,9 @@ from modelpin.storage import STORE_DIRNAME, BaselineError, load_baseline, save_b
 MIN_RUNS = 2
 #: Below this, the permutation test is underpowered — warn but proceed.
 RECOMMENDED_RUNS = 5
+#: Tool-call trajectory match modes accepted by `--match` (validated at the CLI boundary
+#: so an unknown mode fails friendly here rather than deep in the diff engine).
+VALID_MATCH_MODES = ("strict", "unordered", "subset", "superset")
 
 app = typer.Typer(
     help="Modelpin - Dependabot for AI models. Know before the model breaks you.",
@@ -175,6 +178,12 @@ def _resolve_runs(runs: Optional[int], cfg: ModelpinConfig) -> int:
     return n
 
 
+def _resolve_match_mode(mode: str) -> str:
+    if mode not in VALID_MATCH_MODES:
+        _fail(f"--match must be one of {', '.join(VALID_MATCH_MODES)} (got {mode!r}).")
+    return mode
+
+
 @app.command()
 def version() -> None:
     """Print the Modelpin version."""
@@ -274,6 +283,7 @@ def check(
     store_dir: str = typer.Option(STORE_DIRNAME, "--store-dir"),
 ) -> None:
     """Replay scenarios on a new model and report behavioral regressions."""
+    mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
     scenarios = _load_scenarios_or_fail(scenarios_dir or cfg.scenarios_dir)
     from_model = from_ or (cfg.models[0] if cfg.models else None)
@@ -380,6 +390,7 @@ def report(
     models are replayed live with YOUR API key (BYO-key); the report is framed as
     measurement/opinion ("on our open suite, under these settings, we observed…").
     """
+    mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
     scenarios = _load_scenarios_or_fail(suite_dir)
     n = _resolve_runs(runs, cfg)

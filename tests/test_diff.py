@@ -149,6 +149,64 @@ def test_trajectory_match_modes():
 
 
 # --------------------------------------------------------------------------- #
+# Directional match modes THROUGH diff_scenario (regression guards for the FP hole
+# where subset/superset silently collapsed to strict and flagged the very change the
+# mode permits — a false positive on the cardinal metric).
+# --------------------------------------------------------------------------- #
+
+
+def test_subset_mode_allows_a_dropped_call_unchanged():
+    """`--match subset` declares 'the candidate dropping a call is acceptable'. A candidate
+    that consistently drops a call must therefore be `unchanged`, not a manufactured
+    regression."""
+    base = runs([["lookup_order", "issue_refund"]] * RUNS)
+    cand = runs([["lookup_order"]] * RUNS)  # drops issue_refund every run -> allowed under subset
+    r = diff_scenario("s", "old", "new", base, cand, mode="subset")
+    assert r.verdict == DiffVerdict.unchanged
+    assert r.signals.tool_call_match == 1.0
+
+
+def test_superset_mode_allows_an_added_call_unchanged():
+    """`--match superset` declares 'the candidate adding a call is acceptable'."""
+    base = runs([["lookup_order"]] * RUNS)
+    cand = runs([["lookup_order", "issue_refund"]] * RUNS)  # adds a call -> allowed under superset
+    r = diff_scenario("s", "old", "new", base, cand, mode="superset")
+    assert r.verdict == DiffVerdict.unchanged
+    assert r.signals.tool_call_match == 1.0
+
+
+def test_subset_mode_does_not_flag_an_allowed_drop_even_when_distribution_shifts():
+    """Even when the candidate's trajectory *distribution* differs from baseline, if every
+    candidate trajectory is permitted by the subset relation the verdict stays unchanged —
+    the strict-collapse bug fired a regression here."""
+    full, dropped = ["lookup_order", "issue_refund"], ["lookup_order"]
+    base = runs([full] * RUNS)
+    cand = runs(
+        [dropped, dropped, dropped, dropped, full]
+    )  # all subset-allowed; distribution shifts
+    r = diff_scenario("s", "old", "new", base, cand, mode="subset")
+    assert r.verdict == DiffVerdict.unchanged
+
+
+def test_subset_mode_flags_a_new_call_as_regression():
+    """subset still FORBIDS new calls: a candidate that consistently introduces a call
+    absent from baseline must regress (the mode loosens drops, not additions)."""
+    base = runs([["lookup_order"]] * RUNS)
+    cand = runs([["lookup_order", "issue_refund"]] * RUNS)  # new call -> forbidden under subset
+    r = diff_scenario("s", "old", "new", base, cand, mode="subset")
+    assert r.verdict == DiffVerdict.regression
+    assert "tool-call" in r.explanation
+
+
+def test_superset_mode_flags_a_dropped_call_as_regression():
+    """superset FORBIDS dropping calls."""
+    base = runs([["lookup_order", "issue_refund"]] * RUNS)
+    cand = runs([["lookup_order"]] * RUNS)  # dropped a call -> forbidden under superset
+    r = diff_scenario("s", "old", "new", base, cand, mode="superset")
+    assert r.verdict == DiffVerdict.regression
+
+
+# --------------------------------------------------------------------------- #
 # Permutation-test sanity (the engine's foundation)
 # --------------------------------------------------------------------------- #
 

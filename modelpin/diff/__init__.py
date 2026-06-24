@@ -24,6 +24,7 @@ from modelpin.diff.stats import (
 )
 from modelpin.diff.semantic import Judge, semantic_divergence_flags
 from modelpin.diff.structural import (
+    EQUIVALENCE_MODES,
     MatchMode,
     assertion_violation_flags,
     canonical_sequence,
@@ -31,6 +32,7 @@ from modelpin.diff.structural import (
     refusal_rate,
     refused_flags,
     tool_call_sequence,
+    trajectory_match,
 )
 from modelpin.models import DiffResult, DiffSignals, DiffVerdict, Scenario, Trace
 
@@ -91,11 +93,32 @@ def diff_scenario(
             explanation="insufficient data: need baseline and candidate runs",
         )
 
-    # --- tool-call trajectory distribution -------------------------------------
-    base_keys = [canonical_sequence(tool_call_sequence(t), mode) for t in baseline_traces]
-    cand_keys = [canonical_sequence(tool_call_sequence(t), mode) for t in candidate_traces]
-    tool_tvd = total_variation_distance(base_keys, cand_keys)
-    tool_p = permutation_pvalue_distribution(base_keys, cand_keys)
+    # --- tool-call trajectory --------------------------------------------------
+    # Equivalence modes (strict/unordered) collapse each run to a hashable key and compare
+    # the two DISTRIBUTIONS. Directional modes (subset/superset) are relations, NOT
+    # equivalences: bucketing them by a key would flag the very change the mode permits (a
+    # dropped call under subset, an added call under superset) as a regression — a false
+    # positive on the cardinal metric. For those, score each run by whether it VIOLATES the
+    # baseline relation and gate a *rise* in the violation rate (one-sided, like refusal).
+    if mode in EQUIVALENCE_MODES:
+        base_keys = [canonical_sequence(tool_call_sequence(t), mode) for t in baseline_traces]
+        cand_keys = [canonical_sequence(tool_call_sequence(t), mode) for t in candidate_traces]
+        tool_tvd = total_variation_distance(base_keys, cand_keys)
+        tool_p = permutation_pvalue_distribution(base_keys, cand_keys)
+    else:
+        ref_seq = modal_sequence(baseline_traces, mode)
+        base_viol = [
+            0 if trajectory_match(ref_seq, tool_call_sequence(t), mode) else 1
+            for t in baseline_traces
+        ]
+        cand_viol = [
+            0 if trajectory_match(ref_seq, tool_call_sequence(t), mode) else 1
+            for t in candidate_traces
+        ]
+        # Reuse MIN_TOOL_TVD as the violation-rate floor (both are 0..1 "fraction" scales);
+        # clamp the rise at >= 0 so the reported tool_call_match never exceeds 1.0.
+        tool_tvd = max(0.0, _mean(cand_viol) - _mean(base_viol))
+        tool_p = permutation_pvalue_mean(base_viol, cand_viol)
     tool_regressed = tool_p <= ALPHA and tool_tvd >= MIN_TOOL_TVD
 
     # --- refusal rate ----------------------------------------------------------
@@ -154,10 +177,16 @@ def diff_scenario(
     if tool_regressed:
         verdict = DiffVerdict.regression
         hard_pvalues.append(tool_p)
-        reasons.append(
-            f"tool-call behavior changed: {list(modal_sequence(baseline_traces, mode))} "
-            f"-> {list(modal_sequence(candidate_traces, mode))}"
-        )
+        if mode in EQUIVALENCE_MODES:
+            reasons.append(
+                f"tool-call behavior changed: {list(modal_sequence(baseline_traces, mode))} "
+                f"-> {list(modal_sequence(candidate_traces, mode))}"
+            )
+        else:
+            reasons.append(
+                f"tool-call trajectory now violates the '{mode}' relation vs baseline "
+                f"{list(modal_sequence(baseline_traces, mode))}"
+            )
     if refusal_regressed:
         verdict = DiffVerdict.regression
         hard_pvalues.append(refusal_p)
