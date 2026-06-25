@@ -5,7 +5,7 @@ Why Chat Completions (not the Responses API): the milestone compares an *older* 
 here are verified against the official `openai` Python SDK (v1.x):
 ``response.choices[0].message.{content,tool_calls,refusal}`` and ``response.usage``.
 
-Guardrails (see CLAUDE.md / spec §9):
+Guardrails (BYO-key, key-safe):
 - Use the END USER's key from ``OPENAI_API_KEY``. Never hardcode, ship, or log it.
 - The SDK is an *optional* dependency; its import stays inside the run path so the
   package imports without it. Tests inject a fake client and never touch the network.

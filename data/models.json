@@ -1,5 +1,5 @@
 {
-  "_note": "SEED registry. Anthropic ids are current (per the claude-api reference). OpenAI (gpt-*) and Google (gemini-*) ids, and ALL lifecycle dates, are UNVERIFIED placeholders — verify against live provider docs/endpoints before relying on them (CLAUDE.md guardrail). Dates intentionally omitted to avoid asserting unverified facts.",
+  "_note": "SEED registry. Anthropic ids are current (per the claude-api reference). OpenAI (gpt-*) and Google (gemini-*) ids, and ALL lifecycle dates, are UNVERIFIED placeholders — verify against live provider docs/endpoints before relying on them. Dates intentionally omitted to avoid asserting unverified facts.",
   "models": [
     {"id": "gpt-5.2", "provider": "openai", "family": "gpt-5", "status": "deprecated", "replacement_id": "gpt-5.5"},
     {"id": "gpt-5.5", "provider": "openai", "family": "gpt-5", "status": "active"},

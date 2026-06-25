@@ -47,5 +47,4 @@ Committed raw per-pair signals live in [`results/`](results/):
 - **`result-selfjudge.json`** — candidate == judge == `gpt-4o-mini`. Kept only as a cross-check;
   an adversarial audit showed self-judging made the separation artificially clean.
 
-Full write-up + the post-promotion held-out re-validation: [`docs/fp-measurement.md`](../../docs/fp-measurement.md)
-and `docs/STATUS.md`.
+Full write-up + the post-promotion held-out re-validation: [`docs/fp-measurement.md`](../../docs/fp-measurement.md).

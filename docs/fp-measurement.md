@@ -72,7 +72,7 @@ semantic equivalence 1.00, refusal delta 0.00 on every scenario). This is *not* 
 known-equivalent pair, so it does not measure the false-positive rate; rather it shows the
 cross-vendor judge fired and found two genuinely different models behaviorally equivalent on
 this suite — i.e. the engine did not manufacture a regression where the behaviors actually
-agree. (The run also surfaced + fixed two Gemini-3.x tool-loop bugs; see `docs/STATUS.md`.)
+agree. (The run also surfaced + fixed two Gemini-3.x tool-loop bugs.)
 
 **Phase-0 DoD: met** — `mp check` detects genuine regressions between real model
 behaviors *and* shows a measured **0% false-positive rate** on a held-out set.

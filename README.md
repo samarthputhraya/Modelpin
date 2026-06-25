@@ -206,7 +206,7 @@ re-validated on the held-out suite after promoting semantic divergence from `cha
 CI-failing `regression` (still 0/8).
 
 **This is a first calibration. Do not over-trust it.** The honest limitations, documented in
-[`docs/STATUS.md`](docs/STATUS.md):
+[`docs/fp-measurement.md`](docs/fp-measurement.md):
 - the calibration set is **small** (≈6+6 pairs) and the perturbations are **synthetic**, not
   harvested from real migrations;
 - recall on subtle changes was 4/6 — it can *miss* a subtle real change (again, the safe direction);
@@ -350,9 +350,9 @@ GitHub Action; the public-report engine (`mp report`) + open suite; the
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 
-The full engineering record and roadmap live in [`docs/STATUS.md`](docs/STATUS.md). Next up: the
-first public **Modelpin Report** on a real model launch (the harness is launch-ready), then the
-Anthropic adapter.
+The full false-positive measurement lives in [`docs/fp-measurement.md`](docs/fp-measurement.md),
+and the multi-model Drift Map in [`docs/reports/`](docs/reports/). Next up: the first public
+**Modelpin Report** on a real model launch (the harness is launch-ready), then the Anthropic adapter.
 
 ## License
 

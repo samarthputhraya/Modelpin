@@ -113,10 +113,6 @@ If you can share the raw baseline JSON (`--store-dir`), that's the most useful a
 
 ---
 
-## Using Claude Code
+## Pairing with an AI assistant
 
-This project includes a `CLAUDE.md` with full context for the engine's design decisions. If you're pairing with Claude Code on a contribution, point it there first — especially the "design guardrails" section, which documents the intentional choices that look like bugs.
-
-```bash
-claude    # reads CLAUDE.md automatically
-```
+The intentional design choices in `modelpin/diff/` that look like bugs — `confidence = min(p)` for an `unchanged` verdict, the conservative effect-size floors, the one-sided refusal test — are documented above (see "Testing ethos — golden tests, no live calls") and in [`docs/fp-measurement.md`](docs/fp-measurement.md). If you pair with an AI assistant on a contribution, point it at those first, and keep changes to the diff engine backed by calibration evidence.

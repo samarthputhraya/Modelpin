@@ -26,3 +26,13 @@ scripts/_calibration_*.json
 # Windows reserved device name accidentally materialized by `>nul` redirects
 # under Git Bash (it's a real file there, not the null device). Never track it.
 nul
+
+# Internal / GTM docs — kept LOCAL to the maintainer, never published (open-core split:
+# the free CLI/engine/Action is open; roadmap, internal process notes, and the launch/sales
+# playbook stay private). These files remain on disk for local use, just untracked.
+/CLAUDE.md
+/.claude/
+/docs/STATUS.md
+/docs/Modelpin-Engineering-Context-Pack.md
+/docs/engine-review-brief.md
+/docs/launch/
