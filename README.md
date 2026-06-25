@@ -2,6 +2,11 @@
 
 **Dependabot for AI models.** Know before the model breaks you.
 
+[![CI](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml/badge.svg)](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/modelpin.svg)](https://pypi.org/project/modelpin/)
+[![Python](https://img.shields.io/pypi/pyversions/modelpin.svg)](https://pypi.org/project/modelpin/)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 A provider ships a new model (or retires the one you depend on). Modelpin **replays your app's
 real behavior** on the new model, decides whether anything *actually* regressed despite model
 randomness, and posts a PR-style report — so you find out in a pull request, not in production.

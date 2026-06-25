@@ -1,0 +1,21 @@
+# Normalize line endings: store text as LF in the repo, regardless of contributor OS.
+# This ends the cross-platform "every file looks modified" confusion (Windows CRLF working
+# tree vs. LF blobs). Existing blobs are already LF, so this is a no-op for current content.
+* text=auto eol=lf
+
+# Keep shell scripts LF even when checked out on Windows.
+*.sh text eol=lf
+
+# Treat binaries as binary (never EOL-convert, never diff as text).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.whl  binary
+*.gz   binary
+*.zip  binary
+
+# Collapse generated/large artifacts in PR diffs (still tracked, just less noisy).
+*.lock      linguist-generated=true
+docs/reports/data/** linguist-generated=true

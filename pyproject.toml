@@ -4,16 +4,17 @@ version = "0.1.1"
 description = "Dependabot for AI models — catch model-migration regressions before they hit production."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Samarth Puthraya" }]
 keywords = ["llm", "ai", "agents", "regression-testing", "model-pinning", "evals", "ci", "dependabot"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Quality Assurance",
   "Topic :: Software Development :: Testing",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -34,13 +35,14 @@ dev = ["pytest>=8", "ruff>=0.5", "black>=24.0"]
 Homepage = "https://modelpin.dev"
 Repository = "https://github.com/samarthputhraya/modelpin"
 Issues = "https://github.com/samarthputhraya/modelpin/issues"
+Changelog = "https://github.com/samarthputhraya/modelpin/blob/main/CHANGELOG.md"
 
 [project.scripts]
 modelpin = "modelpin.cli:main"
 mp = "modelpin.cli:main"
 
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

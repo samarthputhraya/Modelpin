@@ -1,0 +1,47 @@
+name: CI
+
+# Offline quality gate: runs the full test suite + lint on every push to main and every PR.
+# No API keys, no network model calls — the suite uses the fake provider, so this is safe to
+# run on forked-PRs and never touches a secret. (The live model-check dogfood is the separate,
+# manual `modelpin.yml` workflow.)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install (with providers + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[providers,dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (black)
+        run: black --check .
+
+      - name: Tests (offline — fake provider, no API calls)
+        run: pytest -q
