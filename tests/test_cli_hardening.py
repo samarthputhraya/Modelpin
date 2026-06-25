@@ -117,7 +117,7 @@ def test_malformed_scenario_fails_friendly(tmp_path):
         ["baseline", "--provider", "fake", "--model", "m", "--scenarios-dir", scen, "--runs", "5"],
     )
     assert r.exit_code == 1
-    assert "broken.json" in r.output
+    assert "broken.json" in "".join(r.output.split())
     assert "Traceback" not in r.output
 
 
