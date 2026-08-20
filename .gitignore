@@ -32,7 +32,7 @@ nul
 # playbook stay private). These files remain on disk for local use, just untracked.
 /CLAUDE.md
 /.claude/
-/docs/STATUS.md
-/docs/Modelpin-Engineering-Context-Pack.md
-/docs/engine-review-brief.md
-/docs/launch/
+/ops/
+
+# pytest-cov output
+.coverage
