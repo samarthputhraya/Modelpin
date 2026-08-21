@@ -34,7 +34,7 @@ def test_deprecations_filters_to_deprecated_and_retired(tmp_path):
 def test_seed_matches_repo_json():
     """The embedded seed and the repo's data/models.json must never drift.
 
-    The wheel is code only (ADR-0011), so the registry that ships is SEED_MODELS. But
+    The wheel is code only, so the registry that ships is SEED_MODELS. But
     community PRs are far more comfortable editing JSON than a Python literal, so
     data/models.json stays in the repo as the contributor-facing surface. This equality is
     the only thing keeping the file people edit and the data that ships in step.

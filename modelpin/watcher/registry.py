@@ -1,6 +1,6 @@
 """The seed model registry, embedded as code.
 
-The wheel ships **no** data files (ADR-0011), so the registry cannot be read from a
+The wheel ships **no** data files, so the registry cannot be read from a
 ``data/models.json`` next to the package — under ``pip install`` there is no such file, and
 the previous implementation's fallback of sniffing ``Path.cwd()/"data"/"models.json"`` was
 worse than the failure: it let a stranger's unrelated ``./data/models.json`` decide which

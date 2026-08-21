@@ -134,3 +134,36 @@ def test_demo_reaches_the_verdict_the_readme_promises(
     cand = replay(scenario, DEMO_TO, provider, runs=5)
     result = diff_scenario(scenario_id, DEMO_FROM, DEMO_TO, base, cand, scenario, "strict")
     assert result.verdict == expected, f"{scenario_id}: {result.verdict} ({result.explanation})"
+
+
+def test_printed_advice_never_tells_a_powershell_user_to_run_mp() -> None:
+    """Every command the CLI PRINTS must use `modelpin`, never the bare `mp` alias.
+
+    On PowerShell `mp` is a ReadOnly, AllScope alias for `Move-ItemProperty`, resolved
+    BEFORE PATH. The README warns about it one paragraph above the quickstart -- and the
+    CLI used to print the broken form anyway, so a user who read the warning and did
+    everything right was then handed a command that silently runs the wrong program.
+    `modelpin` works on every shell, so printed advice has no reason to say anything else.
+    """
+    import re
+
+    import modelpin
+
+    package_root = Path(modelpin.__file__).parent
+    offenders: list[tuple[str, str]] = []
+    # The WHOLE package, not just cli.py: the first version of this test scanned cli/demo
+    # only and missed `Run \`mp baseline\` first.` in storage.py -- an error message on the
+    # single most common first-run failure path.
+    for source_file in sorted(package_root.rglob("*.py")):
+        source = source_file.read_text(encoding="utf-8")
+        for lineno, line in enumerate(source.splitlines(), 1):
+            stripped = line.strip()
+            # Only user-facing strings: skip pure comments (`#` lines carry design notes
+            # that legitimately discuss the `mp` alias by name).
+            if stripped.startswith("#"):
+                continue
+            if re.search(r"(?<![\w.-])mp (init|scan|baseline|check|report|version)\b", line):
+                offenders.append((f"{source_file.relative_to(package_root)}:{lineno}", stripped))
+    assert not offenders, "printed advice uses the PowerShell-broken `mp` alias:\n" + "\n".join(
+        f"  {where}: {text}" for where, text in offenders
+    )

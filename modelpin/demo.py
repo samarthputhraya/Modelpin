@@ -1,7 +1,8 @@
-"""The offline demo sandbox written by ``mp init --demo``.
+"""The offline demo sandbox written by ``modelpin init --demo``.
 
-Modelpin ships **no** data files: the wheel is code only (see ADR-0011 and
-``tests/test_packaging_contents.py``). The zero-key 30-second demo therefore has to be
+Modelpin ships **no** data files: the wheel is code only, so nothing outside the package
+is read at runtime and a ``pip install`` cannot leave a documented command pointing at a
+file that is not there. The zero-key 30-second demo therefore has to be
 *generated* into the user's own directory rather than read out of the installed package —
 which is also why it never breaks after ``pip install``, and why the error message that
 points at it can never be a lie.
@@ -173,7 +174,7 @@ def _traces() -> list[Trace]:
     ]
 
 
-_CONFIG = f"""# modelpin.yaml - written by `mp init --demo`. Everything here is offline and free.
+_CONFIG = f"""# modelpin.yaml - written by `modelpin init --demo`. Everything here is offline and free.
 models:
   - {DEMO_FROM}          # the "current" model this demo pretends your app depends on
 scenarios_dir: scenarios
@@ -191,12 +192,16 @@ No API key. No cost. Nothing here talks to a provider — `providers: [fake]` in
 
 ## Run it
 
+> These say `modelpin`, not `mp`. Both work on bash/zsh/cmd, but PowerShell ships a
+> ReadOnly alias `mp` -> `Move-ItemProperty` that it resolves *before* PATH, so `mp`
+> there silently runs the wrong program. `modelpin` is safe everywhere.
+
 ```bash
-mp baseline --fixtures {DEMO_FIXTURES}
-mp check --to {DEMO_TO} --fixtures {DEMO_FIXTURES}
+modelpin baseline --fixtures {DEMO_FIXTURES}
+modelpin check --to {DEMO_TO} --fixtures {DEMO_FIXTURES}
 ```
 
-`mp check` exits **1** here, on purpose. That non-zero exit is the whole product: it is
+`modelpin check` exits **1** here, on purpose. That non-zero exit is the whole product: it is
 what fails your CI when a model migration changes your app's behavior.
 
 ## What you should see
@@ -214,7 +219,7 @@ Action posts on your PR.
 ## Now make it lie to you
 
 Open `{DEMO_FIXTURES}` and edit the `{DEMO_TO}` trace for `refund_request` so its
-`tool_calls` match `{DEMO_FROM}` exactly. Re-run `mp check`. The regression disappears and
+`tool_calls` match `{DEMO_FROM}` exactly. Re-run `modelpin check`. The regression disappears and
 the verdict moves to `unchanged` — the verdict is computed from the traces, not hardcoded.
 
 Then point `scenarios/` at your own app's cases and swap `providers: [fake]` for a real
@@ -237,7 +242,7 @@ def write_demo(root: str | Path = ".") -> list[Path]:
     """Scaffold the offline demo under ``<root>/modelpin-demo``.
 
     Never overwrites: an existing file is left exactly as the user left it, so re-running
-    ``mp init --demo`` after editing the traces is safe. Returns only the paths actually
+    ``modelpin init --demo`` after editing the traces is safe. Returns only the paths actually
     written, in creation order.
     """
     demo = Path(root) / DEMO_DIRNAME

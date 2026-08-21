@@ -4,7 +4,7 @@ All notable changes to Modelpin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.2] - 2026-08-22
 
 ### Changed (breaking)
 - **`mp report --suite-dir` is now required.** There is no built-in default suite directory.
@@ -23,8 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bigger: the wheel stays code-only, `mp init --demo` generates the demo, and the model
   registry is embedded.
 - **The error message's remedy no longer loops.** `no scenarios in ...` used to say
-  "Run `mp init` first" unconditionally — advice that was true in 1 of 5 reachable states,
-  and that in 2 of them sent the user around a loop with no exit. The message now reports the
+  "Run `mp init` first" unconditionally. That was correct only when the missing directory
+  happened to be the one `mp init` creates; otherwise it sent the user around a loop with no
+  exit (— `mp init` succeeds, the identical command fails identically). The message now reports the
   absolute path it searched, which setting chose it, what it actually found there, and a
   remedy that is true in that state. `mp init` is named only when `mp init` would create
   exactly that path.
@@ -55,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wheel is unaffected and stays code-only.
 
 [#28]: https://github.com/samarthputhraya/modelpin/issues/28
+
+## [Unreleased]
 
 ### Planned
 - Anthropic adapter (currently a stub; needs a paid key).

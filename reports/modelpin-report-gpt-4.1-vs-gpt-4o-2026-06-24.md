@@ -53,20 +53,28 @@ This is a measurement on a fixed, open suite under the exact settings above — 
 ## Reproduce this report
 
 ```bash
-# The suite lives in the repo, not in the wheel — and this report ran on suite **v1**,
-# which the checkout no longer carries at that path (it now serves v2). Check out the tag
-# that matches the suite_hash above to reproduce this report exactly.
+# This report ran on suite **v1**. No RELEASE TAG carries it: the suite was first committed
+# after v0.1.1 was tagged, and `examples/report-suite/` at HEAD now serves v2
+# (sha256:ffd99774f681). Pin the commit, not a tag.
 git clone https://github.com/samarthputhraya/modelpin && cd modelpin
-git checkout v0.1.0                      # suite modelpin-public-v1, sha256:1c25c111a296
-pip install "modelpin[providers]"
+git checkout f67e2ae            # suite modelpin-public-v1 1.0.0, sha256:1c25c111a296
+
+# Install the ENGINE from this checkout too, not from PyPI: published 0.1.1 predates the
+# `report` implementation (its `report` command is a "Coming soon" stub with no options),
+# so `pip install modelpin` cannot run the line below at any version below 0.1.2.
+pip install -e ".[providers]"
 
 modelpin report --to gpt-4.1 --from gpt-4o --provider openai --runs 5 --match strict \
   --suite-dir examples/report-suite
 ```
 
-> Verify the `Suite` row above matches `sha256:1c25c111a296` before comparing numbers. If it
+> Verify the `Suite` row above reads `sha256:1c25c111a296` before comparing numbers. If it
 > does not, you are running a different suite and the results are not comparable — that is
-> exactly the failure this block now guards against.
+> exactly the failure this block guards against.
+>
+> The `Engine version` row records what `modelpin version` printed when this report was
+> generated. Note that three distinct engine builds have carried the string `0.1.1`, so that
+> row does not by itself identify an engine — the pinned commit above is what does.
 
 You supply your own API key (read from the environment). Exact outputs vary because models are non-deterministic; the distribution-level verdicts are what reproduce.
 

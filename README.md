@@ -37,7 +37,7 @@ Install (Python 3.12+):
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.1.1
+modelpin version                        # -> modelpin 0.1.2
 ```
 
 > **Windows PowerShell:** run `modelpin …`, not `mp …`. PowerShell ships a built-in `mp` alias
@@ -53,10 +53,10 @@ the whole pipeline (baseline, candidate replay, behavioral diff, report) at zero
 
 <!-- mp:smoke -->
 ```bash
-mp init --demo
+modelpin init --demo
 cd modelpin-demo
-mp baseline --fixtures traces.json
-mp check --to demo-model-v2 --fixtures traces.json
+modelpin baseline --fixtures traces.json
+modelpin check --to demo-model-v2 --fixtures traces.json
 ```
 
 You'll get a per-scenario verdict (`unchanged` / `changed_minor` / `regression`), a confidence
@@ -70,12 +70,12 @@ score, a one-line plain-English explanation per scenario, and a Markdown report 
 | `angry_customer` | `regression` | the candidate refuses an action the baseline performed |
 | `invoice_parse` | `changed_minor` | `"Total: $5"` → `"Total: 5"` breaks the scenario's assertion, but nothing refused and no tool moved |
 
-`mp check` exits non-zero **only** on a real `regression` — that's the CI gate, and it is why
+`modelpin check` exits non-zero **only** on a real `regression` — that's the CI gate, and it is why
 the demo exits 1. Then edit `traces.json`, re-run, and watch the verdict move: the answer is
 computed from the traces, not baked in.
 
 None of this is bundled inside the installed package — the wheel is code only, and the demo is
-generated on your machine. That is deliberate: shipping the files would mean the quickstart depends
+generated on your machine. That is deliberate: shipping them would mean the quickstart depends
 on data that a `pip install` may or may not place where the docs claim — which is exactly how the
 previous quickstart broke. Generating it means the commands above cannot rot.
 
@@ -362,11 +362,12 @@ is what keeps the false-positive promise honest and the tool small enough to tru
 ## Status
 
 **Phase 0 (core engine MVP) — complete; `v0.1.1` live on PyPI.** Live-validated cross-vendor
-(OpenAI ↔ Google ↔ Groq/Llama); held-out false-positive rate **0/8**; multi-turn replay; a real
+(OpenAI ↔ Google ↔ Groq/Llama); **0 false positives in 8 held-out trials** (an
+observation, not a rate — the exact one-sided 95% upper bound for 0/8 is ~31%); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; **193 tests passing**, `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; **200 tests passing**, `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

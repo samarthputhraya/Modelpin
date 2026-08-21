@@ -19,7 +19,7 @@ class FakeProvider(ProviderAdapter):
     @classmethod
     def from_fixtures(cls, path: str | Path) -> "FakeProvider":
         """Build a provider from a JSON array of Trace objects (one template per
-        scenario_id + model_id). Lets `mp baseline`/`mp check` run fully offline."""
+        scenario_id + model_id). Lets `modelpin baseline`/`modelpin check` run fully offline."""
         records = json.loads(Path(path).read_text())
         canned: dict[tuple[str, str], Trace] = {}
         for record in records:

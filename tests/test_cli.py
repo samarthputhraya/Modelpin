@@ -376,3 +376,42 @@ def test_report_missing_suite_fails_clearly(tmp_path):
     )
     assert r.exit_code == 1
     assert "scenarios" in r.output.lower()
+
+
+def test_init_scaffolds_when_the_dir_holds_only_reserved_files(tmp_path):
+    """A scenarios dir containing only `manifest.json` was a no-exit loop.
+
+    `_dir_state()` correctly reported "only reserved files and no scenario files" and
+    advised `modelpin init` -- but `init()`'s own glob was not reserved-aware, so it wrote
+    nothing, and re-running the failing command reproduced the byte-identical error forever.
+    The error path and the fix path have to agree on what "has scenarios" means.
+    """
+    scen = tmp_path / "scenarios"
+    scen.mkdir()
+    (scen / "manifest.json").write_text("{}", encoding="utf-8")
+
+    r = runner.invoke(app, ["init", str(tmp_path)])
+    assert r.exit_code == 0, r.output
+    assert (
+        scen / "greeting.json"
+    ).is_file(), f"init wrote no starter scenario, so the advice loops.\n{r.output}"
+
+    # ...and the command that sent the user here now gets past the scenarios check.
+    after = runner.invoke(
+        app,
+        [
+            "baseline",
+            "--provider",
+            "fake",
+            "--model",
+            "x",
+            "--config",
+            str(tmp_path / "modelpin.yaml"),
+            "--scenarios-dir",
+            str(scen),
+            "--store-dir",
+            str(tmp_path / ".modelpin"),
+        ],
+    )
+    assert after.exit_code == 0, after.output
+    assert "no scenarios found" not in after.output

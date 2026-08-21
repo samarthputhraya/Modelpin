@@ -60,7 +60,9 @@ def load_baseline(model_id: str, store_dir: str | Path = STORE_DIRNAME) -> dict[
     """
     path = baseline_path(model_id, store_dir)
     if not path.exists():
-        raise FileNotFoundError(f"No baseline for {model_id!r} at {path}. Run `mp baseline` first.")
+        raise FileNotFoundError(
+            f"No baseline for {model_id!r} at {path}. Run `modelpin baseline` first."
+        )
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         return {
@@ -68,5 +70,5 @@ def load_baseline(model_id: str, store_dir: str | Path = STORE_DIRNAME) -> dict[
         }
     except (json.JSONDecodeError, ValidationError, AttributeError, TypeError) as exc:
         raise BaselineError(
-            f"Baseline {path} is corrupt ({exc}). Delete it and re-run `mp baseline`."
+            f"Baseline {path} is corrupt ({exc}). Delete it and re-run `modelpin baseline`."
         ) from exc
