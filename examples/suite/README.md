@@ -26,6 +26,6 @@ not behavior); semantic equivalence is judged by the LLM-judge instead.
 Run it (BYO key), e.g.:
 
 ```
-mp baseline --provider openai --model gpt-3.5-turbo --scenarios-dir examples/suite --runs 5
-mp check    --provider openai --to gpt-4o-mini --from gpt-3.5-turbo --scenarios-dir examples/suite --runs 5
+modelpin baseline --provider openai --model gpt-3.5-turbo --scenarios-dir examples/suite --runs 5
+modelpin check    --provider openai --to gpt-4o-mini --from gpt-3.5-turbo --scenarios-dir examples/suite --runs 5
 ```

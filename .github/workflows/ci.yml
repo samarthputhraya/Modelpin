@@ -190,7 +190,12 @@ jobs:
           cat r.txt
           test "$rc" -eq 2 || { echo "expected exit 2 (missing required option), got $rc"; exit 1; }
           grep -qi "suite-dir" r.txt || { echo "error did not name --suite-dir"; exit 1; }
-          if grep -qi "mp init" r.txt; then echo "report must never advise 'mp init'"; exit 1; fi
+          # Assert the MEANING, not a literal that a rename can retire: `report` must
+          # never tell the user to RUN init. Saying "`modelpin init` does not create
+          # suite directories" is the opposite -- correct, and must stay allowed.
+          if grep -qiE 'run [`"'"'"']?(mp|modelpin) init' r.txt; then
+            echo "report must never advise running init"; exit 1
+          fi
           echo "mp report contract ok"
 
       - name: Console scripts exist under both names

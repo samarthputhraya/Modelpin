@@ -47,7 +47,7 @@ modelpin version                        # -> modelpin 0.1.2
 
 ### Try it offline, no API key (30 seconds)
 
-`mp init --demo` writes a self-contained sandbox — four scenarios, canned traces and a
+`modelpin init --demo` writes a self-contained sandbox — four scenarios, canned traces and a
 config — into `modelpin-demo/`. It replays those traces through the fake provider, so you see
 the whole pipeline (baseline, candidate replay, behavioral diff, report) at zero cost and no key:
 
@@ -83,18 +83,18 @@ previous quickstart broke. Generating it means the commands above cannot rot.
 
 ```bash
 # 1. Scaffold modelpin.yaml + scenarios/ (never overwrites existing files)
-mp init
+modelpin init
 
 # 2. See which models your repo already depends on, and where
-mp scan
+modelpin scan
 
 # 3. Add a scenario or two (a JSON file per representative case — see below),
 #    then record how your current model behaves, N times
 export OPENAI_API_KEY=sk-...        # your key, read from the env — never stored
-mp baseline                         # uses models[0] + providers[0] from modelpin.yaml
+modelpin baseline                   # uses models[0] + providers[0] from modelpin.yaml
 
 # 4. Replay your scenarios on a candidate model and diff the behavior
-mp check --to gpt-5.5
+modelpin check --to gpt-5.5
 ```
 
 A scenario is a small JSON file (one per case) under `scenarios/`. The one `mp init` writes:
@@ -275,7 +275,7 @@ OpenAI-compatible API and has a free tier, so a free key makes a zero-cost cross
 
 ```bash
 export GROQ_API_KEY=...     # free at console.groq.com
-mp check --provider groq --from gpt-4o-mini --to llama-3.3-70b-versatile
+modelpin check --provider groq --from gpt-4o-mini --to llama-3.3-70b-versatile
 ```
 
 A caveat worth stating: open-model *hosts* rotate ids but don't retire on a lab's fixed schedule the
@@ -367,7 +367,7 @@ observation, not a rate — the exact one-sided 95% upper bound for 0/8 is ~31%)
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; **200 tests passing**, `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; **201 tests passing**, `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

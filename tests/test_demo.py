@@ -167,3 +167,26 @@ def test_printed_advice_never_tells_a_powershell_user_to_run_mp() -> None:
     assert not offenders, "printed advice uses the PowerShell-broken `mp` alias:\n" + "\n".join(
         f"  {where}: {text}" for where, text in offenders
     )
+
+
+def test_readme_fences_never_hand_powershell_users_the_mp_alias() -> None:
+    """Same rule as above, for the docs a reader copy-pastes.
+
+    Only ONE README fence carries `<!-- mp:smoke -->` and is executed by CI, so the other
+    five drifted back to `mp` while the guarded one was fixed -- and README's own PowerShell
+    warning sits a few lines above them. A doc command is as much "printed advice" as
+    anything the CLI emits; the reader cannot tell which fence CI covers.
+    """
+    import re
+
+    repo_root = Path(__file__).resolve().parents[1]
+    offenders: list[str] = []
+    for doc in sorted(repo_root.glob("*.md")) + sorted(repo_root.glob("examples/**/*.md")):
+        for lineno, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), 1):
+            # Only lines that ARE a command: a fenced line starting with the invocation.
+            if re.match(r"^\s*mp (init|scan|baseline|check|report|version)\b", line):
+                offenders.append(f"  {doc.relative_to(repo_root)}:{lineno}: {line.strip()}")
+    assert not offenders, (
+        "doc fences tell PowerShell users to run `mp`, which resolves to Move-ItemProperty "
+        "before PATH:\n" + "\n".join(offenders)
+    )
