@@ -1,0 +1,788 @@
+name: Release
+
+# Publishes modelpin to PyPI with Trusted Publishing (OIDC). There is no PyPI token in this
+# repo, in a GitHub secret, in ~/.pypirc, or on anyone's laptop. The only credential is a
+# short-lived (<=15 min) token PyPI mints for THIS workflow file, and PEP 740 provenance
+# attestations ride along for free because the publish action has them on by default and they
+# only work via Trusted Publishing.
+#
+# THE FILENAME IS PART OF THE CREDENTIAL. PyPI matches the trusted publisher on
+# owner + repository + this exact filename (+ environment). Renaming this file, moving the
+# publish job into a second file, or calling it from a reusable workflow all revoke publishing
+# with an `invalid-publisher` 403 that looks exactly like a bad token. Pick the name once.
+#
+# One-time setup, in this order — see ops/RUNBOOK.md for the verification commands:
+#   1. Settings -> Environments -> New environment `pypi`. THIS REPO HAS ZERO ENVIRONMENTS
+#      TODAY, and a workflow that names one that does not exist AUTO-CREATES IT WITH NO
+#      PROTECTION RULES and publishes green. Verify afterwards, do not assume:
+#        gh api repos/samarthputhraya/modelpin/environments/pypi --jq '.protection_rules'
+#      must print a NON-EMPTY array. Add yourself as a required reviewer, and set
+#      Deployment branches and tags -> Selected branches and tags -> add `v*.*.*` as a TAG
+#      rule (the UI makes you pick branch-vs-tag per pattern; a BRANCH pattern can never match
+#      a tag push). That tag rule is REQUIRED, not optional: it is the only control that stops
+#      an edited copy of this file running from an arbitrary branch, because PyPI matches the
+#      filename and never looks at the ref or the event.
+#   2. https://pypi.org/manage/project/modelpin/settings/publishing/  (modelpin already exists
+#      on PyPI, so this is the project's own Publishing page -- NOT the account-level "pending
+#      publisher" flow, which only creates projects that do not exist yet.)
+#        Owner: samarthputhraya
+#        Repository name: modelpin
+#        Workflow name: release.yml   <- the form's label says "name" but the field is a
+#                                        FILENAME: no directories, must end .yml/.yaml
+#        Environment name: pypi       <- must match `environment:` below. PyPI lower-cases and
+#                                        compares case-insensitively. Leaving it BLANK still
+#                                        publishes, which is the dangerous direction: the
+#                                        protection rules you think you have become decorative.
+#   3. Ship TWO clean releases through this workflow, THEN delete the old API token in PyPI
+#      account settings. Not after the first -- if a release ever half-uploads, an API token is
+#      the only out-of-band repair path, and PyPI shows a token exactly once. Configuring a
+#      trusted publisher does not disable tokens; there is no "require trusted publishing"
+#      switch.
+
+# TRIGGER: a published GitHub Release, not `on: push: tags`.
+#   - `tags: ['v*']` would ALSO fire on the floating `v1` Action ref, which this repo
+#     force-moves every release and which points at the same commit as v0.1.2 right now. Every
+#     `git push origin v1 --force` would kick off a republish of whatever pyproject holds.
+#   - Publishing a Release is a second deliberate act after the tag push and it is recorded
+#     against a person. It is NOT a security boundary (both need the same write credential) --
+#     the load-bearing controls are the `pypi` environment's approval and tag rule -- but it
+#     costs nothing here, because the release skill already writes a release note by hand.
+# TRAP 1: a Release created BY a workflow using GITHUB_TOKEN does not fire this event at all --
+# no run appears in the Actions tab to investigate. Cut releases by hand or with a PAT.
+# TRAP 2: for a `release` event the associated ref is the TAG, and "GitHub searches the
+# .github/workflows directory ... for workflow files that are PRESENT IN THE ASSOCIATED COMMIT
+# SHA OR GIT REF OF THE EVENT". So a Release cut against a tag whose commit predates this file
+# fires NOTHING -- green Release page, empty Actions tab, PyPI unchanged. The tag must point at
+# a commit that CONTAINS this file. That is why shipping the already-existing v0.1.2 tag
+# requires moving it forward first; see ops/RUNBOOK.md.
+on:
+  release:
+    types: [published]
+
+# Deliberately stricter than ci.yml's workflow-level `contents: read`. Declaring any permission
+# sets every unspecified one to none, so each job below states exactly what it needs and no job
+# inherits the right to mint an OIDC token.
+permissions: {}
+
+# NOT ci.yml's `cancel-in-progress: true`. Cancelling a test run costs a minute; cancelling an
+# upload can leave a version half-published, and PyPI never lets a filename be reused -- a
+# burned 0.1.2 is 0.1.2 forever, and the only way forward is 0.1.3.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Runs before anything is built and before the environment approval, so a doomed release
+  # never reaches a human's approval prompt. Everything here is stdlib + git + gh with no
+  # `pip install`, so no dependency of ours gets a vote on whether the gate passes.
+  version-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read          # for the required-checks assertion below; nothing else needs it
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      whl: ${{ steps.tag.outputs.whl }}
+      sdist: ${{ steps.tag.outputs.sdist }}
+    steps:
+      # Every action in every job is pinned to a full-length commit SHA. A floating `@v7` in
+      # the jobs that BUILD the uploaded bytes is a remote-code-execution hole that needs no
+      # access to this repo at all (tj-actions/changed-files, March 2025). The trailing comment
+      # is the human-readable version and the handle Dependabot/Renovate bumps.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # github.sha, NOT the tag name. For a release event GITHUB_SHA is "Last commit in the
+          # tagged release", frozen in the event payload at run creation; a tag name is a
+          # mutable pointer that each job would re-resolve at its own runtime. Tags are
+          # completely unprotected on this repo (zero rulesets), so re-resolving would let a
+          # tag force-moved between two jobs ship bytes that no gate ever saw.
+          ref: ${{ github.sha }}
+          # `merge-base --is-ancestor` and `rev-parse v1^{commit}` need real objects. At the
+          # default fetch-depth 1 they die with "Not a valid object name" inside a step whose
+          # name says "gate", which reads as a broken guard rather than a shallow clone.
+          fetch-depth: 0
+          fetch-tags: true
+          # The token is not needed after checkout (this repo is public, so the git fetches
+          # below work unauthenticated) and leaving it in .git/config is free credential
+          # exposure. If modelpin ever goes private, this must flip back to true.
+          persist-credentials: false
+
+      - name: Gate — release kind, tag shape, and the tag still points where this run came from
+        id: tag
+        env:
+          # Passed via env, never interpolated into the script body: a tag name expanded
+          # straight into a `run:` block is an expression-injection hole (the class of bug
+          # GHSA-vxmw-7h4f-hqxh patched in the publish action itself).
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          DRAFT: ${{ github.event.release.draft }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          # `types: [published]` fires for pre-releases too, and there is nothing else in this
+          # file that would notice: a pre-release cut on a normal v0.1.3 tag would upload to
+          # production PyPI and burn that version forever. Fail LOUDLY rather than skipping the
+          # job -- a skipped job leaves a green run and no signal, which is the exact failure
+          # mode this workflow exists to avoid.
+          if [ "$PRERELEASE" != "false" ] || [ "$DRAFT" != "false" ]; then
+            echo "FAIL: this is a pre-release or draft (prerelease=$PRERELEASE draft=$DRAFT)."
+            echo "      There is no TestPyPI route in this file; it publishes to production"
+            echo "      PyPI only. Untick 'This is a pre-release' and publish again."
+            exit 1
+          fi
+
+          # Exact shape, not a `v*` glob: `v1` is this repo's floating Action ref and points at
+          # a release commit. It must never be able to publish.
+          printf '%s' "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' || {
+            echo "FAIL: tag '$TAG' is not vMAJOR.MINOR.PATCH - refusing to publish"; exit 1; }
+
+          # Closes the time-of-check/time-of-use window at its source: if the tag was moved
+          # after the Release was published, this run is operating on bytes the tag no longer
+          # names, and every gate below would be certifying the wrong commit.
+          git rev-parse -q --verify "refs/tags/$TAG^{commit}" >/dev/null \
+            || git fetch --force origin "+refs/tags/$TAG:refs/tags/$TAG"
+          TAG_COMMIT="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          if [ "$TAG_COMMIT" != "$EVENT_SHA" ]; then
+            echo "FAIL: tag $TAG now points at $TAG_COMMIT but this run was dispatched for"
+            echo "      $EVENT_SHA. The tag moved after the Release was published."
+            exit 1
+          fi
+
+          VER="${TAG#v}"
+          # The gate's verdict is the ONLY source of the version downstream. Nothing else in
+          # this file re-derives it from tag_name, so the shape check above is load-bearing
+          # rather than decorative.
+          {
+            echo "version=$VER"
+            echo "whl=modelpin-$VER-py3-none-any.whl"
+            echo "sdist=modelpin-$VER.tar.gz"
+          } >> "$GITHUB_OUTPUT"
+          echo "tag ok: $TAG -> $VER at $EVENT_SHA"
+
+      # The tag is the only string a human types during a release, so it is the only thing that
+      # can disagree with the tree. Fail here naming BOTH sides. This gate deliberately does
+      # not auto-bump the files (a workflow that can rewrite the version can be talked into
+      # shipping anything) and deliberately does not derive the version FROM the tag: that
+      # makes a typo'd tag authoritative and leaves `mp version` disagreeing with the installed
+      # wheel forever. If this project ever adopts a dynamic version, this gate inverts and
+      # must be rewritten.
+      - name: Gate — tag and tree agree on the version
+        env:
+          VER: ${{ steps.tag.outputs.version }}
+        run: |
+          python - "$VER" <<'PY'
+          import pathlib, re, sys, tomllib
+
+          ver = sys.argv[1]
+          problems = []
+
+          project = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+          if "version" not in project:
+              sys.exit("pyproject declares no static project.version - if this moved to a "
+                       "dynamic version, this whole gate inverts and must be rewritten")
+          if project["version"] != ver:
+              problems.append(f"pyproject.toml says {project['version']!r}, tag says {ver!r}")
+
+          # Read the file; never import the package. Importing runs code from the ref this job
+          # has not finished vouching for yet.
+          init = pathlib.Path("modelpin/__init__.py").read_text(encoding="utf-8")
+          m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', init, re.M)
+          if m is None:
+              problems.append("modelpin/__init__.py has no __version__ = '...' line")
+          elif m.group(1) != ver:
+              problems.append(f"modelpin/__init__.py says {m.group(1)!r}, tag says {ver!r}")
+
+          changelog = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          if not re.search(rf"^## \[{re.escape(ver)}\] - \d{{4}}-\d{{2}}-\d{{2}}", changelog, re.M):
+              problems.append(f"CHANGELOG.md has no dated '## [{ver}] - YYYY-MM-DD' heading")
+
+          readme = pathlib.Path("README.md").read_text(encoding="utf-8")
+          if f"-> modelpin {ver}" not in readme:
+              problems.append(f"README.md does not show '-> modelpin {ver}' for `modelpin version`")
+
+          if problems:
+              print(f"version gate FAILED for {ver}:")
+              for p in problems:
+                  print("  - " + p)
+              print("")
+              print("RECOVERY — re-running THIS run cannot help: a re-run reuses the original")
+              print("event's GITHUB_SHA and GITHUB_REF, so it re-reads the same commit.")
+              print("  1. land the version fix on main and wait for CI green on that commit")
+              print("  2. gh release delete <tag> --cleanup-tag")
+              print("  3. git tag -a <tag> <fixed commit>   (and move v1 to the same commit)")
+              print("  4. git push origin <tag>; git push origin v1 --force")
+              print("  5. publish a new GitHub Release against the new tag")
+              print("Do not move the tag to match a stale file.")
+              sys.exit(1)
+          print(f"version gate ok: {ver} == pyproject == __version__ == CHANGELOG == README")
+          PY
+
+      # NOT gated, on purpose: README's Status section and CHANGELOG's `[x.y.z]:` link-reference
+      # block are both stale at 2363004 (they still say v0.1.1), so gating on them would make
+      # this workflow unable to ship the release it was written for. They are prose claims --
+      # claims-auditor territory per CLAUDE.md's routing table -- not machine-checkable version
+      # identity. Revisit once 0.1.2 is out and both surfaces are clean.
+
+      # ci.yml runs on `push: branches: [main]` and `pull_request`. It does NOT run on tags or
+      # releases, so NOTHING has tested the exact commit this Release points at unless we go
+      # and look. Two checks are needed and neither is sufficient alone:
+      #   - required checks green on THIS sha: proves it was tested. But a fork/PR head commit
+      #     also collects green checks from `pull_request` runs without ever being merged.
+      #   - ancestry: proves it is on main. But with a non-squash merge, every commit of a
+      #     branch becomes an ancestor of main while only the branch HEAD was ever checked.
+      # Together they are a real release gate. Branch protection alone is not: it does not
+      # cover tags, this repo has zero rulesets, and enforce_admins is false.
+      - name: Gate — the tagged commit is on main AND passed the four required checks
+        env:
+          EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          git rev-parse --verify -q refs/remotes/origin/main >/dev/null \
+            || git fetch origin "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor "$EVENT_SHA" origin/main; then
+            echo "FAIL: $EVENT_SHA is not an ancestor of origin/main. Publish from main."
+            exit 1
+          fi
+          echo "ancestry ok: $EVENT_SHA is on origin/main"
+
+          gh api "repos/$REPO/commits/$EVENT_SHA/check-runs" -f per_page=100 \
+            --jq '.check_runs[] | [.name, .status, (.conclusion // "null"), .started_at] | @tsv' \
+            > "$RUNNER_TEMP/checks.tsv"
+          cat "$RUNNER_TEMP/checks.tsv"
+          python - "$RUNNER_TEMP/checks.tsv" <<'PY'
+          import sys
+          # The four contexts branch protection requires on main. Hardcoded: reading branch
+          # protection needs admin scope, which GITHUB_TOKEN cannot be granted.
+          required = ["test (3.12)", "test (3.13)",
+                      "wheel-smoke (ubuntu-latest)", "wheel-smoke (windows-latest)"]
+          latest = {}
+          for line in open(sys.argv[1], encoding="utf-8"):
+              if not line.strip():
+                  continue
+              name, status, conclusion, started = line.rstrip("\n").split("\t")
+              # A re-run adds a second row for the same name; the newest one is the verdict.
+              if name not in latest or started > latest[name][2]:
+                  latest[name] = (status, conclusion, started)
+          problems = []
+          for name in required:
+              if name not in latest:
+                  problems.append(f"{name}: never ran on this commit")
+                  continue
+              status, conclusion, _ = latest[name]
+              if status != "completed" or conclusion != "success":
+                  problems.append(f"{name}: status={status} conclusion={conclusion}")
+          if problems:
+              print("FAIL: this commit did not pass the required checks:")
+              for p in problems:
+                  print("  - " + p)
+              print("")
+              print("If CI is still running, wait for it to go green and then use")
+              print("'Re-run failed jobs' on THIS run -- the sha is unchanged, so a re-run")
+              print("re-queries the API and will pass.")
+              sys.exit(1)
+          print("required checks ok: " + ", ".join(required))
+          PY
+
+      - name: Gate — v1 still serves this commit and root action.yml exists
+        env:
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          # ^{commit} on BOTH sides. Release tags here are ANNOTATED (rev-parse yields a
+          # tag-object sha) while v1 is LIGHTWEIGHT (a commit sha). Comparing them raw reports
+          # a mismatch on a repo where the invariant actually holds, and the obvious "fix" is
+          # to weaken the guard.
+          git rev-parse -q --verify "refs/tags/v1^{commit}" >/dev/null \
+            || git fetch --force origin "+refs/tags/v1:refs/tags/v1" || true
+          V1_COMMIT="$(git rev-parse -q --verify "refs/tags/v1^{commit}" || true)"
+          if [ -z "$V1_COMMIT" ]; then
+            echo "FAIL: no v1 tag - consumers pin uses: samarthputhraya/modelpin@v1"
+            exit 1
+          fi
+          if [ "$V1_COMMIT" != "$EVENT_SHA" ]; then
+            echo "FAIL: v1 -> $V1_COMMIT but this release -> $EVENT_SHA"
+            echo "      Run: git tag -f v1 $EVENT_SHA; git push origin v1 --force"
+            echo "      then 'Re-run failed jobs' on this run (the tag is re-read at runtime)."
+            exit 1
+          fi
+          # The failure this repo already ate once: `v1` left pointing at a commit from before
+          # root action.yml moved, so every consumer's `uses: samarthputhraya/modelpin@v1`
+          # broke -- with no signal here, because modelpin.yml dogfoods `uses: ./` and never
+          # exercises the @v1 path.
+          # This ASSERTS and never moves the tag: force-moving v1 needs contents: write, and
+          # co-locating that with id-token: write would widen the blast radius of the most
+          # dangerous file in the repo. Consequence for ordering: move v1 BEFORE publishing.
+          if ! git cat-file -e "$EVENT_SHA:action.yml"; then
+            echo "FAIL: no root action.yml at $EVENT_SHA - uses: ...@v1 has nothing to run"
+            exit 1
+          fi
+          echo "provenance ok: v1 -> $EVENT_SHA, root action.yml present"
+
+      # Cheap early exit so a version that is already fully published never reaches the human
+      # approval prompt. The AUTHORITATIVE, three-way PyPI state check lives in the publish job
+      # (it must survive "Re-run failed jobs", which re-runs publish but not this job).
+      - name: Gate — this version is not already fully published
+        env:
+          VER: ${{ steps.tag.outputs.version }}
+          WHL: ${{ steps.tag.outputs.whl }}
+          SDIST: ${{ steps.tag.outputs.sdist }}
+        run: |
+          python - "$VER" "$WHL" "$SDIST" <<'PY'
+          import json, sys, urllib.error, urllib.request
+
+          ver, whl, sdist = sys.argv[1:4]
+          # The Index API, not /pypi/<name>/json: PyPI documents the JSON API's `releases` key
+          # as deprecated and warns it may be removed, at which point `.get("releases", {})`
+          # would silently report every version as new. This endpoint also lists FILES, which
+          # is what actually matters -- a version can be half-published.
+          req = urllib.request.Request(
+              "https://pypi.org/simple/modelpin/",
+              headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  files = {f["filename"] for f in json.load(resp)["files"]}
+          except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as exc:
+              print(f"WARN: could not read the PyPI index ({exc}); the publish job re-checks")
+              raise SystemExit(0)
+          present = sorted({whl, sdist} & files)
+          if len(present) == 2:
+              sys.exit(f"modelpin {ver} is ALREADY fully published. A PyPI filename can never "
+                       f"be reused - bump the version.")
+          if present:
+              print(f"NOTE: {ver} is HALF-published ({present}). The publish job will run in "
+                    f"repair mode and upload only what is missing.")
+          else:
+              print(f"ok: {ver} is new to the index")
+          PY
+
+  # Builds the exact bytes that get uploaded, then re-verifies AND EXECUTES those bytes.
+  # Nothing in ci.yml ever inspected them: tests/test_packaging_contents.py builds its own wheel
+  # from a sanitized COPY of the tree, and ci.yml's wheel-smoke builds a third one into
+  # RUNNER_TEMP and throws it away. The asymmetry decides it -- the checks below cost about a
+  # minute, and the failure they prevent (a broken, private-leaking, or unimportable artifact on
+  # PyPI) is irreversible.
+  build:
+    needs: version-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      whl_sha256: ${{ steps.digests.outputs.whl_sha256 }}
+      sdist_sha256: ${{ steps.digests.outputs.sdist_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}          # same immutable commit the gate validated
+          persist-credentials: false      # this job runs a PEP 517 backend; give it no token
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: "3.12"      # floor from requires-python; the wheel is py3-none-any
+
+      - name: Build sdist + wheel from a clean tree, with a pinned toolchain
+        run: |
+          # A stale egg-info makes setuptools ship files the current pyproject no longer
+          # selects -- a false green that has already fooled one packaging experiment. On a
+          # fresh checkout these cannot exist (.gitignore excludes build/, dist/, *.egg-info),
+          # so this rm is the belt; the braces are that NOTHING in this job runs
+          # `pip install -e .`, which is what creates them in the first place.
+          rm -rf build dist ./*.egg-info
+          test -z "$(ls -d build dist ./*.egg-info 2>/dev/null)" || {
+            echo "tree is not clean after rm"; exit 1; }
+
+          # Every version pinned exactly. `[build-system] requires = ["setuptools>=77"]` is an
+          # unbounded floor, and setuptools is not a spectator here: it is executed code that
+          # sits next to dist/ and it DECIDES THE PUBLISHED BYTES. ops/RUNBOOK.md#toolchain-
+          # pinning already caps ruff and black for exactly this reason; the thing that
+          # produces the artifact deserves the same treatment. Bump these deliberately, in
+          # their own commit, like any other pin.
+          python -m pip install --disable-pip-version-check "pip==26.2.1"
+          python -m pip install \
+            "build==1.5.0" \
+            "setuptools==84.0.0" \
+            "wheel==0.48.0" \
+            "twine==7.0.0" \
+            "pytest==9.1.1"
+
+          # --no-isolation so the pins above ARE the build backend, instead of `build`
+          # resolving a fresh setuptools from PyPI inside an isolated env where the pin cannot
+          # reach. If pyproject's [build-system].requires ever grows a dependency these pins do
+          # not satisfy, build fails loudly here rather than silently using something else.
+          # No `--wheel`: the default two-step build makes the wheel FROM the extracted sdist,
+          # so a MANIFEST.in that drops LICENSE or a source file fails here instead of shipping
+          # a wheel whose dist-info/licenses/ is empty.
+          python -m build --no-isolation
+          ls -l dist
+
+      # Fail HERE, not after upload: names the packaging defect while it is still fixable.
+      - name: Assert the artifacts match the tag and the packaging contracts
+        env:
+          VER: ${{ needs.version-gate.outputs.version }}
+          WHL: ${{ needs.version-gate.outputs.whl }}
+          SDIST: ${{ needs.version-gate.outputs.sdist }}
+        run: |
+          python - "$VER" "$WHL" "$SDIST" <<'PY'
+          import pathlib, sys, tarfile, zipfile
+
+          # Reuse, do not re-implement. ci.yml already carries a second copy of the wheel
+          # contract and the two have ALREADY drifted (it omits modelpin/cli.py and dies with
+          # an unhandled StopIteration when there is no dist-info). A third copy, living in the
+          # one file that holds upload rights, is the worst possible place for that drift. If
+          # this import ever breaks, fix tests/test_packaging_contents.py -- do not inline it.
+          # (That module imports pytest at module scope, which is the only reason pytest is in
+          # the pin list above. TODO: move wheel_contract_problems/_SDIST_REQUIRED into a
+          # stdlib-only tests/packaging_contract.py and drop pytest from the release path.)
+          sys.path.insert(0, "tests")
+          from test_packaging_contents import _SDIST_REQUIRED, wheel_contract_problems
+
+          ver, whl_name, sdist_name = sys.argv[1:4]
+          dist = pathlib.Path("dist")
+
+          # EXACTLY these two files. `twine upload dist/*` globs the whole directory, so a
+          # stray SHA256SUMS, an .asc, or a leftover 0.1.1 wheel would be handed to twine as a
+          # distribution -- and this single check also catches a stale dist/ and a
+          # version/filename mismatch.
+          found = sorted(p.name for p in dist.iterdir())
+          expected = sorted([whl_name, sdist_name])
+          if found != expected:
+              sys.exit(f"dist/ holds {found}, expected exactly {expected}")
+
+          problems = []
+          names = zipfile.ZipFile(dist / whl_name).namelist()
+          problems += wheel_contract_problems(names)
+          if not any(n.endswith(".dist-info/licenses/LICENSE") for n in names):
+              problems.append("no dist-info/licenses/LICENSE - Apache-2.0 attribution did not "
+                              "survive into the wheel")
+
+          with tarfile.open(dist / sdist_name) as tf:
+              members = ["/".join(n.split("/")[1:]) for n in tf.getnames()]
+
+          # CLOSED, like the wheel contract -- not a deny-list of the two directories someone
+          # happened to think of. The sdist is the archive that carries everything, and a leak
+          # there is public on PyPI permanently. Measured on the 0.1.2 sdist (138 members):
+          _SDIST_TOP_ALLOWED = {
+              "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "MANIFEST.in",
+              "PKG-INFO", "README.md", "SECURITY.md", "action.yml", "data", "docs", "examples",
+              "modelpin", "modelpin.egg-info", "pyproject.toml", "setup.cfg", "tests",
+          }
+          top = {m.split("/")[0] for m in members if m}
+          unexpected = sorted(top - _SDIST_TOP_ALLOWED)
+          if unexpected:
+              problems.append("unexpected top-level entries in the sdist: " + ", ".join(unexpected))
+          # One clause that covers ops/, .claude/, reports/, .env*, .modelpin/, .github/ and
+          # everything nobody has thought of yet. MANIFEST.in prunes three directories; the
+          # repo's own test only checks two of them, and it builds from a copy that strips
+          # dotfiles before they could ever be seen -- so this workflow is the FIRST place this
+          # class of leak could surface.
+          hidden = sorted(m for m in members if any(p.startswith(".") for p in m.split("/") if p))
+          if hidden:
+              problems.append("hidden/private paths in the sdist: " + ", ".join(hidden))
+          missing = [r for r in _SDIST_REQUIRED if r not in members]
+          if missing:
+              problems.append("sdist is missing " + ", ".join(missing))
+
+          if problems:
+              print("REFUSING TO PUBLISH - artifact contract violated:")
+              for p in problems:
+                  print("  - " + p)
+              sys.exit(1)
+          print(f"artifacts ok: wheel {len(names)} entries, code only; "
+                f"sdist {len(members)} members, top-level clean")
+          PY
+
+      # The contract check above never opens a file -- it reasons about a member LIST, so a
+      # wheel missing 22 of its 25 modules passes it. Nothing else in this repo executes the
+      # bytes that ship: ci.yml's wheel-smoke runs on `push`/`pull_request` and builds its own
+      # throwaway wheel. This is the keyless, README-free subset of that job, moved to the one
+      # side of the upload where failure is still recoverable.
+      - name: Install the real wheel into a fresh venv and run it
+        env:
+          VER: ${{ needs.version-gate.outputs.version }}
+        run: |
+          python -m venv "$RUNNER_TEMP/smoke"
+          VB="$RUNNER_TEMP/smoke/bin"
+          "$VB/python" -m pip install --disable-pip-version-check --upgrade "pip==26.2.1"
+          # No -e. No ".". No [providers]. No [dev]. Exactly what `pip install modelpin` gives
+          # a stranger.
+          "$VB/python" -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"   # NOT the checkout: cwd must not supply examples/, data/, or a
+                              # modelpin/ dir that shadows site-packages on sys.path[0]
+          "$VB/modelpin" version | tee v1.txt
+          "$VB/mp" version | tee v2.txt      # both console scripts; losing one is silent
+          grep -qF "modelpin $VER" v1.txt
+          grep -qF "modelpin $VER" v2.txt
+          # Surface with no CLI path into it, so it needs its own assertion.
+          "$VB/python" -P -c "from modelpin.watcher import load_registry, get_model; r = load_registry(); assert r, 'registry empty'; assert get_model('claude-opus-4-8'), 'known id missing'; print(f'registry ok: {len(r)} models')"
+
+      # Checks only that the long description renders on PyPI. It is NOT the packaging contract
+      # above and must never be described as one -- a wheel full of stowaways sails through it.
+      # The publish action runs it again (verify-metadata defaults to true); this copy is
+      # --strict and runs before the environment approval, so a metadata problem never reaches
+      # a human's approval prompt. Measured: --strict passes on the 0.1.2 artifacts.
+      - name: twine check --strict (long-description rendering only)
+        run: twine check --strict dist/*
+
+      # The publish job cannot check out anything (declaring id-token: write sets contents to
+      # none), so the only way it can prove it is uploading the bytes this job verified is if
+      # those digests travel as data.
+      - name: Record the digests of the verified artifacts
+        id: digests
+        env:
+          WHL: ${{ needs.version-gate.outputs.whl }}
+          SDIST: ${{ needs.version-gate.outputs.sdist }}
+        run: |
+          sha256sum "dist/$WHL" "dist/$SDIST"
+          {
+            echo "whl_sha256=$(sha256sum "dist/$WHL" | cut -d' ' -f1)"
+            echo "sdist_sha256=$(sha256sum "dist/$SDIST" | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Hand the artifacts to the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # The ONLY job with id-token: write, and the only job that runs no project code: no checkout,
+  # no pip install, no build backend, no entry point of ours. A job holding this permission
+  # exposes ACTIONS_ID_TOKEN_REQUEST_URL/TOKEN to every step and every child process, so any
+  # poisoned build dependency in the job above could otherwise mint a PyPI upload token without
+  # ever touching dist/. That separation is the strongest mitigation available here and is the
+  # whole reason build and publish are two jobs.
+  # Honest limit: this protects the CREDENTIAL, not the ARTIFACT. A compromised build job can
+  # still put a backdoored wheel into the artifact, and it will be published and attested with a
+  # perfectly valid identity. Attestations prove provenance, never correctness.
+  publish:
+    needs: [version-gate, build]
+    # The publish action is Linux-only and hard-fails on anything else; do not let this inherit
+    # ci.yml's windows-latest habit, and never give this job a `container:`.
+    runs-on: ubuntu-latest
+    environment:
+      # Must equal the environment registered on PyPI. Both directions bite: if PyPI expects
+      # `pypi` and this is missing, the token carries no environment claim and the upload dies
+      # with invalid-publisher; if PyPI's field is blank, this still publishes and the approval
+      # gate you think you have is doing nothing.
+      # It is a real gate against accident and against a narrowly-scoped leaked credential --
+      # the job pauses before any step runs, so nothing here executes until a human approves.
+      # It is NOT a defence against account takeover: with enforce_admins false and one
+      # maintainer, the same account approves the deployment and can edit the environment.
+      name: pypi
+      url: https://pypi.org/p/modelpin
+    permissions:
+      # Job level, never workflow level -- at workflow level every job in this file could mint
+      # the token. This is the entire credential; nothing else is granted. Declaring it sets
+      # `contents` to none, which is exactly right and is why this job must never gain an
+      # actions/checkout step (it would 403).
+      id-token: write
+    steps:
+      - name: Fetch the artifacts built above
+        # Same-run downloads need no token and no `actions: read`; only cross-run or cross-repo
+        # downloads do. The two-job split therefore costs zero extra permissions.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      # Shell only -- no pip, no network, no project code. A file COUNT would be satisfied by
+      # any two files; this asserts the exact names the gate derived AND the exact bytes the
+      # build job verified, which is the only construction that actually connects the two jobs.
+      - name: Assert dist/ holds exactly the two verified artifacts, byte for byte
+        env:
+          WHL: ${{ needs.version-gate.outputs.whl }}
+          SDIST: ${{ needs.version-gate.outputs.sdist }}
+          WHL_SHA: ${{ needs.build.outputs.whl_sha256 }}
+          SDIST_SHA: ${{ needs.build.outputs.sdist_sha256 }}
+        run: |
+          ls -l dist
+          test -f "dist/$WHL" || { echo "missing dist/$WHL"; exit 1; }
+          test -f "dist/$SDIST" || { echo "missing dist/$SDIST"; exit 1; }
+          # `find -type f`, not `ls | wc -l`: a filename containing a newline counts twice.
+          n="$(find dist -type f | wc -l)"
+          test "$n" -eq 2 || { echo "dist/ holds $n files; twine uploads dist/* - refusing"; exit 1; }
+          printf '%s  dist/%s\n%s  dist/%s\n' "$WHL_SHA" "$WHL" "$SDIST_SHA" "$SDIST" > EXPECTED
+          sha256sum -c EXPECTED
+          echo "artifact continuity ok: these are the bytes the build job verified"
+
+      # Runs in THIS job, not the gate, on purpose: "Re-run failed jobs" re-runs only the failed
+      # jobs, so after a failed upload the operator restarts here with every gate skipped. This
+      # is the guard that most needs to survive that, and it is the last thing between the
+      # artifact store and an irreversible upload.
+      - name: Decide fresh publish vs repair of a half-published release
+        id: pypi
+        env:
+          VER: ${{ needs.version-gate.outputs.version }}
+          WHL: ${{ needs.version-gate.outputs.whl }}
+          SDIST: ${{ needs.version-gate.outputs.sdist }}
+        run: |
+          python3 - "$VER" "$WHL" "$SDIST" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys, urllib.request
+
+          ver, whl, sdist = sys.argv[1:4]
+          req = urllib.request.Request(
+              "https://pypi.org/simple/modelpin/",
+              headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+          )
+          with urllib.request.urlopen(req, timeout=30) as resp:
+              files = {f["filename"] for f in json.load(resp)["files"]}
+          present = sorted({whl, sdist} & files)
+
+          if len(present) == 2:
+              print("mode=complete")
+              sys.stderr.write(
+                  f"FAIL: modelpin {ver} is already fully published. A PyPI filename can never "
+                  f"be reused, so there is nothing to do here - bump the version.\n"
+              )
+              raise SystemExit(1)
+          if present:
+              # twine uploads dist/* sequentially and, with skip-existing off (the default,
+              # which is correct), aborts on the first 'File already exists'. That makes a
+              # half-published version otherwise UNRECOVERABLE through this workflow. This is
+              # the one narrow case where skip-existing is right, and it can never mask a
+              # duplicate (that is `complete`, above) or an empty upload (that is `fresh`).
+              print("mode=repair")
+              sys.stderr.write(f"NOTE: {ver} is HALF-published; already on the index: {present}. "
+                               f"Uploading only what is missing.\n")
+          else:
+              print("mode=fresh")
+              sys.stderr.write(f"ok: {ver} is new to the index; publishing both files.\n")
+          PY
+          cat "$GITHUB_OUTPUT"
+
+      # SHA-pinned like everything else, and here it matters most: this is the one step that can
+      # write to PyPI, this repo has no dependabot.yml yet, and a git tag is mutable by whoever
+      # controls the action repository. The SHA is v1.14.2 DEREFERENCED to its commit -- v1.14.2
+      # is an ANNOTATED tag, and pasting the tag-object sha (a892a5a6...) fails with
+      # `manifest unknown` because no container is published under it.
+      # Honest limit: this action is a composite that builds
+      # `docker://ghcr.io/pypa/gh-action-pypi-publish:<ref>` at runtime, so the pin fixes the
+      # trampoline, not the image that actually runs. There is no supported way to digest-pin it
+      # today -- still strictly better than @release/v1, which is mutable at both layers. (And
+      # `@v1` does not exist at all on that repo: the float is the BRANCH release/v1.)
+      #
+      # NO `with:` BLOCK, deliberately. Every effective default is already correct here:
+      # packages-dir=dist, repository-url=upload.pypi.org, verify-metadata=true (twine check
+      # runs before attestations are generated), attestations=true (PEP 740 provenance, free
+      # with Trusted Publishing), skip-existing=false.
+      #   - adding `password:` -- even one pointing at a deleted secret -- flips this back to
+      #     token auth (the check is literally user == __token__ and empty password), silently
+      #     drops the attestations, and produces a 403 identical to the laptop failure this
+      #     workflow exists to escape.
+      #   - snake_case input names still work but emit deprecation annotations on every release.
+      - name: Publish to PyPI (Trusted Publishing — no token anywhere)
+        if: steps.pypi.outputs.mode == 'fresh'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+
+      # Only reachable when the step above measured a genuinely half-published version. Kept as
+      # a separate step so `skip-existing: true` can never be the path a normal release takes,
+      # and so the log says out loud that this run is a repair.
+      - name: REPAIR a half-published release (skip-existing, deliberate)
+        if: steps.pypi.outputs.mode == 'repair'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+        with:
+          skip-existing: true
+
+  # Post-release verification against PUBLISHED bytes only -- no checkout, no secrets, no
+  # permissions, no model calls. modelpin.yml cannot cover this: it runs `uses: ./` and installs
+  # `.[providers]` from the checkout, so it never touches a published artifact.
+  # This runs the README's OWN quickstart, extracted from the README INSIDE THE PUBLISHED SDIST
+  # with the extractor inside the published sdist -- so it verifies what a stranger downloads,
+  # not what the repo happens to contain. A red run here means the upload already succeeded;
+  # fix forward with a new version, never by weakening a gate above.
+  verify-published:
+    needs: [version-gate, publish]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Both files are on the index, and fetch the published sdist
+        env:
+          WHL: ${{ needs.version-gate.outputs.whl }}
+          SDIST: ${{ needs.version-gate.outputs.sdist }}
+        run: |
+          python - "$WHL" "$SDIST" "$RUNNER_TEMP" <<'PY'
+          import json, pathlib, sys, tarfile, time, urllib.request
+
+          whl, sdist, tmp = sys.argv[1:4]
+          req = urllib.request.Request(
+              "https://pypi.org/simple/modelpin/",
+              headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+          )
+          entry = None
+          for attempt in range(1, 7):
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  files = {f["filename"]: f for f in json.load(resp)["files"]}
+              # A half-published release installs FINE from an sdist alone, so asserting "pip
+              # install worked" would go green on it. Assert both filenames explicitly.
+              missing = sorted({whl, sdist} - set(files))
+              if not missing:
+                  entry = files[sdist]
+                  break
+              print(f"attempt {attempt}: index still missing {missing}")
+              time.sleep(20)
+          if entry is None:
+              sys.exit(f"PyPI is not serving {missing} - this release is INCOMPLETE")
+          dest = pathlib.Path(tmp) / sdist
+          urllib.request.urlretrieve(entry["url"], dest)
+          with tarfile.open(dest) as tf:
+              tf.extractall(pathlib.Path(tmp) / "sd", filter="data")
+          print(f"index ok: {whl} and {sdist} are both served")
+          PY
+
+      - name: Fresh venv, WHEEL from PyPI only
+        env:
+          VER: ${{ needs.version-gate.outputs.version }}
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          VB="$RUNNER_TEMP/venv/bin"
+          # --only-binary=:all: so a missing wheel fails here instead of silently building from
+          # the sdist and reporting success on a half-published release.
+          "$VB/python" -m pip install --disable-pip-version-check --no-cache-dir \
+            --only-binary=:all: "modelpin==$VER"
+          cd "$RUNNER_TEMP"
+          "$VB/modelpin" version | tee version.txt
+          "$VB/mp" version
+          # -F: the version is not a regex, and an unanchored `0.1.2` also matches `0.1.20`.
+          grep -qF "modelpin $VER" version.txt || {
+            echo "installed modelpin does not report $VER"; exit 1; }
+
+      # ANTI-DRIFT, the same contract ci.yml enforces: the commands come OUT of the README that
+      # was actually published. This is the release skill's post-release step 2, mechanized.
+      - name: Run the published README's quickstart against the published wheel
+        run: |
+          SD="$(echo "$RUNNER_TEMP"/sd/modelpin-*)"
+          python "$SD/tests/docs_extract.py" --marker mp:smoke "$SD/README.md" \
+            --out "$RUNNER_TEMP/quickstart.sh"
+          echo '--- extracted from the PUBLISHED README.md ---'
+          cat "$RUNNER_TEMP/quickstart.sh"
+          mkdir -p "$RUNNER_TEMP/empty"
+          cd "$RUNNER_TEMP/empty"
+          export PATH="$RUNNER_TEMP/venv/bin:$PATH"
+          # `mp check` exits 1 BY DESIGN on a regression, and the demo ends on one.
+          # Exit code carries no signal here; never `bash -e`, never assert on $?.
+          bash "$RUNNER_TEMP/quickstart.sh" > out.txt 2>&1 || true
+          cat out.txt
+          python - out.txt <<'PY'
+          import pathlib, sys
+          out = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+          bad = ["no scenarios in", "no scenarios found in", "Traceback",
+                 "FileNotFoundError", "No such file or directory",
+                 "is not recognized as", "Missing option"]
+          hits = [b for b in bad if b in out]
+          here = pathlib.Path(".")
+          baselines = sorted(here.rglob(".modelpin/baseline-*.json"))
+          reports = [p for p in here.rglob(".modelpin/last-report.md") if p.stat().st_size]
+          if hits:
+              sys.exit(f"quickstart failed for a packaging reason {hits}")
+          if not baselines:
+              sys.exit("no .modelpin/baseline-*.json written - mp baseline did not run")
+          if not reports:
+              sys.exit("no non-empty .modelpin/last-report.md - mp check did not complete")
+          if "REGRESSION" not in out.upper():
+              sys.exit("demo reported no regression - README verdict table is stale")
+          print(f"published quickstart ok: {len(baselines)} baseline(s), "
+                f"report {reports[0].stat().st_size} B")
+          PY
