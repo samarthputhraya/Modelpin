@@ -17,20 +17,16 @@ pip install -e ".[dev,providers]"
 Verify everything works offline (no API key needed):
 
 ```bash
-modelpin baseline \
-  --provider fake \
-  --fixtures examples/traces/demo_traces.json \
-  --model claude-opus-4-6 \
-  --scenarios-dir examples/scenarios \
-  --config examples/modelpin.yaml
-
-modelpin check \
-  --to claude-opus-4-7 --from claude-opus-4-6 \
-  --provider fake \
-  --fixtures examples/traces/demo_traces.json \
-  --scenarios-dir examples/scenarios \
-  --config examples/modelpin.yaml
+modelpin init --demo
+cd modelpin-demo
+modelpin baseline --fixtures traces.json
+modelpin check --to demo-model-v2 --fixtures traces.json
 ```
+
+`modelpin check` exits **1** there on purpose — the demo ends on a real regression, and that
+non-zero exit is the CI gate. The sandbox is generated, not checked in: the wheel ships no data
+files at all, so this is the same artifact a stranger gets from `pip install`, not a repo-only
+convenience that could drift from it.
 
 ---
 

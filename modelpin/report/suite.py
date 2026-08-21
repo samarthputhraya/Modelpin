@@ -20,8 +20,11 @@ _HASH_ALGO = "sha256"
 #: Hex chars of the digest to surface — enough to pin the suite, short enough for a header.
 _HASH_LEN = 12
 
-#: Fallbacks when a suite directory has no (readable) manifest.json.
-DEFAULT_SUITE_ID = "modelpin-public-suite"
+#: Fallbacks when a suite directory has no (readable) manifest.json. `read_manifest` never
+#: raises, so ANY unmanifested directory lands here — and with `--suite-dir` now supplied by
+#: the user, defaulting to the official id would let any local folder publish a report
+#: header claiming to be the open public suite.
+DEFAULT_SUITE_ID = "local-suite"
 DEFAULT_SUITE_VERSION = "unversioned"
 
 

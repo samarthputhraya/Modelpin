@@ -1,8 +1,0 @@
-# Example modelpin.yaml (mp init would generate this in your repo).
-models:
-  - gpt-3.5-turbo
-scenarios_dir: scenarios
-providers:
-  - openai
-runs: 5
-judge_model: gpt-4o-mini   # semantic LLM-judge (optional; enables meaning-equivalence checks)

@@ -11,6 +11,8 @@ entry points, and `python -m pip wheel . --no-deps` builds a clean wheel.
 python -m pip install --upgrade build twine
 
 # build sdist + wheel into dist/
+rm -rf build dist ./*.egg-info   # a STALE egg-info makes setuptools ship files the current
+                                 # pyproject no longer selects -- a false green at release time
 python -m build            # or: python -m pip wheel . --no-deps -w dist
 
 # (recommended) smoke-test on TestPyPI first

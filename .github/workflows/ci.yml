@@ -45,3 +45,156 @@ jobs:
 
       - name: Tests (offline — fake provider, no API calls)
         run: pytest -q
+
+  # MP-01 / #28. The `test` job above installs with `-e` and runs from the checkout, which
+  # removes BOTH preconditions of the bug it failed to catch: an editable install resolves
+  # repo-root paths, and cwd supplies examples/ and data/. This bug class is invisible to
+  # that job by construction, so it needs its own.
+  wheel-smoke:
+    name: wheel-smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # Deliberately NOT `needs: test` — independent signal, should not wait.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    defaults:
+      run:
+        # bash on BOTH legs. On windows-latest this is Git Bash, where `mp` resolves to
+        # mp.exe from the venv Scripts dir. LANDMINE: never let the Windows leg fall back
+        # to pwsh — PowerShell ships a ReadOnly alias mp -> Move-ItemProperty and resolves
+        # aliases BEFORE PATH, so the README's `mp baseline ...` would run Move-ItemProperty
+        # and die with a parameter-binding error that looks nothing like a packaging bug.
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"      # floor from requires-python; wheel is py3-none-any
+
+      # Git Bash on Windows inherits RUNNER_TEMP as a backslash path (D:\a\_temp).
+      - name: Normalize temp path
+        run: |
+          T="$(cygpath -u "$RUNNER_TEMP" 2>/dev/null || printf '%s' "$RUNNER_TEMP")"
+          echo "SMOKE_TMP=$T" >> "$GITHUB_ENV"
+
+      - name: Build the wheel from a clean tree
+        run: |
+          # A stale egg-info makes setuptools ship files the current pyproject no longer
+          # selects — a false green that has already fooled one packaging experiment.
+          rm -rf build dist ./*.egg-info
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir "$SMOKE_TMP/dist"
+
+      # Fail HERE, not three steps later: names the packaging defect instead of letting it
+      # surface as a CLI error that blames the user ("Run `mp init` first.").
+      - name: Assert the wheel is code-only
+        run: |
+          python - "$SMOKE_TMP"/dist/*.whl <<'PY'
+          import sys, zipfile
+          whl = sys.argv[1]
+          names = zipfile.ZipFile(whl).namelist()
+          top = sorted({n.split("/")[0] for n in names})
+          info = next(t for t in top if t.endswith(".dist-info"))
+          stowaways = [n for n in names if not n.endswith(".py") and not n.startswith(info)]
+          problems = []
+          if sorted(top) != sorted(["modelpin", info]):
+              problems.append(f"unexpected top-level entries: {top}")
+          if stowaways:
+              problems.append("non-.py files in the wheel: " + ", ".join(stowaways))
+          if not any(n == "modelpin/demo.py" for n in names):
+              problems.append("modelpin/demo.py missing - `mp init --demo` cannot work")
+          if not any(n == "modelpin/watcher/registry.py" for n in names):
+              problems.append("modelpin/watcher/registry.py missing - load_registry() is DOA")
+          if problems:
+              print(f"{whl} ({len(names)} entries) FAILS the wheel contract:")
+              for p in problems:
+                  print("  - " + p)
+              sys.exit(1)
+          print(f"wheel ok: {len(names)} entries, code only, top-level {top}")
+          PY
+
+      - name: Fresh venv OUTSIDE the checkout, wheel ONLY
+        run: |
+          python -m venv "$SMOKE_TMP/venv"
+          VENV_BIN="$SMOKE_TMP/venv/bin"
+          [ -d "$VENV_BIN" ] || VENV_BIN="$SMOKE_TMP/venv/Scripts"
+          echo "VENV_BIN=$VENV_BIN" >> "$GITHUB_ENV"
+          "$VENV_BIN/python" -m pip install --upgrade pip
+          # No -e. No ".". No [providers]. No [dev]. Exactly what `pip install modelpin`
+          # gives a stranger — which also tests the README's "a bare install runs the
+          # offline fake path with no provider SDKs" claim.
+          "$VENV_BIN/python" -m pip install "$SMOKE_TMP"/dist/*.whl
+
+      # ANTI-DRIFT: the commands come OUT of README.md; they are not copied into this file.
+      # Fails closed (exit 2) if the marker is gone, so a README rewrite cannot silently
+      # un-cover the quickstart.
+      - name: Extract the quickstart from README.md
+        run: |
+          python tests/docs_extract.py --marker mp:smoke README.md --out "$SMOKE_TMP/quickstart.sh"
+          echo '--- extracted from README.md ---'
+          cat "$SMOKE_TMP/quickstart.sh"
+
+      - name: Run it in an empty directory
+        run: |
+          mkdir -p "$SMOKE_TMP/empty"
+          cd "$SMOKE_TMP/empty"   # NOT the checkout: cwd must not supply examples/, data/,
+                                  # or a modelpin/ dir that shadows site-packages on sys.path[0]
+          export PATH="$VENV_BIN:$PATH"
+          # `mp check` exits 1 BY DESIGN on a regression, and the demo ends on one.
+          # Exit code carries no signal here; never `bash -e`, never assert on $?.
+          bash "$SMOKE_TMP/quickstart.sh" > out.txt 2>&1 || true
+          cat out.txt
+          python - out.txt <<'PY'
+          import pathlib, sys
+          out = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+          bad = ["no scenarios in", "no scenarios found in", "Traceback",
+                 "FileNotFoundError", "No such file or directory",
+                 "is not recognized as", "Move-ItemProperty", "Missing option"]
+          hits = [b for b in bad if b in out]
+          # The quickstart cds into modelpin-demo/, so the artifacts land under it.
+          here = pathlib.Path(".")
+          baselines = sorted(here.rglob(".modelpin/baseline-*.json"))
+          reports = [p for p in here.rglob(".modelpin/last-report.md") if p.stat().st_size]
+          if hits:
+              sys.exit(f"quickstart failed for a packaging reason {hits}")
+          if not baselines:
+              sys.exit("no .modelpin/baseline-*.json written - mp baseline did not run")
+          if not reports:
+              sys.exit("no non-empty .modelpin/last-report.md - mp check did not complete")
+          # The demo is chosen to end on a regression; a green run means the fixtures or the
+          # engine changed and the README's verdict table is now wrong.
+          if "REGRESSION" not in out.upper():
+              sys.exit("demo reported no regression - README verdict table is stale")
+          print(f"quickstart ran from a wheel: {len(baselines)} baseline(s), "
+                f"report {reports[0].stat().st_size} B")
+          PY
+
+      # Surface 2: no CLI command reaches load_registry(), so it needs its own assertion.
+      - name: Model registry loads with no repo on disk
+        run: |
+          cd "$SMOKE_TMP/empty"
+          "$VENV_BIN/python" -P -c "from modelpin.watcher import load_registry, get_model; r = load_registry(); assert r, 'registry empty'; assert get_model('claude-opus-4-8'), 'known id missing'; print(f'registry ok: {len(r)} models')"
+
+      # Surface 3: `mp report` must fail FAST and HONESTLY, not with 'Run `mp init` first.'
+      - name: mp report requires an explicit suite
+        run: |
+          cd "$SMOKE_TMP/empty"
+          set +e
+          "$VENV_BIN/modelpin" report --to a --from b --provider fake > r.txt 2>&1
+          rc=$?
+          set -e
+          cat r.txt
+          test "$rc" -eq 2 || { echo "expected exit 2 (missing required option), got $rc"; exit 1; }
+          grep -qi "suite-dir" r.txt || { echo "error did not name --suite-dir"; exit 1; }
+          if grep -qi "mp init" r.txt; then echo "report must never advise 'mp init'"; exit 1; fi
+          echo "mp report contract ok"
+
+      - name: Console scripts exist under both names
+        run: |
+          cd "$SMOKE_TMP/empty"
+          "$VENV_BIN/modelpin" version
+          "$VENV_BIN/mp" version

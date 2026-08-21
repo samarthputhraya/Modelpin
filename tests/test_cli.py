@@ -4,19 +4,28 @@ PR-style report and a CI-failing exit code on a real regression.
 """
 
 import json
+import tempfile
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 from modelpin.cli import _report_basename, app
+from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
 from modelpin.models import Trace
 from modelpin.providers import ProviderError
 
 REPO = Path(__file__).resolve().parents[1]
-FIXTURES = str(REPO / "examples" / "traces" / "demo_traces.json")
-SCEN = str(REPO / "examples" / "scenarios")
-CONFIG = str(REPO / "examples" / "modelpin.yaml")
 REPORT_SUITE = str(REPO / "examples" / "report-suite")
+
+# The offline fixtures come from `mp init --demo`, not from a checked-in copy under
+# examples/. One source of truth: if the demo a new user runs ever breaks, these tests break
+# with it -- which is the only coupling between the two that cannot silently rot.
+_DEMO_ROOT = Path(tempfile.mkdtemp(prefix="modelpin-cli-demo-"))
+write_demo(_DEMO_ROOT)
+_DEMO = _DEMO_ROOT / DEMO_DIRNAME
+FIXTURES = str(_DEMO / DEMO_FIXTURES)
+SCEN = str(_DEMO / "scenarios")
+CONFIG = str(_DEMO / "modelpin.yaml")
 
 runner = CliRunner()
 
@@ -52,7 +61,7 @@ def test_end_to_end_check_detects_regressions_offline(tmp_path):
             "--fixtures",
             FIXTURES,
             "--model",
-            "claude-opus-4-6",
+            DEMO_FROM,
             "--scenarios-dir",
             SCEN,
             "--config",
@@ -71,9 +80,9 @@ def test_end_to_end_check_detects_regressions_offline(tmp_path):
         [
             "check",
             "--to",
-            "claude-opus-4-7",
+            DEMO_TO,
             "--from",
-            "claude-opus-4-6",
+            DEMO_FROM,
             "--provider",
             "fake",
             "--fixtures",
@@ -156,9 +165,9 @@ def test_report_exits_zero_even_on_regression(tmp_path):
         [
             "report",
             "--to",
-            "claude-opus-4-7",
+            DEMO_TO,
             "--from",
-            "claude-opus-4-6",
+            DEMO_FROM,
             "--provider",
             "fake",
             "--fixtures",
@@ -180,7 +189,7 @@ def test_report_exits_zero_even_on_regression(tmp_path):
     md = mds[0].read_text(encoding="utf-8")
     assert "Modelpin Report" in md
     assert "sha256:" in md
-    assert "claude-opus-4-7" in md and "claude-opus-4-6" in md
+    assert DEMO_TO in md and DEMO_FROM in md
     assert "we observed" in md
     # A REAL regression must be present (not just the word in boilerplate): the alarm glyph
     # fires and the regressing scenario appears in the table.
@@ -192,7 +201,7 @@ def test_report_exits_zero_even_on_regression(tmp_path):
     sidecar = json.loads(jsons[0].read_text(encoding="utf-8"))
     assert set(sidecar) == {"meta", "results"}
     assert sidecar["meta"]["suite_hash"].startswith("sha256:")
-    assert sidecar["meta"]["candidate_model"] == "claude-opus-4-7"
+    assert sidecar["meta"]["candidate_model"] == DEMO_TO
     assert len(sidecar["results"]) == len(list(Path(SCEN).glob("*.json")))
     assert any(r["verdict"] == "regression" for r in sidecar["results"])
 
@@ -204,9 +213,9 @@ def test_report_same_model_runs_and_exits_zero(tmp_path):
         [
             "report",
             "--to",
-            "claude-opus-4-6",
+            DEMO_FROM,
             "--from",
-            "claude-opus-4-6",
+            DEMO_FROM,
             "--provider",
             "fake",
             "--fixtures",

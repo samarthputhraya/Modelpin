@@ -46,7 +46,21 @@ def _bucket(
     return regs, minors, unchanged
 
 
-def render_pr_comment(results: list[DiffResult], from_model: str, to_model: str, runs: int) -> str:
+def _provenance(provider: str | None) -> str:
+    """How the traces were produced. The offline `fake` path spends no key, and this line
+    is printed inside the report a first-run user reads under a "no API key" heading."""
+    if provider == "fake":
+        return "from canned offline traces (no API key)"
+    return "using your API key"
+
+
+def render_pr_comment(
+    results: list[DiffResult],
+    from_model: str,
+    to_model: str,
+    runs: int,
+    provider: str | None = None,
+) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
     doesn't contradict its own "safe to adopt" line."""
@@ -59,7 +73,7 @@ def render_pr_comment(results: list[DiffResult], from_model: str, to_model: str,
         header = f"✅ **Modelpin: no behavioral change — `{from_model}` → `{to_model}`**"
     lines = [
         header,
-        f"Replayed {len(results)} scenario(s) ×{runs} runs using your API key.",
+        f"Replayed {len(results)} scenario(s) ×{runs} runs {_provenance(provider)}.",
         "",
     ]
     if regs:

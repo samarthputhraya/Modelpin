@@ -6,6 +6,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (breaking)
+- **`mp report --suite-dir` is now required.** There is no built-in default suite directory.
+  The previous default (`examples/report-suite`) named a path that cannot exist after
+  `pip install`, so a bare `mp report` told users "no scenarios found" for a directory they
+  never chose. Bare `mp report` now exits 2 with an error naming the flag. The one documented
+  invocation that omitted it (`examples/report-suite/README.md`) has been updated; every
+  other documented invocation, including the published report's reproduce command, already
+  passed the flag.
+
+### Fixed
+- **`pip install modelpin` could not run the README's own quickstart** ([#28]). The wheel
+  shipped no `examples/` and no `data/models.json`, so the documented zero-key quickstart
+  exited 1, `watcher.load_registry()` raised `FileNotFoundError`, and `mp report` failed on
+  its own default. Fixed by making the *program* self-sufficient rather than the archive
+  bigger: the wheel stays code-only, `mp init --demo` generates the demo, and the model
+  registry is embedded.
+- **The error message's remedy no longer loops.** `no scenarios in ...` used to say
+  "Run `mp init` first" unconditionally — advice that was true in 1 of 5 reachable states,
+  and that in 2 of them sent the user around a loop with no exit. The message now reports the
+  absolute path it searched, which setting chose it, what it actually found there, and a
+  remedy that is true in that state. `mp init` is named only when `mp init` would create
+  exactly that path.
+- **`mp init` honours `scenarios_dir` from an existing `modelpin.yaml`** instead of always
+  scaffolding `scenarios/`, so following the error's advice now terminates.
+- **`load_registry()` no longer reads `./data/models.json` from the working directory.** An
+  unrelated file in a user's cwd could redefine which models Modelpin believed existed.
+- The offline report no longer claims "using your API key" on a keyless `--provider fake` run
+  — it says "from canned offline traces (no API key)". That line is printed inside the first
+  artifact a new user reads, under a heading that says no key is needed.
+- An unmanifested suite directory no longer publishes a report header claiming to be
+  `modelpin-public-suite`; the fallback id is now `local-suite`.
+- The documented PowerShell escape hatch is `Remove-Item Alias:mp -Force` — the alias is
+  `ReadOnly, AllScope`, so the command as previously written failed.
+
+### Added
+- **`mp init --demo`** — generates a self-contained offline sandbox (`modelpin-demo/`: four
+  scenarios, canned traces, config, README) that demonstrates every verdict the engine can
+  reach, including `unchanged`. No key, no cost, and it exits 1 on a real regression because
+  that non-zero exit is the CI gate.
+- **`wheel-smoke` CI job** — builds the wheel, installs it into a fresh venv *outside* the
+  checkout, extracts the quickstart *from `README.md`* (via `tests/docs_extract.py`, which
+  fails closed), and runs it in an empty directory, on Linux and Windows. The previous CI
+  installed `-e` and ran from the checkout, which removed both preconditions of #28 and made
+  that entire bug class invisible to it.
+- `MANIFEST.in` — the sdist now carries `tests/`, `examples/`, `docs/` and
+  `data/models.json`, so a contributor can build and test from a source distribution. The
+  wheel is unaffected and stays code-only.
+
+[#28]: https://github.com/samarthputhraya/modelpin/issues/28
+
 ### Planned
 - Anthropic adapter (currently a stub; needs a paid key).
 - Edge-probing scenario generator (helping users author discriminating scenarios — "scenario

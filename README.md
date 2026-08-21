@@ -43,27 +43,41 @@ modelpin version                        # -> modelpin 0.1.1
 > **Windows PowerShell:** run `modelpin …`, not `mp …`. PowerShell ships a built-in `mp` alias
 > (`Move-ItemProperty`) that shadows the CLI. The `mp` alias works everywhere else (cmd, bash,
 > zsh) and via `mp.exe`; on PowerShell either use `modelpin`, call `mp.exe`, or run
-> `Remove-Item Alias:mp` once per session (add it to your `$PROFILE` to make it permanent).
+> `Remove-Item Alias:mp -Force` once per session (add it to your `$PROFILE` to make it permanent).
 
 ### Try it offline, no API key (30 seconds)
 
-Modelpin ships a fake provider that replays canned traces, so you can see the whole pipeline —
-baseline, candidate replay, behavioral diff, report — with zero cost and no key:
+`mp init --demo` writes a self-contained sandbox — four scenarios, canned traces and a
+config — into `modelpin-demo/`. It replays those traces through the fake provider, so you see
+the whole pipeline (baseline, candidate replay, behavioral diff, report) at zero cost and no key:
 
+<!-- mp:smoke -->
 ```bash
-mp baseline --provider fake --fixtures examples/traces/demo_traces.json \
-  --model claude-opus-4-6 \
-  --scenarios-dir examples/scenarios --config examples/modelpin.yaml
-
-mp check --to claude-opus-4-7 --from claude-opus-4-6 \
-  --provider fake --fixtures examples/traces/demo_traces.json \
-  --scenarios-dir examples/scenarios --config examples/modelpin.yaml
+mp init --demo
+cd modelpin-demo
+mp baseline --fixtures traces.json
+mp check --to demo-model-v2 --fixtures traces.json
 ```
 
 You'll get a per-scenario verdict (`unchanged` / `changed_minor` / `regression`), a confidence
 score, a one-line plain-English explanation per scenario, and a Markdown report written to
-`.modelpin/last-report.md`. `mp check` exits non-zero **only** on a real `regression` — that's the
-CI gate.
+`.modelpin/last-report.md`:
+
+| scenario | verdict | why |
+|---|---|---|
+| `greeting` | `unchanged` | identical behavior — Modelpin stays quiet |
+| `refund_request` | `regression` | the candidate calls `lookup_order` twice; the final answer is word-for-word identical, so a text diff sees nothing |
+| `angry_customer` | `regression` | the candidate refuses an action the baseline performed |
+| `invoice_parse` | `changed_minor` | `"Total: $5"` → `"Total: 5"` breaks the scenario's assertion, but nothing refused and no tool moved |
+
+`mp check` exits non-zero **only** on a real `regression` — that's the CI gate, and it is why
+the demo exits 1. Then edit `traces.json`, re-run, and watch the verdict move: the answer is
+computed from the traces, not baked in.
+
+None of this is bundled inside the installed package — the wheel is code only, and the demo is
+generated on your machine. That is deliberate: shipping the files would mean the quickstart depends
+on data that a `pip install` may or may not place where the docs claim — which is exactly how the
+previous quickstart broke. Generating it means the commands above cannot rot.
 
 ### The real flow, on your own app
 
@@ -293,7 +307,7 @@ In CI, supply these as repo secrets (see the workflow above). Error text is scru
 | `mp baseline` | Record current model behavior for your scenarios (N runs). |
 | `mp check --to <model>` | Replay scenarios on a new model, diff vs baseline, write the PR-style report, fail CI on a regression. |
 | `mp version` | Print the Modelpin version. |
-| `mp report --to <new> --from <incumbent>` | Replay the **open public suite** (`examples/report-suite/`) across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. |
+| `mp report --to <new> --from <incumbent> --suite-dir <dir>` | Replay a scenario suite across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. `--suite-dir` is required: the wheel ships no scenarios, so the **open public suite** lives in the repo at `examples/report-suite/` — clone it, or point this at your own. |
 
 Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--match`
 (`strict\|unordered\|subset\|superset`), `--config`, `--scenarios-dir`, `--store-dir`, and
@@ -349,9 +363,10 @@ is what keeps the false-positive promise honest and the tool small enough to tru
 
 **Phase 0 (core engine MVP) — complete; `v0.1.1` live on PyPI.** Live-validated cross-vendor
 (OpenAI ↔ Google ↔ Groq/Llama); held-out false-positive rate **0/8**; multi-turn replay; a real
-GitHub Action; the public-report engine (`mp report`) + open suite; the
+GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
+in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; **167 tests passing**, `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; **193 tests passing**, `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

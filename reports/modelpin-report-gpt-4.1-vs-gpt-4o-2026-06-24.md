@@ -53,8 +53,20 @@ This is a measurement on a fixed, open suite under the exact settings above — 
 ## Reproduce this report
 
 ```bash
-modelpin report --to gpt-4.1 --from gpt-4o --provider openai --runs 5 --match strict --suite-dir examples/report-suite
+# The suite lives in the repo, not in the wheel — and this report ran on suite **v1**,
+# which the checkout no longer carries at that path (it now serves v2). Check out the tag
+# that matches the suite_hash above to reproduce this report exactly.
+git clone https://github.com/samarthputhraya/modelpin && cd modelpin
+git checkout v0.1.0                      # suite modelpin-public-v1, sha256:1c25c111a296
+pip install "modelpin[providers]"
+
+modelpin report --to gpt-4.1 --from gpt-4o --provider openai --runs 5 --match strict \
+  --suite-dir examples/report-suite
 ```
+
+> Verify the `Suite` row above matches `sha256:1c25c111a296` before comparing numbers. If it
+> does not, you are running a different suite and the results are not comparable — that is
+> exactly the failure this block now guards against.
 
 You supply your own API key (read from the environment). Exact outputs vary because models are non-deterministic; the distribution-level verdicts are what reproduce.
 

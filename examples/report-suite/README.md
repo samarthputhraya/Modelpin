@@ -72,7 +72,8 @@ Each report stamps the suite identity so a reader can pin exactly what ran:
 ## Run it (bring your own key)
 
 ```bash
-modelpin report --to <new-model> --from <incumbent-model> --provider openai --runs 5
+modelpin report --to <new-model> --from <incumbent-model> --provider openai --runs 5 \
+  --suite-dir examples/report-suite
 ```
 
 Both models are replayed live with **your** API key; the report is written under `reports/`.

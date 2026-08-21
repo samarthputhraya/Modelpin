@@ -1,9 +1,0 @@
-{
-  "id": "invoice_parse",
-  "name": "Parse an invoice total",
-  "kind": "single",
-  "input": {
-    "messages": [{"role": "user", "content": "Extract the total from: Subtotal 4, Tax 1, Total 5 dollars."}]
-  },
-  "assertions": {"must_contain": ["$"]}
-}

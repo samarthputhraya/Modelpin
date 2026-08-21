@@ -1,0 +1,18 @@
+# What goes in the SDIST — deliberately NOT the wheel.
+#
+# The wheel is code only: `tests/test_packaging_contents.py` asserts it contains zero
+# non-.py entries outside dist-info (ADR-0011). MANIFEST.in cannot add files to a wheel
+# built by setuptools without `include_package_data`, which is exactly why it is the right
+# tool here — it makes the source distribution complete (a contributor can `pip download
+# --no-binary` and get a runnable checkout with the suites and the test suite) while
+# leaving the installed program untouched.
+graft examples
+graft docs
+graft tests
+include data/models.json
+include CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md
+include action.yml
+prune ops
+prune .claude
+prune reports
+global-exclude *.pyc __pycache__/*

@@ -1,6 +1,7 @@
 """Watcher — tracks model release/deprecation state. See spec section 4.1.
 
-Phase 0: load the shipped community registry (data/models.json).
+Phase 0: the seed registry is embedded in ``registry.py`` rather than read from disk, so
+``load_registry()`` works identically from a repo checkout and from ``pip install modelpin``.
 TODO (Phase 1): refresh from provider model-list endpoints + deprecation pages.
 """
 
@@ -11,23 +12,19 @@ from pathlib import Path
 from typing import Optional
 
 from modelpin.models import Model, ModelStatus
-
-
-def _registry_path() -> Path:
-    here = Path(__file__).resolve()
-    candidates = [
-        here.parents[2] / "data" / "models.json",  # repo-root/data (editable install)
-        Path.cwd() / "data" / "models.json",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[0]
+from modelpin.watcher.registry import SEED_MODELS
 
 
 def load_registry(path: Optional[Path] = None) -> list[Model]:
-    p = path or _registry_path()
-    raw = json.loads(p.read_text())
+    """The model registry: the embedded seed, or an explicit override file.
+
+    ``path=None`` returns the shipped seed — no filesystem access, so this cannot depend on
+    the caller's working directory (an earlier version searched ``./data/models.json``,
+    which let an unrelated file in the user's cwd redefine the registry).
+    """
+    if path is None:
+        return [Model(**m) for m in SEED_MODELS]
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
     return [Model(**m) for m in raw.get("models", [])]
 
 

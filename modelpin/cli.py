@@ -20,10 +20,12 @@ from typing import NoReturn, Optional
 import typer
 from rich.box import ASCII as ASCII_BOX
 from rich.console import Console
+from rich.markup import escape as _rich_escape
 from rich.table import Table
 
 from modelpin import __version__
 from modelpin.config import DEFAULT_PROVIDER, ConfigError, ModelpinConfig, load_config
+from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_TO, write_demo
 from modelpin.detector import scan_repo
 from modelpin.diff import (
     ALPHA,
@@ -44,6 +46,7 @@ from modelpin.report import (
     to_report_sidecar,
 )
 from modelpin.report.suite import compute_suite_hash, read_manifest, slug
+from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
 from modelpin.scenarios import ScenarioError, load_scenarios
 from modelpin.storage import STORE_DIRNAME, BaselineError, load_baseline, save_baseline
 
@@ -149,14 +152,95 @@ def _load_config_or_fail(config_path: str) -> ModelpinConfig:
         _fail(str(exc))
 
 
-def _load_scenarios_or_fail(scenarios_dir: str) -> list[Scenario]:
+#: How the directory we searched was chosen — quoted back to the user, because
+#: "no scenarios in 'examples/scenarios'" never said *who* asked for that path.
+_SOURCE_LABEL = {
+    "flag": "from --scenarios-dir",
+    "config": "from scenarios_dir: in modelpin.yaml",
+    "default": "the built-in default",
+    "suite": "from --suite-dir",
+}
+_REPO_URL = "https://github.com/samarthputhraya/modelpin"
+
+
+def _dir_state(p: Path) -> str:
+    """Which of the states that `load_scenarios()` collapses into `[]` are we actually in?"""
+    if not p.exists():
+        return "that directory does not exist"
+    if not p.is_dir():
+        return "that path is a file, not a directory"
+    jsons = sorted(p.glob("*.json"))
+    if not jsons:
+        return "it exists but contains no .json files"
+    if all(f.name in _RESERVED_IN_DIR for f in jsons):
+        names = ", ".join(f.name for f in jsons)
+        return f"it contains only reserved files ({names}) and no scenario files"
+    return "no .json file there loaded as a scenario"
+
+
+def _init_target(config_path: str) -> Optional[Path]:
+    """The scenarios dir `mp init` would actually create here, or None if unknowable."""
+    try:
+        sub = load_config(config_path).scenarios_dir if Path(config_path).exists() else "scenarios"
+    except ConfigError:
+        return None
+    return (Path.cwd() / sub).resolve()
+
+
+def _scenarios_remedy(resolved: Path, source: str, config_path: str) -> str:
+    """Advice that is TRUE in this state. `mp init` is only named when it would create
+    exactly this path — otherwise the user follows it, succeeds, retries, and loops."""
+    if source == "suite":
+        return (
+            "`mp init` does not create suite directories. The open public suite ships in the "
+            f"repo, not in the wheel: clone {_REPO_URL} and pass "
+            "--suite-dir <checkout>/examples/report-suite."
+        )
+    if resolved == _init_target(config_path):
+        return (
+            "Run `mp init` to scaffold it with a starter scenario, or `mp init --demo` "
+            "for a runnable offline demo."
+        )
+    if source == "flag":
+        return (
+            "`mp init` will NOT create this path. Either add scenario *.json files there, "
+            "or drop --scenarios-dir to use the directory from modelpin.yaml."
+        )
+    return (
+        "`mp init` scaffolds the directory named by scenarios_dir: in modelpin.yaml, which "
+        "is not this path. Either add scenario *.json files here, or fix scenarios_dir:."
+    )
+
+
+def _fail_no_scenarios(raw: str, source: str, config_path: str) -> NoReturn:
+    resolved = Path(raw).resolve()
+    # _rich_escape: _fail() prints through Rich markup, so a path containing '[' would
+    # otherwise be swallowed as a style tag and corrupt the very message meant to unstick
+    # the user.
+    _fail(
+        f"no scenarios found in {_rich_escape(str(resolved))} ({_SOURCE_LABEL[source]}) -\n"
+        f"       {_dir_state(Path(raw))}.\n"
+        f"       {_scenarios_remedy(resolved, source, config_path)}"
+    )
+
+
+def _load_scenarios_or_fail(
+    scenarios_dir: str, *, source: str, config_path: str = "modelpin.yaml"
+) -> list[Scenario]:
     try:
         scenarios = load_scenarios(scenarios_dir)
     except ScenarioError as exc:
         _fail(str(exc))
     if not scenarios:
-        _fail(f"no scenarios in {scenarios_dir!r}. Run `mp init` first.")
+        _fail_no_scenarios(scenarios_dir, source, config_path)
     return scenarios
+
+
+def _scenarios_source(scenarios_dir: Optional[str], config_path: str) -> str:
+    """Where the scenarios directory came from, for the error message to quote back."""
+    if scenarios_dir:
+        return "flag"
+    return "config" if Path(config_path).exists() else "default"
 
 
 def _resolve_provider(provider: Optional[str], cfg: ModelpinConfig) -> str:
@@ -205,15 +289,52 @@ def scan(path: str = typer.Argument(".", help="Repo root to scan.")) -> None:
 
 
 @app.command()
-def init(directory: str = typer.Argument(".", help="Repo to scaffold.")) -> None:
+def init(
+    directory: str = typer.Argument(".", help="Repo to scaffold."),
+    demo: bool = typer.Option(
+        False,
+        "--demo",
+        help="Write a runnable offline demo instead of scaffolding this repo "
+        "(no API key, no cost).",
+    ),
+) -> None:
     """Create modelpin.yaml + scenarios/ in the current repo (never overwrites)."""
     root = Path(directory)
-    cfg = root / "modelpin.yaml"
-    scenarios_dir = root / "scenarios"
+
+    if demo:
+        written = write_demo(root)
+        if written:
+            console.print("[green]Offline demo written:[/]")
+            for p in written:
+                console.print(f"  - {p}")
+        else:
+            console.print(f"[dim]{root / DEMO_DIRNAME} already exists; left untouched.[/]")
+        console.print("\nNext, run these three lines:")
+        console.print(f"  [bold]cd {DEMO_DIRNAME}[/]")
+        console.print(f"  [bold]mp baseline --fixtures {DEMO_FIXTURES}[/]")
+        console.print(f"  [bold]mp check --to {DEMO_TO} --fixtures {DEMO_FIXTURES}[/]")
+        console.print(
+            f"\n[dim]`mp check` exits 1 there on purpose - that is the CI gate. "
+            f"See {DEMO_DIRNAME}/README.md.[/]"
+        )
+        return
+
+    cfg_path = root / "modelpin.yaml"
+    # Honour an existing modelpin.yaml's scenarios_dir. Hardcoding "scenarios" here made
+    # `mp init` scaffold a directory the rest of the CLI would then not read — the second
+    # no-exit loop: the error says run `mp init`, `mp init` succeeds, nothing changes.
+    sub = "scenarios"
+    if cfg_path.exists():
+        try:
+            sub = load_config(cfg_path).scenarios_dir
+        except ConfigError as exc:
+            _fail(str(exc))
+    scenarios_dir = root / sub
+
     created: list[str] = []
-    if not cfg.exists():
-        cfg.write_text(_SAMPLE_CONFIG, encoding="utf-8")
-        created.append(str(cfg))
+    if not cfg_path.exists():
+        cfg_path.write_text(_SAMPLE_CONFIG, encoding="utf-8")
+        created.append(str(cfg_path))
     scenarios_dir.mkdir(parents=True, exist_ok=True)
     if not any(scenarios_dir.glob("*.json")):
         (scenarios_dir / "greeting.json").write_text(_SAMPLE_SCENARIO, encoding="utf-8")
@@ -223,8 +344,11 @@ def init(directory: str = typer.Argument(".", help="Repo to scaffold.")) -> None
         for c in created:
             console.print(f"  - {c}")
         console.print("\nNext: add scenarios, then run [bold]mp baseline[/].")
+        console.print(
+            "[dim]No API key yet? Run `mp init --demo` for a free offline walkthrough.[/]"
+        )
     else:
-        console.print("Already initialised (modelpin.yaml + scenarios/ present).")
+        console.print(f"Already initialised (modelpin.yaml + {sub}/ present).")
 
 
 @app.command()
@@ -245,7 +369,11 @@ def baseline(
 ) -> None:
     """Record current model behavior for your scenarios (N runs)."""
     cfg = _load_config_or_fail(config_path)
-    scenarios = _load_scenarios_or_fail(scenarios_dir or cfg.scenarios_dir)
+    scenarios = _load_scenarios_or_fail(
+        scenarios_dir or cfg.scenarios_dir,
+        source=_scenarios_source(scenarios_dir, config_path),
+        config_path=config_path,
+    )
     from_model = model or (cfg.models[0] if cfg.models else None)
     if not from_model:
         _fail("no model to baseline. Pass --model or set `models:` in modelpin.yaml.")
@@ -285,7 +413,11 @@ def check(
     """Replay scenarios on a new model and report behavioral regressions."""
     mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
-    scenarios = _load_scenarios_or_fail(scenarios_dir or cfg.scenarios_dir)
+    scenarios = _load_scenarios_or_fail(
+        scenarios_dir or cfg.scenarios_dir,
+        source=_scenarios_source(scenarios_dir, config_path),
+        config_path=config_path,
+    )
     from_model = from_ or (cfg.models[0] if cfg.models else None)
     if not from_model:
         _fail("no baseline model. Pass --from or set `models:` in modelpin.yaml.")
@@ -330,7 +462,9 @@ def check(
     report_path = Path(store_dir) / "last-report.md"
     try:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(render_pr_comment(results, from_model, to, n), encoding="utf-8")
+        report_path.write_text(
+            render_pr_comment(results, from_model, to, n, prov), encoding="utf-8"
+        )
         console.print(f"\n[dim]PR-style Markdown report written to {report_path}[/]")
     except OSError as exc:
         console.print(f"[yellow]warning:[/] could not write report to {report_path}: {exc}")
@@ -346,7 +480,9 @@ def check(
 
 
 #: Where rendered Modelpin Reports (.md + .json) are written by default.
-DEFAULT_REPORT_SUITE = "examples/report-suite"
+#: There is deliberately no DEFAULT_REPORT_SUITE: the wheel ships no scenarios (ADR-0011),
+#: so any built-in default would name a path that cannot exist after `pip install`, and the
+#: user would be told "no scenarios found" for a directory they never asked for.
 DEFAULT_REPORT_OUTPUT = "reports"
 
 
@@ -377,7 +513,9 @@ def report(
         "strict", "--match", help="Tool-call match mode: strict|unordered|subset|superset."
     ),
     suite_dir: str = typer.Option(
-        DEFAULT_REPORT_SUITE, "--suite-dir", help="Public scenario suite directory."
+        ...,
+        "--suite-dir",
+        help="Public scenario suite directory (required; the open suite lives in the repo).",
     ),
     config_path: str = typer.Option("modelpin.yaml", "--config"),
     output_dir: str = typer.Option(
@@ -392,7 +530,7 @@ def report(
     """
     mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
-    scenarios = _load_scenarios_or_fail(suite_dir)
+    scenarios = _load_scenarios_or_fail(suite_dir, source="suite", config_path=config_path)
     n = _resolve_runs(runs, cfg)
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
