@@ -245,7 +245,11 @@ jobs:
           fi
           echo "ancestry ok: $EVENT_SHA is on origin/main"
 
-          gh api "repos/$REPO/commits/$EVENT_SHA/check-runs" -f per_page=100 \
+          # -X GET is load-bearing: `gh api` switches to POST the moment any -f/-F
+          # field is present, and this endpoint has no POST route -- it 404s with
+          # "Not Found", which reads as "that commit does not exist" rather than
+          # "wrong HTTP verb". Cost one failed release to find.
+          gh api -X GET "repos/$REPO/commits/$EVENT_SHA/check-runs" -f per_page=100 \
             --jq '.check_runs[] | [.name, .status, (.conclusion // "null"), .started_at] | @tsv' \
             > "$RUNNER_TEMP/checks.tsv"
           cat "$RUNNER_TEMP/checks.tsv"
