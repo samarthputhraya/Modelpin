@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from modelpin.config import DEFAULT_RUNS
 from modelpin.models import Assertion, Scenario, ToolCall, Trace
 
 #: The sandbox directory `mp init --demo` creates, relative to the target root.
@@ -180,7 +181,7 @@ models:
 scenarios_dir: scenarios
 providers:
   - fake                 # replays canned traces from {DEMO_FIXTURES}; never calls an API
-runs: 5                  # N replays per scenario per model (>=5 gives the diff real power)
+runs: {DEFAULT_RUNS}                  # N replays per scenario per model; below 4 the tool signal cannot fire
 # judge_model is intentionally unset: the semantic LLM-judge costs real tokens, and the
 # fake provider disables it anyway. This demo is purely structural + statistical.
 """

@@ -22,11 +22,17 @@ DEFAULT_PROVIDER = "openai"
 #:
 #:     N=2 -> 0.333   N=3 -> 0.100   N=4 -> 0.0286   N=5 -> 0.0079
 #:
-#: So below N=4 the tool signal cannot fire on ANY data — a total trajectory change scores
-#: `unchanged`. N=3 was the default until MP-03, which meant every run inheriting it was
-#: blind to the signal the product is named for. 5 (not 4) is the default because it clears
-#: the floor with margin: at N=4 only a *perfect* split reaches significance, so a single
-#: noisy run destroys the result.
+#: So below N=4 the tool signal cannot fire in the DEFAULT match modes (`strict`,
+#: `unordered`) on any data — a total trajectory change scores `unchanged`. The directional
+#: modes use a one-sided statistic (floor `1/C(2N,N)`) and do fire at N=3. N=3 was the
+#: default until MP-03, which meant every run inheriting it was blind, in the default mode,
+#: to the signal the product is named for.
+#:
+#: 5 (not 4) because at N=4 only a *perfect* split reaches significance, so a single noisy
+#: run destroys the result. 5 is also the ONLY N this project has ever measured its
+#: false-positive rate at (`docs/fp-measurement.md`), and N=3 was the worst possible N for
+#: the binary signals: their conditional FP peaks at exactly ALPHA there (1/C(6,3) = 0.05)
+#: and falls to 2.38% at N=5. See ADR-0016.
 #:
 #: Lowering this below 4 re-opens MP-03. ``tests/test_config.py`` pins the invariant.
 DEFAULT_RUNS = 5

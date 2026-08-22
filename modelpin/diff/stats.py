@@ -12,9 +12,12 @@ one observed. Small N (5 runs/side by default, see ``config.DEFAULT_RUNS``) is e
 exactly; large pools fall back to a fixed-seed random sample so the cost stays bounded and
 reproducible.
 
-Note the hard floor this creates: the smallest p attainable at N runs/side is
-``2/C(2N, N)`` for the tool signal, so below N=4 it cannot reach ``p <= ALPHA`` on ANY
-data. N is therefore a correctness input, not a cost dial. See MP-03.
+Note the hard floor this creates. The smallest p attainable at N runs/side is
+``2/C(2N, N)`` for the two-sided distributional statistic used by the ``strict`` and
+``unordered`` match modes, so in THOSE modes the tool signal cannot reach ``p <= ALPHA``
+below N=4 on any data. The directional modes (``subset``/``superset``) go through the
+one-sided mean statistic, whose floor is ``1/C(2N, N)`` — they do fire at N=3. N is
+therefore a correctness input, not a cost dial. See MP-03.
 
 Two statistics:
 - a difference of means, for binary per-run signals (refusal rate, assertion-failure

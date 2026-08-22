@@ -333,3 +333,54 @@ def test_minority_judge_divergence_below_floor_is_not_flagged():
     r = diff_scenario("s", "old", "new", base, cand, judge=judge)
     assert r.signals.semantic_score == 0.6
     assert r.verdict == DiffVerdict.unchanged
+
+
+# --- the significance boundary is load-bearing (ADR-0016) --------------------------------
+
+
+def test_the_significance_gate_is_inclusive_and_must_stay_inclusive():
+    """`p <= ALPHA`, never `p < ALPHA`. This looks like an off-by-one; it is not.
+
+    At N=3 runs/side the smallest attainable p on a one-sided binary signal is exactly
+    1/C(6,3) = 0.05, which is the SAME IEEE double as ALPHA (0x1.999999999999ap-5). So at
+    N=3 every hard verdict Modelpin can emit sits exactly on the boundary, and "tightening"
+    the four gates to `<` would silently delete 100% of detection at N=3 while reading like
+    a correctness fix in review.
+
+    The default is 5 now (MP-03), so this is less likely to be hit -- but `runs: 3` is
+    still legal config, so it is not one bit safer.
+    """
+    from modelpin.diff import ALPHA
+
+    p = permutation_pvalue_mean([0.0, 0.0, 0.0], [1.0, 1.0, 1.0])
+    assert p == ALPHA, f"expected the N=3 floor to equal ALPHA exactly, got {p!r}"
+    assert p.hex() == float(ALPHA).hex(), "bit-level equality is the whole point"
+    assert p <= ALPHA, "the gate must admit the boundary"
+    assert not (p < ALPHA), "documents WHY `<` would be wrong: it excludes the boundary"
+
+
+def test_a_total_refusal_flip_still_fires_at_the_legacy_default_of_three():
+    """End-to-end proof of the above: N=3, the exact boundary, must produce a verdict."""
+    scenario = Scenario(id="s", name="s", input={"messages": []})
+    clean = [
+        Trace(scenario_id="s", model_id="old", run_idx=i, final_output="Sure, here you go.")
+        for i in range(3)
+    ]
+    # `refused` is a stored field the ADAPTERS set via looks_like_refusal(); the diff reads
+    # the field, it does not re-derive it from the text. Setting it here is what a real
+    # adapter does -- passing refusal text alone leaves refusal_delta at 0.0.
+    refusing = [
+        Trace(
+            scenario_id="s",
+            model_id="new",
+            run_idx=i,
+            final_output="I can't help with that.",
+            refused=True,
+        )
+        for i in range(3)
+    ]
+    result = diff_scenario("s", "old", "new", clean, refusing, scenario, "strict")
+    assert result.verdict == DiffVerdict.regression, (
+        f"a 0%->100% refusal flip at N=3 must fire; got {result.verdict} "
+        f"({result.explanation}). If this broke, someone changed `p <= ALPHA` to `p < ALPHA`."
+    )

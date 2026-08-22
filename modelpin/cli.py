@@ -92,7 +92,7 @@ models:
 scenarios_dir: scenarios
 providers:
   - openai                 # uses YOUR OPENAI_API_KEY from the environment
-runs: {DEFAULT_RUNS}                    # N replays per scenario (below 4 the tool signal cannot fire)
+runs: {DEFAULT_RUNS}                    # N replays per scenario; below 4 the tool signal cannot fire
 judge_model: gpt-4o-mini   # semantic LLM-judge (optional; extra calls). Remove to disable.
 """
 

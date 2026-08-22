@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -47,11 +49,44 @@ def test_the_default_runs_can_actually_reach_significance():
     ), "DEFAULT_RUNS sits on the significance floor with no margin for a noisy run"
 
 
-def test_the_cli_warning_threshold_matches_the_default():
-    """MP-03 was three copies of one number drifting apart. Keep them one number."""
-    from modelpin.cli import RECOMMENDED_RUNS
+def test_no_shipped_file_hardcodes_a_runs_value_that_disagrees():
+    """MP-03 was one number living in FIVE places and drifting apart.
 
-    assert RECOMMENDED_RUNS == DEFAULT_RUNS
+    Python sites interpolate `DEFAULT_RUNS`; the YAML files cannot, so they are pinned
+    here instead. Asserting `RECOMMENDED_RUNS == DEFAULT_RUNS` would be a tautology --
+    `cli.py` derives it -- so this checks the copies that are still literals.
+    """
+    import re
+
+    repo = Path(__file__).resolve().parents[1]
+    shipped = [
+        repo / ".github" / "workflows" / "modelpin.yml",
+        repo / "examples" / "github-workflow.yml",
+        repo / "modelpin.yaml",
+    ]
+    wrong = []
+    for path in shipped:
+        if not path.is_file():
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            m = re.match(r"""\s*runs:\s*["']?(\d+)["']?""", line)
+            if m and int(m.group(1)) != DEFAULT_RUNS:
+                wrong.append(f"{path.relative_to(repo)}:{lineno} runs={m.group(1)}")
+    assert not wrong, (
+        f"hardcoded runs value disagrees with DEFAULT_RUNS={DEFAULT_RUNS}: {wrong}. "
+        "That drift IS MP-03."
+    )
+
+
+def test_the_generated_config_templates_track_the_default():
+    """Both scaffolds interpolate the constant rather than repeating it."""
+    import yaml
+
+    from modelpin.cli import _SAMPLE_CONFIG
+    from modelpin.demo import _CONFIG
+
+    assert yaml.safe_load(_SAMPLE_CONFIG)["runs"] == DEFAULT_RUNS
+    assert yaml.safe_load(_CONFIG)["runs"] == DEFAULT_RUNS
 
 
 def test_parses_yaml(tmp_path):
