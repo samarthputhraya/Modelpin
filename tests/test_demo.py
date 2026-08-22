@@ -21,7 +21,7 @@ import pytest
 from typer.testing import CliRunner
 
 from modelpin.cli import app
-from modelpin.config import load_config
+from modelpin.config import DEFAULT_RUNS, load_config
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
 from modelpin.models import DiffVerdict
 from modelpin.providers.fake import FakeProvider
@@ -57,7 +57,10 @@ def test_generated_scenarios_and_config_are_valid(demo: Path) -> None:
     assert cfg.models == [DEMO_FROM]
     assert cfg.providers == ["fake"]
     assert cfg.scenarios_dir == "scenarios"
-    assert cfg.runs >= 5, "fewer than 5 runs/side cannot reach p <= ALPHA on the tool signal"
+    # The structural floor is 4 (min attainable p = 2/C(2N,N) = 0.0286 <= ALPHA); 5 is the
+    # policy, because at 4 only a perfect split reaches significance and one noisy run
+    # destroys it. Stated precisely because the old wording claimed 5 was the floor.
+    assert cfg.runs >= DEFAULT_RUNS, "the demo must not ship below the default runs/side"
     assert cfg.judge_model is None, "the demo must never require a paid judge call"
 
 

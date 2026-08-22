@@ -8,8 +8,13 @@ This is the core defense of the north-star metric: the FALSE-POSITIVE rate.
 The test is an EXACT two-sample permutation test — no SciPy, fully deterministic:
 enumerate every way to relabel the pooled runs into two groups of the original
 sizes, and measure how often chance alone produces a gap at least as large as the
-one observed. Small N (the default 3-5 runs) is enumerated exactly; large pools
-fall back to a fixed-seed random sample so the cost stays bounded and reproducible.
+one observed. Small N (5 runs/side by default, see ``config.DEFAULT_RUNS``) is enumerated
+exactly; large pools fall back to a fixed-seed random sample so the cost stays bounded and
+reproducible.
+
+Note the hard floor this creates: the smallest p attainable at N runs/side is
+``2/C(2N, N)`` for the tool signal, so below N=4 it cannot reach ``p <= ALPHA`` on ANY
+data. N is therefore a correctness input, not a cost dial. See MP-03.
 
 Two statistics:
 - a difference of means, for binary per-run signals (refusal rate, assertion-failure
