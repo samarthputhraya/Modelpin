@@ -58,6 +58,10 @@ from modelpin.storage import STORE_DIRNAME, BaselineError, load_baseline, save_b
 
 #: A behavioral diff compares run *distributions*; fewer than this can't form one.
 MIN_RUNS = 2
+#: `mp check` exit code when at least one scenario could not be measured at all. Distinct
+#: from 1 (a real regression) so a caller can tell "it broke" from "we could not tell", and
+#: distinct from 2, which Click already returns for a usage error. See ADR-0018.
+EXIT_UNMEASURED = 3
 #: Below this, the permutation test is underpowered — warn but proceed. Derived from the
 #: config default so the number a user is warned about and the number they get by default
 #: can never disagree; three copies of it drifting apart is exactly what MP-03 was.
@@ -488,6 +492,7 @@ def check(
     # Decide the CI exit code BEFORE any side effect, so a report-write failure
     # can never silently mask a real regression.
     has_regression = any(r.verdict == DiffVerdict.regression for r in results)
+    unmeasured = [r for r in results if r.verdict == DiffVerdict.insufficient_evidence]
 
     report_path = Path(store_dir) / "last-report.md"
     try:
@@ -507,6 +512,12 @@ def check(
 
     if has_regression:
         raise typer.Exit(code=1)  # fail CI on a real regression
+    if unmeasured:
+        # EXIT_UNMEASURED, not 1: a run that measured nothing is not a regression, and
+        # reporting it as one would put a false claim in the Action's PR comment. Not 2
+        # either -- Click already uses 2 for a usage error, so `mp check --bogus` exits 2.
+        # The Action gates on `code != '0'`, so CI still fails without any workflow change.
+        raise typer.Exit(code=EXIT_UNMEASURED)
 
 
 #: Where rendered Modelpin Reports (.md + .json) are written by default.

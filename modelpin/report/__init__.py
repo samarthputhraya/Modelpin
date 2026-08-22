@@ -18,11 +18,14 @@ _CLI_MARK = {
     DiffVerdict.regression: "[red]REGRESSION[/]",
     DiffVerdict.changed_minor: "[yellow]MINOR[/]",
     DiffVerdict.unchanged: "[green]OK[/]",
+    DiffVerdict.insufficient_evidence: "[yellow]NO EVIDENCE[/]",
 }
 _MD_MARK = {
     DiffVerdict.regression: "❌",
     DiffVerdict.changed_minor: "⚠️",
     DiffVerdict.unchanged: "✅",
+    # Deliberately not the minor-change glyph: an abstention is not a small change.
+    DiffVerdict.insufficient_evidence: "❔",
 }
 
 
@@ -37,13 +40,21 @@ def _md_inline(text: Any) -> str:
     return s.replace("|", "\\|").strip()
 
 
-def _bucket(
-    results: list[DiffResult],
-) -> tuple[list[DiffResult], list[DiffResult], list[DiffResult]]:
-    regs = [r for r in results if r.verdict == DiffVerdict.regression]
-    minors = [r for r in results if r.verdict == DiffVerdict.changed_minor]
-    unchanged = [r for r in results if r.verdict == DiffVerdict.unchanged]
-    return regs, minors, unchanged
+def _bucket(results: list[DiffResult]) -> dict[DiffVerdict, list[DiffResult]]:
+    """Group results by verdict, with a list for EVERY member of the enum.
+
+    Built by iterating ``DiffVerdict`` rather than naming three verdicts, so a member added
+    later cannot silently vanish from the report. It used to return a 3-tuple, and when a
+    fourth verdict was spliced in it landed in none of them: no renderer raised, the PR
+    comment still printed "No behavioral regressions found; looks safe to adopt", and the CLI
+    printed only its header — the scenario disappeared. That failure mode is worse than the
+    bug it was reporting on, which is why this is a dict comprehension over the enum and why
+    the KeyError below is deliberate: fail loudly rather than vanish.
+    """
+    out: dict[DiffVerdict, list[DiffResult]] = {v: [] for v in DiffVerdict}
+    for r in results:
+        out[r.verdict].append(r)
+    return out
 
 
 def _provenance(provider: str | None) -> str:
@@ -64,9 +75,17 @@ def render_pr_comment(
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
     doesn't contradict its own "safe to adopt" line."""
-    regs, minors, unchanged = _bucket(results)
+    _b = _bucket(results)
+    regs = _b[DiffVerdict.regression]
+    minors = _b[DiffVerdict.changed_minor]
+    unchanged = _b[DiffVerdict.unchanged]
+    unmeasured = _b[DiffVerdict.insufficient_evidence]
     if regs:
         header = f"\U0001f6a8 **Modelpin: behavioral regression — `{from_model}` → `{to_model}`**"
+    elif unmeasured:
+        # Above `minors`: "we could not measure" outranks "we measured a small change",
+        # because the unmeasured scenarios might hold anything at all.
+        header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
     elif minors:
         header = f"⚠️ **Modelpin: minor changes — `{from_model}` → `{to_model}`**"
     else:
@@ -84,6 +103,13 @@ def render_pr_comment(
             )
             lines.append(f"&nbsp;&nbsp;&nbsp;&nbsp;confidence {r.confidence:.2f}")
         lines.append("")
+    if unmeasured:
+        lines.append(f"**COULD NOT MEASURE ({len(unmeasured)})**")
+        for r in unmeasured:
+            lines.append(
+                f"{_MD_MARK[r.verdict]} {_md_inline(r.scenario_id)} — {_md_inline(r.explanation)}"
+            )
+        lines.append("")
     if minors:
         lines.append(f"**MINOR CHANGES ({len(minors)})**")
         for r in minors:
@@ -95,6 +121,13 @@ def render_pr_comment(
     lines.append("")
     if regs or minors:
         lines.append(f"→ Pin to `{from_model}` until resolved, or review the full diff above.")
+    elif unmeasured:
+        # MP-49 was exactly this line rendering over a run that measured nothing. "Safe to
+        # adopt" must be reachable ONLY when every scenario produced a real comparison.
+        lines.append(
+            f"→ {len(unmeasured)} scenario(s) could not be measured; `{to_model}` is NOT "
+            "cleared. Re-run, or inspect the provider responses."
+        )
     else:
         lines.append(f"→ No behavioral regressions found; `{to_model}` looks safe to adopt.")
     return "\n".join(lines)
@@ -102,13 +135,17 @@ def render_pr_comment(
 
 def render_cli(results: list[DiffResult], from_model: str, to_model: str, runs: int) -> str:
     """The CLI summary — ASCII text + rich color markup (safe on any console)."""
-    regs, minors, unchanged = _bucket(results)
+    _b = _bucket(results)
+    regs = _b[DiffVerdict.regression]
+    minors = _b[DiffVerdict.changed_minor]
+    unchanged = _b[DiffVerdict.unchanged]
+    unmeasured = _b[DiffVerdict.insufficient_evidence]
     lines = [
         f"[bold]Modelpin[/]: {from_model} -> {to_model}  "
         f"[dim]({len(results)} scenario(s) x{runs} runs)[/]",
         "",
     ]
-    for r in regs + minors:
+    for r in regs + unmeasured + minors:
         lines.append(
             f"{_CLI_MARK[r.verdict]} [bold]{r.scenario_id}[/]: {r.explanation} "
             f"[dim](confidence {r.confidence:.2f})[/]"
@@ -180,7 +217,11 @@ def _cell(text: Any) -> str:
 
 def _report_header(meta: ReportMeta, results: list[DiffResult]) -> list[str]:
     """Title + subtitle + outcome-driven TL;DR (✅/⚠️/🚨 by ACTUAL verdict, never alarmist)."""
-    regs, minors, unchanged = _bucket(results)
+    _b = _bucket(results)
+    regs = _b[DiffVerdict.regression]
+    minors = _b[DiffVerdict.changed_minor]
+    unchanged = _b[DiffVerdict.unchanged]
+    unmeasured = _b[DiffVerdict.insufficient_evidence]
     same_model = meta.reference_model == meta.candidate_model
     if same_model:
         title = f"# Modelpin Report — baseline characterization of `{meta.candidate_model}`"
@@ -191,6 +232,11 @@ def _report_header(meta: ReportMeta, results: list[DiffResult]) -> list[str]:
 
     if regs:
         glyph, head = "🚨", "Behavioral regressions found."
+    elif unmeasured:
+        # Above `minors`, and above the clean headline especially: a published Report whose
+        # banner reads "No behavioral change observed" over scenarios that produced no
+        # comparison is the ADR-0009 surface MP-49 exposed. See ADR-0018.
+        glyph, head = "❔", "Incomplete: some scenarios could not be measured."
     elif minors:
         glyph, head = "⚠️", "Minor behavioral changes observed."
     else:
@@ -205,7 +251,10 @@ def _report_header(meta: ReportMeta, results: list[DiffResult]) -> list[str]:
         f"{glyph} **{head}** On our open suite of {len(results)} scenario(s) "
         f"×{meta.runs} runs, comparing {compare} under the settings below, we observed "
         f"{len(unchanged)} unchanged, {len(minors)} minor change(s), and "
-        f"{len(regs)} regression(s).",
+        f"{len(regs)} regression(s)"
+        # The four buckets MUST sum to len(results): a published claim whose own counts do
+        # not add up is the failure this verdict exists to prevent (ADR-0009, ADR-0018).
+        + (f", and could not measure {len(unmeasured)}." if unmeasured else "."),
     ]
 
 
@@ -252,7 +301,11 @@ def _report_methodology(meta: ReportMeta) -> list[str]:
 
 def _report_table(results: list[DiffResult]) -> list[str]:
     """One row per scenario, sorted regression → minor → unchanged for scannability."""
-    regs, minors, unchanged = _bucket(results)
+    _b = _bucket(results)
+    regs = _b[DiffVerdict.regression]
+    minors = _b[DiffVerdict.changed_minor]
+    unchanged = _b[DiffVerdict.unchanged]
+    unmeasured = _b[DiffVerdict.insufficient_evidence]
     lines = [
         "## Per-scenario results",
         "",
@@ -260,7 +313,7 @@ def _report_table(results: list[DiffResult]) -> list[str]:
         "Token Δ | Confidence | What we observed |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
-    for r in regs + minors + unchanged:
+    for r in regs + unmeasured + minors + unchanged:
         s = r.signals
         semantic = "—" if s.semantic_score is None else format(s.semantic_score, ".0%")
         lines.append(
@@ -273,7 +326,9 @@ def _report_table(results: list[DiffResult]) -> list[str]:
     flagged = regs + minors
     summary = (
         f"**Summary:** {len(regs)} regression(s), {len(minors)} minor, "
-        f"{len(unchanged)} unchanged across {len(results)} scenario(s)."
+        f"{len(unchanged)} unchanged"
+        + (f", {len(unmeasured)} unmeasurable" if unmeasured else "")
+        + f" across {len(results)} scenario(s)."
     )
     if flagged:
         mean_conf = sum(r.confidence for r in flagged) / len(flagged)

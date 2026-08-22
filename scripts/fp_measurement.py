@@ -68,6 +68,23 @@ def _perturb(scenario: Scenario, instruction: str) -> Scenario:
     return scenario.model_copy(update={"input": new_input})
 
 
+#: The verdicts that constitute a FLAG. `insufficient_evidence` is deliberately absent: a run
+#: that measured nothing is neither a false alarm nor a detection, and counting it as either
+#: silently corrupts the north-star metric. Before ADR-0018 both arms tested
+#: `!= DiffVerdict.unchanged`, which would have scored the SAME abstention as a false positive
+#: in the FP arm AND as a success in the recall arm.
+_FLAGGED = (DiffVerdict.regression, DiffVerdict.changed_minor)
+
+
+def classify(verdict: DiffVerdict) -> str:
+    """ "fp" | "clean" | "unmeasured" - the only classifier either arm may use."""
+    if verdict in _FLAGGED:
+        return "fp"
+    if verdict == DiffVerdict.insufficient_evidence:
+        return "unmeasured"
+    return "clean"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--provider", default="openai", help="openai | google")
@@ -102,34 +119,48 @@ def main() -> None:
     # --- false-positive rate: same model vs itself ---------------------------------
     false_positives = scored = 0
     print("EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm")
+    unmeasured = 0
     for s in scenarios:
         r = _verdict(s, s, s.id)
         if r is None:
             continue
+        kind = classify(r.verdict)
+        if kind == "unmeasured":
+            unmeasured += 1
+            print(f"  {s.id:<22} {r.verdict.value:<14} conf={r.confidence:.2f}  <-- UNMEASURED")
+            continue
         scored += 1
-        is_fp = r.verdict != DiffVerdict.unchanged
-        false_positives += int(is_fp)
-        flag = "  <-- FALSE POSITIVE" if is_fp else ""
+        false_positives += int(kind == "fp")
+        flag = "  <-- FALSE POSITIVE" if kind == "fp" else ""
         print(f"  {s.id:<22} {r.verdict.value:<14} conf={r.confidence:.2f}{flag}")
     rate = f"{false_positives/scored:.0%}" if scored else "n/a"
-    print(f"\n  False-positive rate: {false_positives}/{scored} = {rate}\n")
+    print(f"\n  False-positive rate: {false_positives}/{scored} = {rate}")
+    # Coverage is published ALONGSIDE the rate, never folded into it: a rate computed over a
+    # silently shrinking denominator is how a metric flatters itself.
+    print(f"  Unmeasured (excluded from the rate): {unmeasured}\n")
 
     # --- detection: injected regressions -------------------------------------------
-    detected = checked = 0
+    detected = checked = unmeasured_rec = 0
     perturbed = [s for s in scenarios if s.id in PERTURBATIONS]
     print("INJECTED REGRESSIONS (perturbed candidate) -- expect regression/changed_minor")
     for s in perturbed:
         r = _verdict(s, _perturb(s, PERTURBATIONS[s.id]), s.id)
         if r is None:
             continue
+        kind = classify(r.verdict)
+        if kind == "unmeasured":
+            unmeasured_rec += 1
+            print(f"  {s.id:<22} {r.verdict.value:<14} UNMEASURED (excluded)")
+            continue
         checked += 1
-        caught = r.verdict != DiffVerdict.unchanged
+        caught = kind == "fp"
         detected += int(caught)
         print(
             f"  {s.id:<22} {r.verdict.value:<14} conf={r.confidence:.2f}  "
             f"{'detected' if caught else 'MISSED'}  ({r.explanation[:55]})"
         )
     print(f"\n  Detection: {detected}/{checked} injected regressions caught")
+    print(f"  Unmeasured (excluded): {unmeasured_rec}")
 
 
 if __name__ == "__main__":

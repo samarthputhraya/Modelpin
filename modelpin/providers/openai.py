@@ -18,7 +18,7 @@ import os
 import time
 from typing import Any
 
-from modelpin.models import Scenario, ToolCall, Trace
+from modelpin.models import IncompleteReason, Scenario, ToolCall, Trace
 from modelpin.providers._common import looks_like_refusal, scrub_secrets
 from modelpin.providers.base import ProviderAdapter, ProviderError
 
@@ -181,6 +181,30 @@ def _tool_result_messages(message: Any, tool_results: dict[str, Any]) -> list[di
     return messages
 
 
+#: Chat Completions finish_reason values that mean the model ENDED ON ITS OWN TERMS.
+#: Anything else means something cut the run short, which the diff records but never gates on.
+_COMPLETE_FINISH = frozenset({"stop", "tool_calls", "function_call"})
+_FINISH_TO_REASON = {
+    "length": IncompleteReason.max_tokens,
+    "content_filter": IncompleteReason.content_filter,
+}
+
+
+def _incomplete_reason(finish_reason: str | None) -> IncompleteReason | None:
+    """Map a provider stop reason to why the run ended early, or None if it finished.
+
+    A MISSING finish_reason returns None, not `provider_other`: OpenAI-compatible hosts
+    (Groq/OpenRouter/Together) may omit it entirely, and "we do not know" must not be
+    recorded as "we know it was cut short". That silence is a real coverage gap for those
+    hosts and is disclosed in ADR-0018 rather than papered over here.
+    """
+    if not finish_reason:
+        return None
+    if finish_reason in _COMPLETE_FINISH:
+        return None
+    return _FINISH_TO_REASON.get(finish_reason, IncompleteReason.provider_other)
+
+
 def _detect_refusal(message: Any, finish_reason: str | None, text: str) -> bool:
     """True if the model declined or was filtered. Combines hard signals (content
     filter, the SDK's structured-output ``refusal`` field) with a phrase heuristic."""
@@ -265,6 +289,7 @@ class OpenAIAdapter(ProviderAdapter):
         all_tool_calls: list[ToolCall] = []
         final_text = ""
         refused = False
+        incomplete: IncompleteReason | None = None
         tokens_in = tokens_out = 0
         started = time.perf_counter()
 
@@ -281,6 +306,9 @@ class OpenAIAdapter(ProviderAdapter):
             turn_calls = _parse_tool_calls(message)
             all_tool_calls.extend(turn_calls)
             refused = refused or _detect_refusal(message, choice.finish_reason, final_text)
+            # First writer wins, like `refused`: a turn-1 truncation must not be erased by a
+            # clean turn 5. The run as a whole was degraded.
+            incomplete = incomplete or _incomplete_reason(choice.finish_reason)
 
             usage = getattr(response, "usage", None)
             tokens_in += getattr(usage, "prompt_tokens", 0) or 0
@@ -290,6 +318,12 @@ class OpenAIAdapter(ProviderAdapter):
             if not turn_calls:
                 break  # the model produced its final answer
             conversation.extend(_tool_result_messages(message, tool_results))
+        else:
+            # for/else fires ONLY when the loop was never `break`n -- i.e. every one of
+            # MAX_TOOL_TURNS turns still wanted another tool. OUR cap ended this run, not the
+            # model, and that is the more actionable fact, so it overrides any provider
+            # reason. Without this the trace is byte-identical to a genuinely finished run.
+            incomplete = IncompleteReason.tool_turns
 
         latency_ms = (time.perf_counter() - started) * 1000.0
         return Trace(
@@ -300,6 +334,7 @@ class OpenAIAdapter(ProviderAdapter):
             tool_calls=all_tool_calls,
             final_output=final_text,
             refused=refused,
+            incomplete_reason=incomplete,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             latency_ms=latency_ms,

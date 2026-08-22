@@ -21,7 +21,7 @@ import os
 import time
 from typing import Any
 
-from modelpin.models import Scenario, ToolCall, Trace
+from modelpin.models import IncompleteReason, Scenario, ToolCall, Trace
 from modelpin.providers._common import looks_like_refusal, scrub_secrets
 from modelpin.providers.base import ProviderAdapter, ProviderError
 
@@ -147,9 +147,36 @@ def _part_text(parts: list[Any]) -> str:
     return "".join(getattr(p, "text", None) or "" for p in parts)
 
 
-def _detect_refusal(candidate: Any, prompt_feedback: Any, text: str) -> bool:
+def _finish_reason_name(candidate: Any) -> str:
+    """The SDK's FinishReason as a plain string ('' when absent). Enum in new SDKs, str in old."""
     fr = getattr(candidate, "finish_reason", None)
-    fr_name = getattr(fr, "name", None) or (str(fr) if fr is not None else "")
+    return getattr(fr, "name", None) or (str(fr) if fr is not None else "")
+
+
+#: Gemini finish reasons that mean the run was cut short. `_BLOCKED_FINISH` is REUSED verbatim
+#: rather than widened -- it also drives `refused`, which is an fp-guardian sensitivity surface.
+_FINISH_TO_REASON: dict[str, IncompleteReason] = {
+    "MAX_TOKENS": IncompleteReason.max_tokens,
+    "MALFORMED_FUNCTION_CALL": IncompleteReason.malformed_tool_call,
+    "UNEXPECTED_TOOL_CALL": IncompleteReason.malformed_tool_call,
+    "TOO_MANY_TOOL_CALLS": IncompleteReason.tool_turns,
+}
+#: Reasons that mean the model finished on its own terms.
+_COMPLETE_FINISH: frozenset[str] = frozenset({"STOP", "FINISH_REASON_UNSPECIFIED", ""})
+
+
+def _incomplete_reason(candidate: Any) -> IncompleteReason | None:
+    """Why this Gemini turn ended early, or None when it finished normally."""
+    name = _finish_reason_name(candidate)
+    if name in _COMPLETE_FINISH:
+        return None
+    if name in _BLOCKED_FINISH:
+        return IncompleteReason.content_filter
+    return _FINISH_TO_REASON.get(name, IncompleteReason.provider_other)
+
+
+def _detect_refusal(candidate: Any, prompt_feedback: Any, text: str) -> bool:
+    fr_name = _finish_reason_name(candidate)
     if fr_name in _BLOCKED_FINISH:
         return True
     if prompt_feedback is not None and getattr(prompt_feedback, "block_reason", None):
@@ -238,6 +265,7 @@ class GoogleAdapter(ProviderAdapter):
         all_tool_calls: list[ToolCall] = []
         final_text = ""
         refused = False
+        incomplete: IncompleteReason | None = None
         tokens_in = tokens_out = 0
         started = time.perf_counter()
 
@@ -251,6 +279,8 @@ class GoogleAdapter(ProviderAdapter):
             refused = refused or _detect_refusal(
                 candidate, getattr(response, "prompt_feedback", None), final_text
             )
+            # First writer wins, like `refused`.
+            incomplete = incomplete or _incomplete_reason(candidate)
 
             usage = getattr(response, "usage_metadata", None)
             tokens_in += getattr(usage, "prompt_token_count", 0) or 0
@@ -260,6 +290,10 @@ class GoogleAdapter(ProviderAdapter):
                 break  # final answer reached
             contents.append(_model_turn_content(parts, final_text))
             contents.append(_function_response_content(turn_calls, tool_results))
+        else:
+            # for/else: never `break`n, so every turn still wanted a tool -- OUR cap ended it.
+            # Overrides any provider reason; our cap is the more actionable fact.
+            incomplete = IncompleteReason.tool_turns
 
         latency_ms = (time.perf_counter() - started) * 1000.0
         return Trace(
@@ -270,6 +304,7 @@ class GoogleAdapter(ProviderAdapter):
             tool_calls=all_tool_calls,
             final_output=final_text,
             refused=refused,
+            incomplete_reason=incomplete,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             latency_ms=latency_ms,

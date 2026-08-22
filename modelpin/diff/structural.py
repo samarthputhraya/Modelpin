@@ -75,6 +75,32 @@ def modal_sequence(traces: list[Trace], mode: MatchMode = "strict") -> tuple[str
     return keys.most_common(1)[0][0]
 
 
+def is_degenerate(trace: Trace) -> bool:
+    """True when this run recorded NO behavior the diff can read.
+
+    The three clauses are exactly the three verdict-bearing per-run extractions in this
+    module -- ``tool_call_sequence``, ``refused_flags``, ``violates_text_assertions`` --
+    plus ``semantic.py``'s read of ``final_output``. If all four have nothing to work with,
+    the run is not evidence of "no change"; it is an absence of evidence. See ADR-0018.
+
+    ``latency_ms`` and the token counts are deliberately NOT consulted: ADR-0003 makes them
+    reported-but-never-gating, and the adapters sum usage with ``or 0``, so a zero there is
+    not evidence of anything.
+
+    ``not trace.refused`` is LOAD-BEARING and must not be tidied away. A genuinely empty
+    response really does carry ``refused=False`` (``looks_like_refusal("")`` is False), while
+    a content-filter refusal can carry empty text and ``refused=True`` -- and that IS a
+    complete measurement which must stay in the comparison. Dropping this clause would turn
+    every both-sides-refuse scenario from a correct ``unchanged`` into an abstention.
+    """
+    return not trace.tool_calls and not trace.refused and not (trace.final_output or "").strip()
+
+
+def degenerate_count(traces: list[Trace]) -> int:
+    """How many of these runs recorded nothing at all."""
+    return sum(1 for t in traces if is_degenerate(t))
+
+
 def refused_flags(traces: list[Trace]) -> list[int]:
     """Per-run refusal as 0/1, for the distributional test."""
     return [1 if t.refused else 0 for t in traces]

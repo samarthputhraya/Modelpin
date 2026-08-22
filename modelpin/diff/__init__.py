@@ -28,6 +28,7 @@ from modelpin.diff.structural import (
     MatchMode,
     assertion_violation_flags,
     canonical_sequence,
+    degenerate_count,
     modal_sequence,
     refusal_rate,
     refused_flags,
@@ -38,6 +39,18 @@ from modelpin.models import DiffResult, DiffSignals, DiffVerdict, Scenario, Trac
 
 #: Significance threshold for the permutation test. Lower = fewer false positives.
 ALPHA = 0.05
+
+#: A side is UNUSABLE when the MODE of its runs is "nothing recorded": ``2 * d > n``.
+#: Strict majority, never ``>=`` — a tie (2 of 4) stays usable, matching this engine's
+#: standing bias that a 50/50 flip is noise, not a regression.
+#:
+#: This is NOT a constant fitted to data. It is the point at which the modal statistics the
+#: engine already relies on — ``modal_sequence``, ``semantic``'s reference output, the TVD
+#: mode — would be computed over "nothing". [A] not [M]: no run in the test suite contains a
+#: single degenerate trace, so it cannot be falsified from this repo. MP-54's ~3,500 live
+#: calls produce the first real d/n distribution via the counters on DiffSignals, and
+#: ADR-0018's revisit trigger is exactly that data. fp-guardian protected.
+DEGENERATE_MAJORITY_NUMERATOR = 2
 #: A tool-call distribution must shift by at least this total-variation distance to
 #: count — guards against trivially-significant jitter once N grows large.
 MIN_TOOL_TVD = 0.5
@@ -68,6 +81,35 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def _side_is_unusable(traces: list[Trace]) -> bool:
+    """A side with no runs, or whose modal run recorded nothing, cannot be compared."""
+    n = len(traces)
+    if n == 0:
+        return True
+    return DEGENERATE_MAJORITY_NUMERATOR * degenerate_count(traces) > n
+
+
+def _abstention_explanation(n_base: int, d_base: int, n_cand: int, d_cand: int) -> str:
+    """Name the failing side AND its remedy — they differ, and a wrong remedy loops the user."""
+    if n_base == 0 or n_cand == 0:
+        return (
+            "insufficient evidence: need at least one recorded run per side "
+            f"(baseline {n_base}, candidate {n_cand}); re-record with `modelpin baseline`"
+        )
+    parts: list[str] = []
+    if DEGENERATE_MAJORITY_NUMERATOR * d_base > n_base:
+        parts.append(
+            f"{d_base}/{n_base} baseline run(s) recorded no output, no tool call and no "
+            "refusal - re-record with `modelpin baseline`"
+        )
+    if DEGENERATE_MAJORITY_NUMERATOR * d_cand > n_cand:
+        parts.append(
+            f"{d_cand}/{n_cand} candidate run(s) recorded no output, no tool call and no "
+            "refusal - re-run, or inspect the provider response"
+        )
+    return "insufficient evidence: " + "; ".join(parts) + "; nothing to compare"
+
+
 def diff_scenario(
     scenario_id: str,
     from_model: str,
@@ -83,14 +125,29 @@ def diff_scenario(
     With ``judge`` set, the semantic LLM-judge signal is evaluated (spec 6B); with it
     ``None`` the diff is purely structural + statistical and makes no network call.
     """
-    if not baseline_traces or not candidate_traces:
+    # --- input-validity gate: did we measure anything at all? --------------------
+    # Runs BEFORE every signal, and outranks every verdict INCLUDING regression, because each
+    # downstream statistic (permutation p, TVD, modal_sequence, the judge's reference output)
+    # is computed over the same contaminated sample. Abstaining is not a softer regression;
+    # it is the honest answer when a side recorded no behavior to compare. ADR-0018.
+    d_base, d_cand = degenerate_count(baseline_traces), degenerate_count(candidate_traces)
+    n_base, n_cand = len(baseline_traces), len(candidate_traces)
+    if _side_is_unusable(baseline_traces) or _side_is_unusable(candidate_traces):
         return DiffResult(
             scenario_id=scenario_id,
             from_model=from_model,
             to_model=to_model,
-            verdict=DiffVerdict.unchanged,
+            verdict=DiffVerdict.insufficient_evidence,
+            # 0.0, never min(p). ADR-0001 governs how sure we are of a COMPARISON; here there
+            # was no comparison. "Confident abstention" is the exact confusion MP-49 was.
             confidence=0.0,
-            explanation="insufficient data: need baseline and candidate runs",
+            signals=DiffSignals(
+                degenerate_baseline=d_base,
+                degenerate_candidate=d_cand,
+                baseline_runs=n_base,
+                candidate_runs=n_cand,
+            ),
+            explanation=_abstention_explanation(n_base, d_base, n_cand, d_cand),
         )
 
     # --- tool-call trajectory --------------------------------------------------
@@ -167,6 +224,13 @@ def diff_scenario(
         semantic_score=semantic_score,
         latency_delta_ms=round(latency_delta, 3),
         token_delta=int(token_delta),
+        # Populated on EVERY result, not just abstentions: degradation below the majority
+        # threshold (e.g. 2 of 5 runs silent) still produces a verdict, and a reader must be
+        # able to see that it did. This residual band is the largest gap ADR-0018 leaves open.
+        degenerate_baseline=d_base,
+        degenerate_candidate=d_cand,
+        baseline_runs=n_base,
+        candidate_runs=n_cand,
     )
 
     # --- verdict ---------------------------------------------------------------

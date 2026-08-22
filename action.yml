@@ -68,7 +68,7 @@ inputs:
 
 outputs:
   verdict-exit-code:
-    description: "0 if no regression, 1 if a regression was detected."
+    description: "0 clean, 1 a behavioral regression, 3 at least one scenario could not be measured."
     value: ${{ steps.check.outputs.code }}
   report-path:
     description: "Path to the rendered Markdown report."
@@ -162,11 +162,18 @@ runs:
             await github.rest.issues.createComment({ owner, repo, issue_number, body });
           }
 
-    - name: Fail on regression
+    - name: Fail on regression or an unmeasurable run
       if: ${{ inputs.fail-on-regression == 'true' && steps.check.outputs.code != '0' }}
       shell: bash
       env:
         MP_TO: ${{ inputs.to }}
+        MP_CODE: ${{ steps.check.outputs.code }}
       run: |
-        echo "::error::Modelpin detected a behavioral regression migrating to '$MP_TO'. See the PR comment / report."
+        # Exit 3 means we could NOT measure, which is not the same claim as "it regressed".
+        # Saying "regression" there would put a false statement in the PR. See ADR-0018.
+        if [ "$MP_CODE" = "3" ]; then
+          echo "::error::Modelpin could not measure at least one scenario migrating to '$MP_TO' - it is NOT cleared. See the PR comment / report."
+        else
+          echo "::error::Modelpin detected a behavioral regression migrating to '$MP_TO'. See the PR comment / report."
+        fi
         exit 1

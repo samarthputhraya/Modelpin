@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_serializer, model_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 
 def _utcnow() -> datetime:
@@ -35,6 +35,26 @@ class ModelStatus(str, Enum):
     active = "active"
     deprecated = "deprecated"
     retired = "retired"
+
+
+class IncompleteReason(str, Enum):
+    """Why a run did NOT end with the model's own finished answer.
+
+    ``None`` means NOT RECORDED — it does **not** mean "complete". Every baseline written
+    before this field existed is ``None``, as is every trace from an OpenAI-compatible host
+    that omits ``finish_reason``.
+
+    **Nothing in the diff gates on this field.** It is recorded and reported only, the same
+    shape ADR-0003 gives latency and tokens. A run can be incomplete and still carry a
+    perfectly comparable answer, and the rate at which that happens has never been measured —
+    MP-54 is what produces that data. See ADR-0018.
+    """
+
+    max_tokens = "max_tokens"  # the token budget cut the answer off
+    tool_turns = "tool_turns"  # our MAX_TOOL_TURNS cap, or the provider's, ended the loop
+    content_filter = "content_filter"  # provider blocked or filtered (also sets `refused`)
+    malformed_tool_call = "malformed_tool_call"  # the model emitted an invalid tool call
+    provider_other = "provider_other"  # a stop reason this version does not recognise
 
 
 class Model(BaseModel):
@@ -97,10 +117,27 @@ class Trace(BaseModel):
     tool_calls: list[ToolCall] = Field(default_factory=list)
     final_output: str = ""
     refused: bool = False
+    #: Why the run ended early, or None when it finished normally OR was never recorded.
+    #: Recording only — see IncompleteReason. Added after 0.1.2, so older baselines read None.
+    incomplete_reason: Optional[IncompleteReason] = None
     tokens_in: int = 0
     tokens_out: int = 0
     latency_ms: float = 0.0
     ts: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("incomplete_reason", mode="before")
+    @classmethod
+    def _tolerate_unknown_reason(cls, v: Any) -> Any:
+        """A newer Modelpin's baseline must never read as CORRUPT to an older one.
+
+        `storage.load_baseline` turns any ValidationError into
+        ``BaselineError("... is corrupt ... Delete it and re-run")`` — i.e. a version skew
+        would cost the user their recorded baseline. An unrecognised reason degrades to
+        ``provider_other`` instead of raising.
+        """
+        if isinstance(v, str) and v not in {m.value for m in IncompleteReason}:
+            return IncompleteReason.provider_other
+        return v
 
     @field_serializer("messages")
     def _serialize_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -121,6 +158,10 @@ class DiffVerdict(str, Enum):
     unchanged = "unchanged"
     changed_minor = "changed_minor"
     regression = "regression"
+    #: The run could not be measured — one side recorded no behavior to compare. NOT the same
+    #: as "no change": see ADR-0018. Deliberately NOT named for low N; MP-55 extends this
+    #: member's predicate rather than adding a fifth.
+    insufficient_evidence = "insufficient_evidence"
 
 
 class DiffSignals(BaseModel):
@@ -130,6 +171,13 @@ class DiffSignals(BaseModel):
     semantic_score: Optional[float] = None
     latency_delta_ms: Optional[float] = None
     token_delta: Optional[int] = None
+    #: How many runs on each side recorded nothing at all, and out of how many. Always
+    #: populated so a reader can see degradation BELOW the abstention threshold, which is
+    #: the largest gap this fix deliberately leaves open (ADR-0018).
+    degenerate_baseline: Optional[int] = None
+    degenerate_candidate: Optional[int] = None
+    baseline_runs: Optional[int] = None
+    candidate_runs: Optional[int] = None
 
 
 class DiffResult(BaseModel):
