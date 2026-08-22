@@ -379,7 +379,7 @@ def baseline(
         None, "--provider", help="openai | google | anthropic | groq | openrouter | fake."
     ),
     fixtures: Optional[str] = typer.Option(
-        None, "--fixtures", help="Canned traces for --provider fake."
+        None, "--fixtures", help="Canned traces for --provider fake (required with it)."
     ),
     runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario."),
     config_path: str = typer.Option("modelpin.yaml", "--config"),
@@ -419,7 +419,7 @@ def check(
         None, "--provider", help="openai | google | anthropic | groq | openrouter | fake."
     ),
     fixtures: Optional[str] = typer.Option(
-        None, "--fixtures", help="Canned traces for --provider fake."
+        None, "--fixtures", help="Canned traces for --provider fake (required with it)."
     ),
     runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario."),
     mode: str = typer.Option(
@@ -525,7 +525,7 @@ def report(
         None, "--provider", help="openai | google | anthropic | groq | openrouter | fake."
     ),
     fixtures: Optional[str] = typer.Option(
-        None, "--fixtures", help="Canned traces for --provider fake (offline)."
+        None, "--fixtures", help="Canned traces for --provider fake (required with it)."
     ),
     runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario per model."),
     mode: str = typer.Option(

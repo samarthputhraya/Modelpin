@@ -1,12 +1,20 @@
 """FakeProvider — replays canned traces for deterministic, offline runs/tests.
 
 This adapter never invents a trace. It used to return a placeholder Trace for any
-``(scenario_id, model_id)`` it did not hold, which made BOTH sides of a comparison
-identical: the run printed ``OK n scenario(s) unchanged`` and exited 0 — "safe to
-adopt" from a run that measured nothing, with `tool_calls` and `refused` structurally
-null on both sides so no signal could ever fire. A false negative of that shape is the
-exact failure the project's north-star metric exists to prevent, so a miss is now a
-hard error. See MP-28 and ADR-0015.
+``(scenario_id, model_id)`` it did not hold, and a fabricated trace is wrong in BOTH
+directions:
+
+- Both sides miss -> the placeholders are identical, no signal can fire, and the run
+  prints ``OK n scenario(s) unchanged`` and exits 0. "Safe to adopt" from a run that
+  measured nothing: a false negative, the exact failure the north-star metric exists
+  to prevent.
+- One side misses -> the placeholder (``tool_calls=[]``, ``refused=False``, empty
+  output) is diffed against REAL traces and manufactures a confident regression.
+  [M] a one-sided gap produced ``tool-call behavior changed: [...] -> []`` at
+  confidence 0.99, where the real change was an extra repeated call. This is the
+  likelier case in practice -- a baseline already on disk plus a typo'd ``--to``.
+
+So a miss is a hard error. See MP-28 and ADR-0015.
 
 The guard has two layers because there are two ways to reach zero coverage:
 ``preflight()`` catches "no canned traces at all" once, before any scenario runs, and
@@ -75,9 +83,9 @@ class FakeProvider(ProviderAdapter):
             )
         raise MissingCannedTrace(
             "`--provider fake` replays canned traces and none were supplied, so every "
-            "replay would return the same placeholder and the run would report "
-            "'unchanged' without measuring anything. Pass `--fixtures <file>` "
-            "(`modelpin init --demo` writes one), or choose a real provider."
+            "replay would return the same placeholder and the run would measure "
+            "nothing. Pass `--fixtures <file>` (`modelpin init --demo` writes one), "
+            "or choose a real provider."
         )
 
     def run(self, scenario: Scenario, model_id: str, run_idx: int = 0) -> Trace:
@@ -86,9 +94,9 @@ class FakeProvider(ProviderAdapter):
             return self.canned[key].model_copy(update={"run_idx": run_idx})
         raise MissingCannedTrace(
             f"no canned trace for scenario {scenario.id!r} on model {model_id!r}; "
-            f"{self._coverage_hint(scenario.id)}. Refusing to invent one: both sides of "
-            "the comparison would be identical and the run would report 'unchanged' "
-            "without measuring anything."
+            f"{self._coverage_hint(scenario.id)}. Refusing to invent one: a fabricated "
+            "trace either matches the other side and hides a real change, or differs "
+            "from it and manufactures one."
         )
 
     def _coverage_hint(self, scenario_id: str) -> str:
