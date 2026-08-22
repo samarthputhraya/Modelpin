@@ -191,8 +191,15 @@ def main() -> None:
         pairs_out.append(
             {"from": frm, "to": to, "label": label, "counts": dict(counts), "results": per}
         )
-        changed = [r for r in per if r["verdict"] != "unchanged"]
+        # NOT `!= "unchanged"`: an abstention is not a behavior change, and this list is what
+        # a Report author reads while writing public copy. Counting it as "changed" is the
+        # same mislabel MP-49 was. See ADR-0018.
+        changed = [r for r in per if r["verdict"] in ("regression", "changed_minor")]
+        unmeasured = [r for r in per if r["verdict"] == "insufficient_evidence"]
         print(f"\n### {label}\n  {frm} -> {to}: {dict(counts)}")
+        if unmeasured:
+            ids = ", ".join(r["scenario_id"] for r in unmeasured)
+            print(f"  UNMEASURED ({len(unmeasured)}), excluded from 'changed': {ids}")
         for r in changed:
             print(f"    [{r['verdict']}] {r['scenario_id']}: {r['explanation'][:80]}")
 

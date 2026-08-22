@@ -42,11 +42,15 @@ def test_a_run_with_nothing_recorded_is_degenerate():
     assert is_degenerate(Trace(scenario_id="s", model_id="m", final_output="   "))
 
 
-def test_a_refusal_is_a_measurement_not_a_degenerate_run():
-    """LOAD-BEARING. A content-filter refusal can carry empty text and refused=True; that is
-    a complete observation and must stay in the comparison. Dropping the `not refused` clause
-    would turn every both-sides-refuse scenario from a correct `unchanged` into an abstention."""
+def test_a_refusal_with_no_text_is_not_degenerate():
+    """LOAD-BEARING. A content-filter refusal carries empty text AND refused=True -- that is a
+    complete observation, not an absence of one."""
     assert not is_degenerate(Trace(scenario_id="s", model_id="m", refused=True))
+
+
+def test_both_sides_refusing_still_compares_as_unchanged():
+    """The consequence of the clause above, asserted separately so a mutation that drops
+    `not refused` fails on BOTH the predicate and the verdict it protects."""
     base, cand = _runs("o", refused=True), _runs("n", refused=True)
     assert diff_scenario("s", "o", "n", base, cand).verdict == DiffVerdict.unchanged
 
@@ -97,12 +101,25 @@ def test_the_explanation_names_the_failing_side_and_its_remedy():
 
 @pytest.mark.parametrize(
     ("n", "d", "expect_abstain"),
-    [(5, 2, False), (5, 3, True), (4, 2, False), (4, 3, True), (3, 2, True), (1, 1, True)],
+    [
+        (5, 2, False),  # 0.40 - below half, verdict still computed
+        (5, 3, True),  # 0.60
+        (4, 2, True),  # 0.50 - the TIE abstains
+        (6, 3, True),  # 0.50
+        (8, 4, True),  # 0.50 - pre-gate this published `regression` @ 0.962
+        (8, 3, False),  # 0.375
+        (3, 2, True),
+        (1, 1, True),
+    ],
 )
-def test_the_threshold_is_a_strict_majority(n: int, d: int, expect_abstain: bool):
-    """2*d > n, never >=. A tie stays usable, matching the engine's standing bias that a
-    50/50 flip is noise. The residual band (d below the threshold) is disclosed, not gated --
-    see ADR-0018's non-goals."""
+def test_a_side_is_unusable_at_or_above_half_degenerate(n: int, d: int, expect_abstain: bool):
+    """``2*d >= n``, inclusive.
+
+    The tie is load-bearing, not a rounding preference. The tool TVD and the semantic delta
+    are each exactly ``d/n`` when a healthy baseline meets d silent runs, and both floors are
+    0.5 -- so d/n == 0.5 is precisely where measurement failure starts clearing the floors by
+    itself. An earlier strict-majority draft let n=8,d=4 publish `regression` at 0.962.
+    """
     cand = _empty("n", d) + _text("n", n - d)
     r = diff_scenario("s", "o", "n", _text("o", n), cand)
     assert (r.verdict == DiffVerdict.insufficient_evidence) is expect_abstain
@@ -162,3 +179,68 @@ def test_an_unknown_reason_degrades_instead_of_corrupting_a_baseline():
 
 def test_a_pre_existing_baseline_still_loads():
     assert Trace(**{"scenario_id": "s", "model_id": "m"}).incomplete_reason is None
+
+
+# --- the paths the "CI recall is unchanged" claim rests on (fp-guardian C3) --------------
+
+
+def test_check_exits_three_when_a_scenario_could_not_be_measured(tmp_path):
+    """The whole "CI still fails" argument is this one exit code.
+
+    3, not 1 (a regression is a different claim) and not 2 (Click already returns 2 for a
+    usage error). `action.yml` gates on `code != '0'`, so CI fails either way -- but a caller
+    that cannot tell "it broke" from "we could not tell" is back at MP-49.
+    """
+    import json
+
+    from typer.testing import CliRunner
+
+    from modelpin.cli import EXIT_UNMEASURED, app
+
+    assert EXIT_UNMEASURED == 3
+    scen = tmp_path / "scenarios"
+    scen.mkdir()
+    (scen / "s.json").write_text(
+        '{"id":"cap","name":"Cap","input":{"messages":[{"role":"user","content":"hi"}]}}',
+        encoding="utf-8",
+    )
+    fx = tmp_path / "fx.json"
+    fx.write_text(
+        json.dumps(
+            [{"scenario_id": "cap", "model_id": "old", "final_output": "Paris."}] * 5
+            + [{"scenario_id": "cap", "model_id": "new", "final_output": ""}] * 5
+        ),
+        encoding="utf-8",
+    )
+    common = [
+        "--provider",
+        "fake",
+        "--fixtures",
+        str(fx),
+        "--scenarios-dir",
+        str(scen),
+        "--store-dir",
+        str(tmp_path / ".s"),
+        "--runs",
+        "5",
+    ]
+    runner = CliRunner()
+    base = runner.invoke(app, ["baseline", "--model", "old", *common])
+    assert base.exit_code == 0, base.output
+    chk = runner.invoke(app, ["check", "--to", "new", "--from", "old", *common])
+    assert chk.exit_code == 3, f"expected EXIT_UNMEASURED, got {chk.exit_code}: {chk.output}"
+
+
+def test_a_report_containing_an_abstention_never_says_safe_to_adopt():
+    """MP-49's actual harm was this sentence rendering over a run that measured nothing.
+
+    `test_report.py` asserts the line is PRESENT for an all-unchanged run; nothing asserted it
+    was ABSENT here, so a refactor could restore the false claim silently.
+    """
+    from modelpin.report import render_pr_comment
+
+    results = [diff_scenario("s", "o", "n", _text("o"), _empty("n"))]
+    md = render_pr_comment(results, "o", "n", 5, provider="openai")
+    assert "safe to adopt" not in md
+    assert "NOT cleared" in md
+    assert "could not measure" in md.lower()

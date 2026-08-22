@@ -40,17 +40,28 @@ from modelpin.models import DiffResult, DiffSignals, DiffVerdict, Scenario, Trac
 #: Significance threshold for the permutation test. Lower = fewer false positives.
 ALPHA = 0.05
 
-#: A side is UNUSABLE when the MODE of its runs is "nothing recorded": ``2 * d > n``.
-#: Strict majority, never ``>=`` — a tie (2 of 4) stays usable, matching this engine's
-#: standing bias that a 50/50 flip is noise, not a regression.
+#: A side is UNUSABLE when AT LEAST HALF of its runs recorded nothing: ``2 * d >= n``.
 #:
-#: This is NOT a constant fitted to data. It is the point at which the modal statistics the
-#: engine already relies on — ``modal_sequence``, ``semantic``'s reference output, the TVD
-#: mode — would be computed over "nothing". [A] not [M]: no run in the test suite contains a
-#: single degenerate trace, so it cannot be falsified from this repo. MP-54's ~3,500 live
-#: calls produce the first real d/n distribution via the counters on DiffSignals, and
-#: ADR-0018's revisit trigger is exactly that data. fp-guardian protected.
-DEGENERATE_MAJORITY_NUMERATOR = 2
+#: The boundary is not arbitrary and it is not a fitted constant. Two of the engine's own
+#: quantities break exactly at ``d/n = 0.5``:
+#:   * ``modal_sequence`` and the semantic reference output are both ``most_common(1)``, so at
+#:     or above half the mode IS "nothing" — the reference every other run is compared against.
+#:   * When a healthy baseline meets a candidate with d silent runs, the tool TVD and the
+#:     semantic delta are each EXACTLY ``d/n``. Since MIN_TOOL_TVD and MIN_SEMANTIC_DELTA are
+#:     both 0.5, ``d/n = 0.5`` is precisely where pure measurement failure begins clearing the
+#:     effect-size floors on its own.
+#:
+#: An earlier draft used a STRICT majority (``>``) on the reasoning that a 50/50 split is
+#: noise. [M] That was falsified: at n=8, d=4 the pre-gate engine publishes `regression` at
+#: confidence 0.962 about a candidate that recorded nothing on half its runs — the p-gate is
+#: the only thing holding the tie, and it stops holding at N>=8. Inclusive `>=` is the only
+#: variant that closes that manufactured regression.
+#:
+#: [A] not [M]: no run in this repo contains a degenerate trace ([M] 0 of 360 real traces in
+#: docs/reports/data/), so the boundary cannot be falsified here. MP-54's live calls produce
+#: the first d/n distribution via the counters on DiffSignals. ADR-0018 holds the revisit
+#: trigger. fp-guardian protected.
+DEGENERATE_SIDE_NUMERATOR = 2
 #: A tool-call distribution must shift by at least this total-variation distance to
 #: count — guards against trivially-significant jitter once N grows large.
 MIN_TOOL_TVD = 0.5
@@ -86,7 +97,7 @@ def _side_is_unusable(traces: list[Trace]) -> bool:
     n = len(traces)
     if n == 0:
         return True
-    return DEGENERATE_MAJORITY_NUMERATOR * degenerate_count(traces) > n
+    return DEGENERATE_SIDE_NUMERATOR * degenerate_count(traces) >= n
 
 
 def _abstention_explanation(n_base: int, d_base: int, n_cand: int, d_cand: int) -> str:
@@ -97,12 +108,12 @@ def _abstention_explanation(n_base: int, d_base: int, n_cand: int, d_cand: int) 
             f"(baseline {n_base}, candidate {n_cand}); re-record with `modelpin baseline`"
         )
     parts: list[str] = []
-    if DEGENERATE_MAJORITY_NUMERATOR * d_base > n_base:
+    if DEGENERATE_SIDE_NUMERATOR * d_base >= n_base:
         parts.append(
             f"{d_base}/{n_base} baseline run(s) recorded no output, no tool call and no "
             "refusal - re-record with `modelpin baseline`"
         )
-    if DEGENERATE_MAJORITY_NUMERATOR * d_cand > n_cand:
+    if DEGENERATE_SIDE_NUMERATOR * d_cand >= n_cand:
         parts.append(
             f"{d_cand}/{n_cand} candidate run(s) recorded no output, no tool call and no "
             "refusal - re-run, or inspect the provider response"

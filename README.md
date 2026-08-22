@@ -59,7 +59,8 @@ modelpin baseline --fixtures traces.json
 modelpin check --to demo-model-v2 --fixtures traces.json
 ```
 
-You'll get a per-scenario verdict (`unchanged` / `changed_minor` / `regression`), a confidence
+You'll get a per-scenario verdict (`unchanged` / `changed_minor` / `regression` /
+`insufficient_evidence` - the last meaning a side recorded nothing to compare), a confidence
 score, a one-line plain-English explanation per scenario, and a Markdown report written to
 `.modelpin/last-report.md`:
 
@@ -155,7 +156,8 @@ jobs:
 
 Action inputs: `to` (required), `from`, `provider`, `config`, `scenarios-dir`, `runs`, `match`,
 `baseline`, `comment`, `fail-on-regression`, `github-token`, `modelpin-spec`, `python-version`,
-`working-directory`. Outputs: `verdict-exit-code` and `report-path`. The usual pattern is to
+`working-directory`. Outputs: `verdict-exit-code` (0 clean, 1 a behavioral regression,
+3 at least one scenario could not be measured) and `report-path`. The usual pattern is to
 **commit your baseline** so CI only replays the candidate; flip `baseline: "true"` to record fresh
 (needs the old model still reachable). Copy-paste workflow:
 [`examples/github-workflow.yml`](examples/github-workflow.yml).

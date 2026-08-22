@@ -13,8 +13,14 @@ This file records how we measure it and the results.
   used to tune the diff thresholds — those remain the conservative, uncalibrated defaults
   (`ALPHA=0.05`, `MIN_TOOL_TVD=0.5`, `MIN_REFUSAL_DELTA=0.34`, `MIN_SEMANTIC_DELTA=0.5`).
 - **False-positive rate (the metric).** Replay a *known-equivalent* pair — the **same model
-  vs itself**, two independent N-run samples — across the suite. Any verdict other than
-  `unchanged` is, by construction, a false alarm from model nondeterminism.
+  vs itself**, two independent N-run samples — across the suite. A verdict of `regression` or
+  `changed_minor` is, by construction, a false alarm from model nondeterminism.
+- **Coverage (published beside the rate, never folded into it).** A scenario can also come
+  back `insufficient_evidence`: at least half the runs on one side recorded no output, no tool
+  call and no refusal, so there was nothing to compare. That is neither a false alarm nor a
+  clean pass, and counting it as either would corrupt this metric in opposite directions — so
+  it is excluded from the denominator and reported separately. **A rate quoted without its
+  coverage number is not a result.** A shrinking denominator is how a metric flatters itself.
 - **Detection (the control).** Inject a controlled behavior change into the candidate
   (refuse refunds / leak PII / always answer "Positive") and confirm the engine flags it —
   so a low FP rate is not merely "always unchanged".
@@ -27,7 +33,17 @@ python scripts/fp_measurement.py --model gpt-4o-mini --runs 5     # judged, full
 
 ## Results
 
-**Headline (live, judged, held-out): false-positive rate = 0/8 = 0%.**
+**Headline (live, judged, held-out): 0 false alarms in 8 scored trials, 0 unmeasured.**
+
+That is an *observation, not a rate.* The exact one-sided 95% upper bound on 0/8 is **~31%**,
+so this result is consistent with a true false-positive rate anywhere from 0% to about a third.
+It is reported here as `0/8` and never as "0%".
+
+It is also measured on the wrong surface to be reassuring: all 8 held-out scenarios run at
+temperature 0, and identical distributions short-circuit to `p=1.0` without the statistic
+running at all. **Zero scenarios in this repository combine tool use with temperature > 0** —
+the one surface where false positives are actually possible. Measured coverage there is `0/0`.
+Closing that is [MP-54]; until it lands, no stronger claim than the sentence above is supported.
 
 `scripts/fp_measurement.py --model gpt-4o-mini --runs 5`, semantic judge ON
 (gpt-4o-mini), gpt-4o-mini vs itself across all 8 held-out scenarios — every verdict
