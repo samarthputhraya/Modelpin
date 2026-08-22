@@ -23,7 +23,9 @@ class ProviderAdapter(ABC):
         """Cheap, no-network readiness check (key present, SDK importable).
 
         Called once before the replay loop so a misconfigured run fails *before*
-        spending any tokens. Default is a no-op (e.g. the fake/offline provider).
+        spending any tokens. The default is a no-op; adapters override it when they can
+        cheaply prove a run would be unmeasurable (``FakeProvider`` refuses a run with no
+        canned traces, which is how MP-28's silent `unchanged` was closed).
         """
         return None
 

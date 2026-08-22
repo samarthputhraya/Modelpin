@@ -5,9 +5,11 @@ That trade only pays if the generated sandbox works end to end, so this drives t
 documented path: generate, load, baseline, check, and assert the verdicts the README
 promises.
 
-It also closes the trap that makes a broken demo silent: FakeProvider returns a placeholder
-trace for any (scenario, model) key it does not hold, so a single typo in a fixture key
-yields `unchanged` + exit 0 — "safe to adopt" from a run that measured nothing. See MP-28.
+It also closes the trap that used to make a broken demo silent: FakeProvider returned a
+placeholder trace for any (scenario, model) key it did not hold, so a single typo in a
+fixture key yielded `unchanged` + exit 0 — "safe to adopt" from a run that measured
+nothing. MP-28 made that a hard error; the test below still earns its place because it
+names the missing PAIRS up front, which a raise mid-run cannot.
 """
 
 from __future__ import annotations
@@ -60,10 +62,12 @@ def test_generated_scenarios_and_config_are_valid(demo: Path) -> None:
 
 
 def test_every_scenario_model_pair_has_a_real_fixture(demo: Path) -> None:
-    """MP-28 guard: a missing key does NOT raise, it silently yields `unchanged`.
+    """MP-28 guard: every pair the demo will replay must have a real fixture.
 
-    This is the single most likely way the demo ships broken, and the failure mode is a
-    false negative — the exact thing Modelpin exists to not do.
+    A miss is now a hard error (FakeProvider.run raises MissingCannedTrace) rather than a
+    silent `unchanged`, so this no longer guards against a false negative — it guards
+    against shipping a demo that dies on first run, and it reports ALL missing pairs at
+    once instead of only the first one to be replayed.
     """
     provider = FakeProvider.from_fixtures(demo / DEMO_FIXTURES)
     scenarios = load_scenarios(demo / "scenarios")

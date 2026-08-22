@@ -13,6 +13,7 @@ from modelpin.cli import _report_basename, app
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
 from modelpin.models import Trace
 from modelpin.providers import ProviderError
+from modelpin.scenarios import load_scenarios
 
 REPO = Path(__file__).resolve().parents[1]
 REPORT_SUITE = str(REPO / "examples" / "report-suite")
@@ -235,10 +236,37 @@ def test_report_same_model_runs_and_exits_zero(tmp_path):
     assert "baseline characterization" in md
 
 
-def test_report_runs_the_default_public_suite(tmp_path):
-    # No fixtures: the fake provider returns identical placeholder traces for both models,
-    # so the run is all-unchanged. This exercises loading + hashing the real public suite,
-    # and the --match plumbing + judge-off labeling end to end.
+def _suite_fixtures(path: Path, *, regress: str | None = None) -> str:
+    """Write real canned traces covering every public-suite scenario on both models.
+
+    Before MP-28 this test passed `--provider fake` with NO fixtures and let the adapter
+    fabricate a placeholder for all 28 keys -- so its all-unchanged result was an artifact
+    of measuring nothing, not a verdict. The fixtures are explicit now: identical on both
+    sides by default, so `unchanged` is earned; `regress` flips one scenario's candidate
+    side to a refusal so the same plumbing can be shown reporting a real regression.
+    """
+    records = []
+    for scenario in load_scenarios(REPORT_SUITE):
+        for model in ("model-y", "model-x"):
+            refused = scenario.id == regress and model == "model-x"
+            records.append(
+                Trace(
+                    scenario_id=scenario.id,
+                    model_id=model,
+                    final_output="I can't help with that." if refused else "ok",
+                    refused=refused,
+                ).model_dump(mode="json")
+            )
+    path.write_text(json.dumps(records), encoding="utf-8")
+    return str(path)
+
+
+def test_report_renders_the_public_suite_provenance(tmp_path):
+    """Suite identity, pinned hash, --match plumbing and judge-off labeling, end to end.
+
+    None of these assertions depends on the verdicts -- they render from the manifest and
+    the suite hash -- so they are unchanged from the pre-MP-28 version of this test.
+    """
     out = tmp_path / "reports"
     r = runner.invoke(
         app,
@@ -250,6 +278,8 @@ def test_report_runs_the_default_public_suite(tmp_path):
             "model-y",
             "--provider",
             "fake",
+            "--fixtures",
+            _suite_fixtures(tmp_path / "suite-fixtures.json"),
             "--suite-dir",
             REPORT_SUITE,
             "--config",
@@ -268,6 +298,44 @@ def test_report_runs_the_default_public_suite(tmp_path):
     assert "sha256:ffd99774f681" in md  # the committed public suite's pinned hash
     assert "`unordered`" in md  # --match was threaded into the settings block
     assert "`disabled`" in md  # fake provider -> no judge -> labeled disabled
+    assert "No behavioral change observed" in md  # earned: identical traces on both sides
+
+
+def test_report_surfaces_a_real_regression_on_the_public_suite(tmp_path):
+    """The false-negative canary for the published-report path.
+
+    MP-28's failure was a Report asserting no behavioral change from a run that measured
+    nothing. Same command, same suite, one scenario genuinely refusing on the candidate:
+    the document must NOT be able to say "no behavioral change observed".
+    """
+    out = tmp_path / "reports"
+    r = runner.invoke(
+        app,
+        [
+            "report",
+            "--to",
+            "model-x",
+            "--from",
+            "model-y",
+            "--provider",
+            "fake",
+            "--fixtures",
+            _suite_fixtures(tmp_path / "regressed.json", regress="borderline_access"),
+            "--suite-dir",
+            REPORT_SUITE,
+            "--config",
+            CONFIG,
+            "--runs",
+            "5",
+            "--output-dir",
+            str(out),
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    md = next(out.glob("*.md")).read_text(encoding="utf-8")
+    assert "borderline_access" in md
+    assert "regression" in md.lower()
+    assert "No behavioral change observed" not in md
 
 
 def _fake_replay_factory(*, raise_on):
@@ -298,6 +366,10 @@ def test_report_skips_failing_scenario_and_still_publishes(tmp_path, monkeypatch
             "a",
             "--provider",
             "fake",
+            # replay is monkeypatched, so the adapter is never asked for a trace; the
+            # fixtures only satisfy preflight, which now refuses a zero-coverage fake run.
+            "--fixtures",
+            FIXTURES,
             "--suite-dir",
             SCEN,
             "--config",
@@ -332,6 +404,8 @@ def test_report_all_scenarios_failing_exits_one(tmp_path, monkeypatch):
             "a",
             "--provider",
             "fake",
+            "--fixtures",
+            FIXTURES,  # preflight only; replay is monkeypatched to always fail
             "--suite-dir",
             SCEN,
             "--config",
@@ -397,6 +471,11 @@ def test_init_scaffolds_when_the_dir_holds_only_reserved_files(tmp_path):
     ).is_file(), f"init wrote no starter scenario, so the advice loops.\n{r.output}"
 
     # ...and the command that sent the user here now gets past the scenarios check.
+    # It still exits 1 -- `--provider fake` with no fixtures cannot measure anything
+    # (MP-28) -- but the error must have MOVED ON to the replay stage. Asserting the new
+    # error names fixtures is what proves the advice loop is broken; the old
+    # `exit_code == 0` conflated "got past the scenarios check" with "the run succeeded",
+    # and only reached green because the adapter fabricated traces.
     after = runner.invoke(
         app,
         [
@@ -413,5 +492,5 @@ def test_init_scaffolds_when_the_dir_holds_only_reserved_files(tmp_path):
             str(tmp_path / ".modelpin"),
         ],
     )
-    assert after.exit_code == 0, after.output
     assert "no scenarios found" not in after.output
+    assert "fixtures" in after.output.lower(), after.output
