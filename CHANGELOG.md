@@ -21,15 +21,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confidence 1.00 that did not happen. See ADR-0015.
 
 ### Changed
-- **`mp baseline` and `mp check` state how many replays a run will make, before making
-  them.** The pre-spend line was `provider=… model=… runs=…`; it now also carries
-  `N scenario(s) from <dir> -> M replays, >=M paid calls`, and `+ up to 2M judge calls`
-  when a `judge_model` is configured. The `>=` is deliberate: one replay is one adapter
-  call, but a `kind: agent` scenario's replay drives a tool loop of up to `MAX_TOOL_TURNS`
-  completions, so replays are a **floor** on paid calls and never a ceiling. `mp check`
-  counts only scenarios that have a baseline, since the rest are skipped rather than
-  replayed. `--provider fake` claims no cost at all — that path replays canned traces and
-  bills nothing. `mp report` does **not** yet carry this line.
+- **`mp baseline`, `mp check` and `mp report` state how many replays a run will make,
+  before making them.** The pre-spend line was `provider=… model=… runs=…`; it now also
+  carries `N scenario(s) from <dir> -> M replays, >=M paid calls`, and
+  `+ up to 2M judge calls` when a `judge_model` is configured. The `>=` is deliberate: one
+  replay is one adapter call, but a `kind: agent` scenario's replay drives a tool loop of up
+  to `MAX_TOOL_TURNS` completions, so replays are a **floor** on the paid calls of a run that
+  completes, never a ceiling. (A run cut short — a provider error, a skipped scenario — bills
+  less.) `mp check` counts only scenarios that have a baseline, since the rest are skipped
+  rather than replayed. `--provider fake` claims no cost at all — that path replays canned
+  traces and bills nothing. See ADR-0019.
+- **`mp report` discloses a two-sided run as two-sided.** It replays `--from` *and* `--to`,
+  so its line reads `N scenario(s) from <dir> x 2 models -> M replays` and its replay and
+  paid-call figures are **twice** what the same suite costs under `mp check` — exactly twice
+  when every scenario has a baseline, since `check` counts only those. `[M]` the 14-scenario
+  `examples/report-suite` queues **140** replays
+  (`modelpin report --to B --from A --suite-dir examples/report-suite`, 14 × `runs: 5` × 2
+  models). Before this release that line named the suite directory but not its size, so the
+  user saw `runs=5` with no hint that 140 replays were queued, and learned the scenario count
+  only from the results table — after the calls had been billed. The judge figure is
+  deliberately **not** doubled: for `report` the semantic judge scores every run on both
+  sides whether or not both were replayed live, so it is bounded by `2 × scenarios × runs`,
+  the same figure `mp check` discloses over the same suite. The header also drops its
+  now-redundant `suite=<dir>` token, which the disclosure line names.
 - **`mp init` names the scenario set it adopted.** When a `modelpin.yaml` already exists,
   `init` honours its `scenarios_dir` (0.1.2 behaviour, unchanged) but now also prints how
   many scenarios that directory holds and where the config is, so an adopted config is

@@ -143,7 +143,12 @@ def _guard_replay(provider: str, fn):
 
 
 def _replay_plan(
-    count: int, src_dir: str, runs: int, provider: str, judge_model: Optional[str]
+    count: int,
+    src_dir: str,
+    runs: int,
+    provider: str,
+    judge_model: Optional[str],
+    sides: int = 1,
 ) -> str:
     """Describe the size of the run that is ABOUT to happen, for the pre-spend line.
 
@@ -151,14 +156,28 @@ def _replay_plan(
     `adapter.run()`, but an agent scenario's replay drives a tool loop of up to
     `MAX_TOOL_TURNS` completions, so replays FLOOR the paid calls and never cap them.
     ADR-0019 governs this contract, including why `fake` must claim no cost at all.
+
+    `sides` is how many models are replayed LIVE: 1 for `baseline`/`check`, whose reference
+    traces come off disk, and 2 for `report`, which replays `--from` and `--to` both. It
+    scales replays and therefore paid calls -- but deliberately NOT the judge axis, because
+    `semantic_divergence_flags` scores every run on both sides regardless of where those
+    traces came from. [M] MP-70: the same 14-scenario suite queues 70 replays under `check`
+    and 140 under `report`, but discloses `up to 140 judge calls` either way. (That ceiling
+    is deliberately loose: a real run needs at most 126, because an output identical to the
+    modal baseline skips the judge -- `up to` is the honest word for a bound.) Deriving the
+    judge count from `replays` would overstate `report`'s judge bill 2x -- the false-claim
+    defect ADR-0019 rejects, merely pointed the other way.
     """
-    replays = count * runs
-    plan = f"{count} scenario(s) from {src_dir} -> {replays} replays"
+    replays = count * runs * sides
+    plan = f"{count} scenario(s) from {src_dir}"
+    if sides > 1:
+        plan += f" x {sides} models"
+    plan += f" -> {replays} replays"
     if provider == "fake":
         return plan  # canned traces, no network, nothing billed
     plan += f", >={replays} paid calls"
     if judge_model:
-        plan += f" + up to {2 * replays} judge calls"
+        plan += f" + up to {2 * count * runs} judge calls"
     return plan
 
 
@@ -614,9 +633,10 @@ def report(
     n = _resolve_runs(runs, cfg)
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
-    console.print(
-        f"[dim]provider={prov} from={from_} to={to} runs={n} match={mode} suite={suite_dir}[/]"
-    )
+    # Both sides are replayed live here, so the run is twice the size of a `check` over the
+    # same suite -- and this is the user's own key (ADR-0008). Disclose before spending it.
+    plan = _replay_plan(len(scenarios), suite_dir, n, prov, cfg.judge_model, sides=2)
+    console.print(f"[dim]provider={prov} from={from_} to={to} runs={n} match={mode} | {plan}[/]")
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg)
 
