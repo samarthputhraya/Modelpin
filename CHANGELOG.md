@@ -4,6 +4,44 @@ All notable changes to Modelpin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed (breaking)
+- **`--fixtures` is now required with `--provider fake`.** The fake provider no longer
+  fabricates a trace when it has no canned one: it raises `MissingCannedTrace` and the CLI
+  exits 1 with an error naming the flag. Previously a bare `mp baseline --provider fake`
+  produced placeholder traces that were structurally indistinguishable from real ones, so a
+  run could report `unchanged` — "safe to adopt" — about behaviour that was never measured.
+  Any scripted offline invocation that omitted `--fixtures` will now fail. Pass
+  `--fixtures <file>`; `modelpin init --demo` writes one.
+  **If you ever ran a fixture-less `baseline` on 0.1.2, delete the stored baseline and
+  re-record.** That run wrote placeholder traces to `.modelpin/baseline-*.json`, and this
+  release does not detect them there — the guard is on the replay path, not the store. A
+  fully correct `check --fixtures` against such a baseline reports regressions at
+  confidence 1.00 that did not happen. See ADR-0015.
+
+### Added
+- **`insufficient_evidence` verdict, and exit code 3.** A scenario where **at least half**
+  of one side's runs recorded no behaviour — no output, no tool call, no refusal — now
+  abstains instead of reporting `unchanged`. Below that threshold (e.g. 2 of 5) the run
+  still reports `unchanged`; the counts are recorded on `DiffSignals` but gate nothing. Previously two identically-degenerate sides scored `unchanged` at
+  **confidence 1.00**, because every p-value was 1.0 and unchanged-confidence is `min(p)`:
+  the engine's least-evidence case scored as its most confident. `mp check` exits 3 when a
+  scenario abstains **and nothing regressed** — a regression still outranks it and exits 1
+  — and the report omits "safe to adopt". See ADR-0018.
+
+### Planned
+- Anthropic adapter (currently a stub; needs a paid key).
+- Edge-probing scenario generator (helping users author discriminating scenarios — "scenario
+  quality is the product").
+- An "underpowered" annotation at low `--runs`. `insufficient_evidence` does **not** cover
+  this: at `--runs 2` neither signal can reach `p ≤ ALPHA`, and at `--runs 3` the tool
+  signal cannot, yet both still report `unchanged` and exit 0. See ADR-0018 non-goal 2.
+- A verdict that reads tool-turn truncation. `Trace.incomplete_reason` now records it, but
+  nothing gates on it — an exhausted tool loop implies a tool call, so the abstention
+  predicate is provably unable to fire on it. See ADR-0018 non-goal 1.
+- Expanded judge calibration (≥30 real-migration trace pairs + a non-OpenAI judge).
+
 ## [0.1.2] - 2026-08-22
 
 ### Changed (breaking)
@@ -57,16 +95,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [#28]: https://github.com/samarthputhraya/modelpin/issues/28
 
-## [Unreleased]
-
-### Planned
-- Anthropic adapter (currently a stub; needs a paid key).
-- Edge-probing scenario generator (helping users author discriminating scenarios — "scenario
-  quality is the product").
-- Distinct error/insufficient-data verdicts (empty traces, all-empty output, tool-turn
-  truncation) and an "underpowered/inconclusive" confidence annotation at low `--runs`.
-- Expanded judge calibration (≥30 real-migration trace pairs + a non-OpenAI judge).
-
 ## [0.1.1] - 2026-06-24
 
 ### Security
@@ -107,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/samarthputhraya/modelpin/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/samarthputhraya/modelpin/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/samarthputhraya/modelpin/releases/tag/v0.1.0

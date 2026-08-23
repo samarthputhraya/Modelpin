@@ -71,9 +71,10 @@ score, a one-line plain-English explanation per scenario, and a Markdown report 
 | `angry_customer` | `regression` | the candidate refuses an action the baseline performed |
 | `invoice_parse` | `changed_minor` | `"Total: $5"` → `"Total: 5"` breaks the scenario's assertion, but nothing refused and no tool moved |
 
-`modelpin check` exits non-zero **only** on a real `regression` — that's the CI gate, and it is why
-the demo exits 1. Then edit `traces.json`, re-run, and watch the verdict move: the answer is
-computed from the traces, not baked in.
+`modelpin check` exits **1** only on a real `regression` — that's the CI gate, and it is why
+the demo exits 1. It also exits **3** when a scenario could not be measured at all, which is a
+different claim from "it broke". Then edit `traces.json`, re-run, and watch the verdict move:
+the answer is computed from the traces, not baked in.
 
 None of this is bundled inside the installed package — the wheel is code only, and the demo is
 generated on your machine. That is deliberate: shipping them would mean the quickstart depends
@@ -313,7 +314,7 @@ In CI, supply these as repo secrets (see the workflow above). Error text is scru
 
 Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--match`
 (`strict\|unordered\|subset\|superset`), `--config`, `--scenarios-dir`, `--store-dir`, and
-`--fixtures` (with `--provider fake`).
+`--fixtures`, which is **required** with `--provider fake` (on `report` too).
 
 ---
 
