@@ -19,7 +19,12 @@
 # Paths here (scenarios_dir) resolve against the WORKING DIRECTORY, not against this file,
 # so the workflow must keep running from the repo root.
 models:
-  - gpt-4o-mini            # the committed baseline lives in .modelpin/baseline-gpt-4o-mini.json
+  # NOT a real model id, deliberately. The baseline file is tracked (so this self-check can
+  # run) and therefore ships in every clone; `mp check` pairs baseline to scenario by id
+  # alone, so under a real model id it collided with strangers' scenarios and fabricated a
+  # REGRESSION at 0.99, exit 1. The traces inside are genuine gpt-4o-mini recordings.
+  # MP-69 / ADR-0021.
+  - modelpin-dogfood       # -> .modelpin/baseline-modelpin-dogfood.json
 scenarios_dir: examples/suite
 providers:
   - openai                 # uses OPENAI_API_KEY (a repo secret in CI)

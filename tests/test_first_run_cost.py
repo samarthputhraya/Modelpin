@@ -11,7 +11,7 @@ the user's config:
   * `mp baseline`, the very next line of README "The real flow, on your own app", then
     replayed Modelpin's own held-out public suite on the user's paid key - 40 replays
     (8 scenarios x runs: 5). In the one recording committed to this repo
-    (`.modelpin/baseline-gpt-4o-mini.json`, 2026-06-24) those cost 60 completion calls,
+    (`.modelpin/baseline-modelpin-dogfood.json`, 2026-06-24) those cost 60 completion calls,
     because three `kind: agent` scenarios drive a 1-6 turn tool loop; that multiplier is
     the model's decision, so treat 60 as an observation bounded by 40-115, not a constant.
 

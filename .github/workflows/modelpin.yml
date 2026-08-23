@@ -1,7 +1,14 @@
 # Modelpin dogfooding itself — an on-demand self-consistency smoke that exercises the GitHub
 # Action end-to-end (install -> mp check -> status check). It replays gpt-4o-mini against its own
 # committed baseline; a green run means the engine isn't crying wolf on normal model
-# nondeterminism (the false-positive north-star). Uses the LOCAL action (`uses: ./`) + installs
+# nondeterminism (the false-positive north-star).
+#
+# `from:` is `modelpin-dogfood`, NOT `gpt-4o-mini`, and that is load-bearing. The baseline file
+# is tracked so this workflow can run, which means it ships in every clone -- and `mp check`
+# pairs a baseline to a scenario by id alone. Keyed under a real model id it collided with
+# strangers' own scenarios and manufactured a REGRESSION at confidence 0.99, exit 1. The traces
+# in that file are still real gpt-4o-mini recordings; only the STORE KEY is fictional, so no
+# `mp init`-scaffolded config can name it. See MP-69 / ADR-0021. Uses the LOCAL action (`uses: ./`) + installs
 # the LOCAL package (`modelpin-spec: ".[providers]"`), so it validates the action.yml + engine
 # as they are in the repo — no published tag required.
 #
@@ -30,8 +37,8 @@ jobs:
       - name: Modelpin behavioral check
         uses: ./                          # the action in this repo (root action.yml)
         with:
-          from: gpt-4o-mini               # committed baseline: .modelpin/baseline-gpt-4o-mini.json
-          to: gpt-4o-mini                 # re-check the same model -> expect "unchanged"
+          from: modelpin-dogfood          # committed baseline: .modelpin/baseline-modelpin-dogfood.json
+          to: gpt-4o-mini                 # its traces ARE gpt-4o-mini -> expect "unchanged"
           provider: openai
           config: .github/modelpin.yaml
           runs: "5"

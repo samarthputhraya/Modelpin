@@ -60,6 +60,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — and the report omits "safe to adopt". See ADR-0018.
 
 ### Fixed
+- **A fresh clone no longer fabricates a regression against Modelpin's own baseline.** `[M]`
+  Reproduced verbatim: clone the repo, run `mp init`, write your own
+  `scenarios/refund_request.json`, run `mp check` — and get
+  `REGRESSION refund_request: tool-call behavior changed: ['lookup_order', 'issue_refund'] -> []
+  (confidence 0.99)`, **exit 1**, plus a `last-report.md` the GitHub Action posts as a PR
+  comment. You never ran `mp baseline`; the traces on the left were Modelpin's own, recorded
+  2026-06-24 for an unrelated scenario that merely shares a filename. Three innocent facts
+  combined: the dogfood baseline is tracked on purpose (`.gitignore:19-20`) so it ships in every
+  clone, `mp init` scaffolds `models: [gpt-4o-mini]` — the exact key it was stored under — and
+  `mp check` pairs a baseline to a scenario by **id alone**. `refund_request` is not an unlucky
+  guess: it is the name in the README's worked-example table and the file `mp init --demo`
+  writes to disk. The dogfood baseline is now keyed under the fictional `modelpin-dogfood`, so
+  no scaffolded config can name it; the traces inside are unchanged, genuine gpt-4o-mini
+  recordings. See ADR-0021.
+  **This fixes the instance, not the mechanism.** `mp check` still pairs on scenario id with no
+  provenance recorded, so editing your own scenario after recording your own baseline hits the
+  same path. That needs a content hash in the baseline payload — tracked, and specified as three
+  `xfail(strict=True)` tests rather than prose.
 - **This repo's own dogfood config no longer hijacks a cloned checkout.** `modelpin.yaml`
   sat at the repo root, which is the path the CLI loads by default, so anyone who cloned
   Modelpin and followed README "The real flow, on your own app" inherited it: `mp init`
@@ -68,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `mp baseline` replayed Modelpin's own held-out public suite on the user's key: **40
   replays** (8 scenarios × the config's `runs: 5`), with no warning and no scenario of the
   user's own involved. `[M]` In the one recording we have — the traces committed at
-  `.modelpin/baseline-gpt-4o-mini.json`, gpt-4o-mini, 2026-06-24 — those 40 replays cost
+  `.modelpin/baseline-modelpin-dogfood.json`, gpt-4o-mini, 2026-06-24 — those 40 replays cost
   **60 chat-completion calls**. Treat that as an observation, not a constant: three of the
   eight are `kind: agent` scenarios whose replays drive a tool loop of 1–6 turns
   (`MAX_TOOL_TURNS`), and the loop length is the model's decision, so the same 40 replays

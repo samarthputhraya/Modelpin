@@ -1,5 +1,5 @@
 {
-  "model_id": "gpt-4o-mini",
+  "model_id": "modelpin-dogfood",
   "scenarios": {
     "cancel_subscription": [
       {
@@ -1492,5 +1492,6 @@
         "ts": "2026-06-24T13:19:03.247450Z"
       }
     ]
-  }
+  },
+  "_note": "Store key only. The traces below were recorded from the REAL model gpt-4o-mini on 2026-06-24 (see each trace's own model field). The key is deliberately NOT a real model id: this file is tracked so the repo can dogfood itself, so it ships in every clone, and any key that a stranger's `modelpin.yaml` could name would be paired against THEIR scenarios by `mp check`. See MP-69 / ADR-0021."
 }
