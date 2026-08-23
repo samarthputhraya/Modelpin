@@ -1,0 +1,27 @@
+# Modelpin's own dogfood config - Modelpin checking itself in CI (see workflows/modelpin.yml).
+#
+# THIS FILE LIVES IN .github/ ON PURPOSE. It used to sit at the repo root, which is the path
+# the CLI loads by default, so anyone who cloned the repo and followed README "The real flow,
+# on your own app" inherited it as their config: `mp init` honoured its scenarios_dir, found
+# the 8 scenarios already in examples/suite, scaffolded nothing, and still exited 0 saying
+# "Already initialised" - then `mp baseline` replayed Modelpin's own held-out public suite on
+# THEIR paid key. 40 replays, no warning, no scenario of their own involved. (Cost in our one
+# committed recording: 60 completion calls. The agent scenarios' tool loop makes that
+# model-dependent, bounded 40-115.) See the CHANGELOG entry. Keep it out of the repo root;
+# the workflow passes it explicitly with `config:`.
+#
+# This is a self-consistency smoke: baseline gpt-4o-mini, then re-check gpt-4o-mini against
+# that committed baseline. A green check is ONE same-model observation that the engine did not
+# cry wolf on ordinary nondeterminism - at n=8 scenarios a clean run bounds the false-positive
+# rate only at <=31% (95% one-sided) - AND that the GitHub Action works end to end.
+# To turn it into a real migration check, point `to:` at a new model id in the workflow.
+#
+# Paths here (scenarios_dir) resolve against the WORKING DIRECTORY, not against this file,
+# so the workflow must keep running from the repo root.
+models:
+  - gpt-4o-mini            # the committed baseline lives in .modelpin/baseline-gpt-4o-mini.json
+scenarios_dir: examples/suite
+providers:
+  - openai                 # uses OPENAI_API_KEY (a repo secret in CI)
+runs: 5
+judge_model: gpt-4o-mini   # semantic judge (same key); checks meaning-equivalence, not just text

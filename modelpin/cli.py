@@ -142,6 +142,26 @@ def _guard_replay(provider: str, fn):
         _fail(str(exc))
 
 
+def _replay_plan(
+    count: int, src_dir: str, runs: int, provider: str, judge_model: Optional[str]
+) -> str:
+    """Describe the size of the run that is ABOUT to happen, for the pre-spend line.
+
+    The `>=` is load-bearing and must not be "tidied" into an exact count: one replay is one
+    `adapter.run()`, but an agent scenario's replay drives a tool loop of up to
+    `MAX_TOOL_TURNS` completions, so replays FLOOR the paid calls and never cap them.
+    ADR-0019 governs this contract, including why `fake` must claim no cost at all.
+    """
+    replays = count * runs
+    plan = f"{count} scenario(s) from {src_dir} -> {replays} replays"
+    if provider == "fake":
+        return plan  # canned traces, no network, nothing billed
+    plan += f", >={replays} paid calls"
+    if judge_model:
+        plan += f" + up to {2 * replays} judge calls"
+    return plan
+
+
 def _build_judge(provider: str, cfg: ModelpinConfig):
     """Construct + preflight the semantic LLM-judge if configured. Returns None when no
     judge_model is set or the run is offline (fake), so the diff stays purely structural."""
@@ -370,7 +390,8 @@ def init(
     # only manifest.json as having no scenarios, so if this check disagrees, `init`
     # silently writes nothing and the error's advice loops forever. That is the exact
     # defect class MP-01 was about, reintroduced one function away.
-    if not any(f for f in scenarios_dir.glob("*.json") if f.name not in _RESERVED_IN_DIR):
+    existing = [f for f in scenarios_dir.glob("*.json") if f.name not in _RESERVED_IN_DIR]
+    if not existing:
         (scenarios_dir / "greeting.json").write_text(_SAMPLE_SCENARIO, encoding="utf-8")
         created.append(str(scenarios_dir / "greeting.json"))
     if created:
@@ -382,7 +403,16 @@ def init(
             "[dim]No API key yet? Run `modelpin init --demo` for a free offline walkthrough.[/]"
         )
     else:
+        # MP-32: this branch means `init` ADOPTED a config it did not write. Reporting a bare
+        # "already initialised" let a cloned repo's config hand the user a scenario set they
+        # had never seen, which `baseline` then replayed on their key. Name what was adopted.
+        # `existing` is not stale here: this branch means nothing was created, so no
+        # greeting.json was written after the glob.
         console.print(f"Already initialised (modelpin.yaml + {sub}/ present).")
+        console.print(
+            f"[dim]{len(existing)} scenario(s) in {sub}/ - `modelpin baseline` replays "
+            f"all of them on your own key. Not yours? Check {cfg_path}.[/]"
+        )
 
 
 @app.command()
@@ -403,8 +433,9 @@ def baseline(
 ) -> None:
     """Record current model behavior for your scenarios (N runs)."""
     cfg = _load_config_or_fail(config_path)
+    src_dir = scenarios_dir or cfg.scenarios_dir
     scenarios = _load_scenarios_or_fail(
-        scenarios_dir or cfg.scenarios_dir,
+        src_dir,
         source=_scenarios_source(scenarios_dir, config_path),
         config_path=config_path,
     )
@@ -414,7 +445,8 @@ def baseline(
     n = _resolve_runs(runs, cfg)
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
-    console.print(f"[dim]provider={prov} model={from_model} runs={n}[/]")
+    plan = _replay_plan(len(scenarios), src_dir, n, prov, judge_model=None)
+    console.print(f"[dim]provider={prov} model={from_model} runs={n} | {plan}[/]")
     _preflight_or_fail(adapter, prov)
     traces = _guard_replay(
         prov, lambda: {s.id: replay(s, from_model, adapter, runs=n) for s in scenarios}
@@ -447,8 +479,9 @@ def check(
     """Replay scenarios on a new model and report behavioral regressions."""
     mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
+    src_dir = scenarios_dir or cfg.scenarios_dir
     scenarios = _load_scenarios_or_fail(
-        scenarios_dir or cfg.scenarios_dir,
+        src_dir,
         source=_scenarios_source(scenarios_dir, config_path),
         config_path=config_path,
     )
@@ -464,7 +497,13 @@ def check(
     n = _resolve_runs(runs, cfg)
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
-    console.print(f"[dim]provider={prov} from={from_model} to={to} runs={n} match={mode}[/]")
+    # Only scenarios that HAVE a baseline are replayed (the rest are skipped below), so
+    # count those - an inflated pre-spend number is its own kind of false claim. MP-32.
+    billable = sum(1 for s in scenarios if base.get(s.id))
+    plan = _replay_plan(billable, src_dir, n, prov, cfg.judge_model)
+    console.print(
+        f"[dim]provider={prov} from={from_model} to={to} runs={n} match={mode} | {plan}[/]"
+    )
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg)
 

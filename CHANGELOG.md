@@ -20,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fully correct `check --fixtures` against such a baseline reports regressions at
   confidence 1.00 that did not happen. See ADR-0015.
 
+### Changed
+- **`mp baseline` and `mp check` state how many replays a run will make, before making
+  them.** The pre-spend line was `provider=… model=… runs=…`; it now also carries
+  `N scenario(s) from <dir> -> M replays, >=M paid calls`, and `+ up to 2M judge calls`
+  when a `judge_model` is configured. The `>=` is deliberate: one replay is one adapter
+  call, but a `kind: agent` scenario's replay drives a tool loop of up to `MAX_TOOL_TURNS`
+  completions, so replays are a **floor** on paid calls and never a ceiling. `mp check`
+  counts only scenarios that have a baseline, since the rest are skipped rather than
+  replayed. `--provider fake` claims no cost at all — that path replays canned traces and
+  bills nothing. `mp report` does **not** yet carry this line.
+- **`mp init` names the scenario set it adopted.** When a `modelpin.yaml` already exists,
+  `init` honours its `scenarios_dir` (0.1.2 behaviour, unchanged) but now also prints how
+  many scenarios that directory holds and where the config is, so an adopted config is
+  visible before `mp baseline` acts on it.
+
 ### Added
 - **`insufficient_evidence` verdict, and exit code 3.** A scenario where **at least half**
   of one side's runs recorded no behaviour — no output, no tool call, no refusal — now
@@ -29,6 +44,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the engine's least-evidence case scored as its most confident. `mp check` exits 3 when a
   scenario abstains **and nothing regressed** — a regression still outranks it and exits 1
   — and the report omits "safe to adopt". See ADR-0018.
+
+### Fixed
+- **This repo's own dogfood config no longer hijacks a cloned checkout.** `modelpin.yaml`
+  sat at the repo root, which is the path the CLI loads by default, so anyone who cloned
+  Modelpin and followed README "The real flow, on your own app" inherited it: `mp init`
+  honoured its `scenarios_dir`, found the 8 scenarios already in `examples/suite`,
+  scaffolded nothing, and still exited 0 reporting "Already initialised" — then
+  `mp baseline` replayed Modelpin's own held-out public suite on the user's key: **40
+  replays** (8 scenarios × the config's `runs: 5`), with no warning and no scenario of the
+  user's own involved. `[M]` In the one recording we have — the traces committed at
+  `.modelpin/baseline-gpt-4o-mini.json`, gpt-4o-mini, 2026-06-24 — those 40 replays cost
+  **60 chat-completion calls**. Treat that as an observation, not a constant: three of the
+  eight are `kind: agent` scenarios whose replays drive a tool loop of 1–6 turns
+  (`MAX_TOOL_TURNS`), and the loop length is the model's decision, so the same 40 replays
+  are bounded at 40–115 calls. The config now lives at `.github/modelpin.yaml` and the
+  workflow passes it explicitly. **This affects people who cloned the repo, not
+  `pip install modelpin` users** — no published artifact ever contained that file: it is
+  absent from the 0.1.1 and 0.1.2 wheels and the 0.1.2 sdist on PyPI, and `MANIFEST.in`
+  never listed it. A `tests/` guard now fails if a `modelpin.yaml` becomes tracked at the
+  root again. Side effect: README's "`mp init` scaffolds `modelpin.yaml` + `scenarios/`" is
+  now true in a fresh clone, where it previously was not.
 
 ### Planned
 - Anthropic adapter (currently a stub; needs a paid key).

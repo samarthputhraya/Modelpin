@@ -34,5 +34,14 @@ nul
 /.claude/
 /ops/
 
+# A contributor's OWN Modelpin setup, made by following the README in a clone
+# (`git clone` -> `pip install -e .` -> `mp init`). These must never become tracked: a
+# tracked root `modelpin.yaml` is the path the CLI loads by default, so it would become
+# the config of everyone who clones this repo, and `mp baseline` would spend their key on
+# whatever it points at. That is MP-32; this repo's dogfood config lives in .github/ and
+# the workflow passes it with `config:`. tests/test_first_run_cost.py asserts on it.
+/modelpin.yaml
+/scenarios/
+
 # pytest-cov output
 .coverage

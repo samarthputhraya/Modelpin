@@ -33,7 +33,7 @@ jobs:
           from: gpt-4o-mini               # committed baseline: .modelpin/baseline-gpt-4o-mini.json
           to: gpt-4o-mini                 # re-check the same model -> expect "unchanged"
           provider: openai
-          config: modelpin.yaml
+          config: .github/modelpin.yaml
           runs: "5"
           modelpin-spec: ".[providers]"   # install this repo's code (pre-tag dogfood)
         env:

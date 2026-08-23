@@ -62,12 +62,17 @@ def test_no_shipped_file_hardcodes_a_runs_value_that_disagrees():
     shipped = [
         repo / ".github" / "workflows" / "modelpin.yml",
         repo / "examples" / "github-workflow.yml",
-        repo / "modelpin.yaml",
+        repo / ".github" / "modelpin.yaml",
     ]
     wrong = []
     for path in shipped:
-        if not path.is_file():
-            continue
+        # Do NOT skip a missing file. MP-32 moved modelpin.yaml into .github/, and a silent
+        # `continue` here would have let this guard pass while checking nothing - the same
+        # way ci.yml's init assertion sat dead. If a shipped file moves, fail loudly.
+        assert path.is_file(), (
+            f"{path.relative_to(repo)} is missing; this guard silently stops checking it. "
+            "Update the `shipped` list to the file's new home."
+        )
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             m = re.match(r"""\s*runs:\s*["']?(\d+)["']?""", line)
             if m and int(m.group(1)) != DEFAULT_RUNS:
