@@ -1,0 +1,42 @@
+{
+  "id": "arg_list_order",
+  "name": "Argument jitter: element order inside an array argument (lists are not sorted, unlike keys)",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a knowledge-base assistant. Tag every article with the tag_article tool, applying every tag that genuinely applies. The available tags are onboarding, billing and security. Never answer in prose without calling the tool. After the tool result comes back, reply with exactly the single lowercase word: tagged"},
+      {"role": "user", "content": "Tag article KB-2043. It walks a brand-new employee through activating their account on day one, tells them where to put the company card so their software seat gets paid for, and shows them how to enrol their hardware key before they can log in."}
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "tag_article",
+          "description": "Attach tags to a knowledge-base article.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "article_id": {
+                "type": "string",
+                "description": "The article identifier exactly as the user gave it, e.g. KB-2043."
+              },
+              "tags": {
+                "type": "array",
+                "description": "Every tag that applies to this article.",
+                "items": {
+                  "type": "string",
+                  "enum": ["onboarding", "billing", "security"]
+                }
+              }
+            },
+            "required": ["article_id", "tags"]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "tag_article": {"status": "tagged", "article_id": "KB-2043"}
+    },
+    "temperature": 0.7
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "id": "arg_enum_phrasing",
+  "name": "Argument jitter: wording and case of a categorical value in a free string field",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a ticket routing assistant. Route every incoming ticket with the route_ticket tool. Never answer in prose without calling the tool. After the tool result comes back, reply with exactly the single lowercase word: routed"},
+      {"role": "user", "content": "Ticket T-4407 arrived by email: the customer says they were charged twice for the same monthly subscription."}
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "route_ticket",
+          "description": "Send a support ticket to the queue that handles it.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticket_id": {
+                "type": "string",
+                "description": "The ticket identifier exactly as the user gave it, e.g. T-4407."
+              },
+              "queue": {
+                "type": "string",
+                "description": "The destination queue for this ticket, for example billing, shipping, or technical."
+              },
+              "channel": {
+                "type": "string",
+                "description": "How the customer contacted us.",
+                "enum": ["email", "phone", "chat"]
+              }
+            },
+            "required": ["ticket_id", "queue", "channel"]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "route_ticket": {"status": "routed", "ticket_id": "T-4407"}
+    },
+    "temperature": 0.7
+  }
+}

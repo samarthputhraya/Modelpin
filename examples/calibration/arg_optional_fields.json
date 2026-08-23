@@ -1,0 +1,47 @@
+{
+  "id": "arg_optional_fields",
+  "name": "Argument jitter: presence or absence of optional fields the user did not pin",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a project assistant. Create the task with the create_task tool, using the title exactly as the user wrote it. Never answer in prose without calling the tool. After the tool result comes back, reply with exactly the single lowercase word: created"},
+      {"role": "user", "content": "Add a task to the Atlas project: Rotate the staging TLS certificate. It is not urgent."}
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "create_task",
+          "description": "Create a task in a project tracker.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "The task title, exactly as the user wrote it."
+              },
+              "project": {
+                "type": "string",
+                "description": "The project the task belongs to."
+              },
+              "priority": {
+                "type": "string",
+                "description": "How urgent the task is. Optional.",
+                "enum": ["low", "normal", "high"]
+              },
+              "notify_channel": {
+                "type": "string",
+                "description": "Chat channel to notify, only if the user asked to notify someone. Optional."
+              }
+            },
+            "required": ["title", "project"]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "create_task": {"status": "created", "task_id": "ATL-419"}
+    },
+    "temperature": 0.7
+  }
+}

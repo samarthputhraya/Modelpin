@@ -1,0 +1,38 @@
+{
+  "id": "arg_freetext_note",
+  "name": "Argument jitter: model-authored prose inside a free-text argument (highest entropy)",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a CRM assistant. After every customer call, record a note with the add_call_note tool. Never answer in prose without calling the tool. After the tool result comes back, reply with exactly the single lowercase word: noted"},
+      {"role": "user", "content": "The call with account A-7731 just ended. The customer said their office Wi-Fi drops every night around 2am, and they have already power-cycled the router twice."}
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "add_call_note",
+          "description": "Attach a note about a customer call to that customer's account.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "account_id": {
+                "type": "string",
+                "description": "The account identifier exactly as the user gave it, e.g. A-7731."
+              },
+              "note": {
+                "type": "string",
+                "description": "A one-sentence summary of the call, in your own words."
+              }
+            },
+            "required": ["account_id", "note"]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "add_call_note": {"status": "saved", "note_id": "N-3120"}
+    },
+    "temperature": 0.7
+  }
+}

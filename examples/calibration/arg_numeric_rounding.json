@@ -1,0 +1,38 @@
+{
+  "id": "arg_numeric_rounding",
+  "name": "Argument jitter: rounding of a computed number in a required numeric field",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a warehouse logging assistant. When a weight is reported, convert it to kilograms and record it with the log_parcel_weight tool. Never answer in prose without calling the tool. After the tool result comes back, reply with exactly the single lowercase word: logged"},
+      {"role": "user", "content": "Parcel P-1188 came in at 7.4 pounds. Log its weight in kilograms."}
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "log_parcel_weight",
+          "description": "Record a parcel's weight, in kilograms, in the shipping log.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "parcel_id": {
+                "type": "string",
+                "description": "The parcel identifier exactly as the user gave it, e.g. P-1188."
+              },
+              "weight_kg": {
+                "type": "number",
+                "description": "The parcel's weight in kilograms."
+              }
+            },
+            "required": ["parcel_id", "weight_kg"]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "log_parcel_weight": {"status": "logged", "parcel_id": "P-1188"}
+    },
+    "temperature": 0.7
+  }
+}

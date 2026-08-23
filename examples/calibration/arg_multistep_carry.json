@@ -1,0 +1,56 @@
+{
+  "id": "arg_multistep_carry",
+  "name": "Argument jitter across a two-call trajectory: format of a value carried from a tool result",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a restaurant booking assistant. Always look the reservation up with find_reservation before changing it, then apply the change with change_reservation_time. Never answer in prose without calling the tools. After the final tool result comes back, reply with exactly the single lowercase word: updated"},
+      {"role": "user", "content": "Please move reservation RS-8842 an hour and a half later."}
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "find_reservation",
+          "description": "Look up a reservation by its confirmation code.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "confirmation_code": {
+                "type": "string",
+                "description": "The reservation's confirmation code exactly as the user gave it, e.g. RS-8842."
+              }
+            },
+            "required": ["confirmation_code"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "change_reservation_time",
+          "description": "Move an existing reservation to a new start time on the same day.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "confirmation_code": {
+                "type": "string",
+                "description": "The reservation's confirmation code."
+              },
+              "new_time": {
+                "type": "string",
+                "description": "The new start time for the reservation."
+              }
+            },
+            "required": ["confirmation_code", "new_time"]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "find_reservation": {"confirmation_code": "RS-8842", "date": "2026-09-02", "current_time": "18:00", "party_size": 4},
+      "change_reservation_time": {"status": "updated", "confirmation_code": "RS-8842"}
+    },
+    "temperature": 0.7
+  }
+}
