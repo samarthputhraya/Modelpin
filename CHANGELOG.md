@@ -210,6 +210,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collected count and cannot drift again.
 
 ### Added
+- **`scripts/arg_repertoire.py`** — measures the observed argument *repertoire* (distinct
+  tool-call payloads per scenario per model across N runs), the number
+  `README-arguments.md` asks for, **as a standalone pre-flight probe**.
+  `scripts/fp_measurement.py::repertoire()` already reports distinct payloads per scenario per
+  *side*, but only inside a paired FP run; this answers the question upstream of it — **can this scenario fire on this model at all?** It reports raw and
+  key-sorted counts separately, so a raw-vs-canonical gap is visible as key-order jitter. `[M]` The
+  component that would collapse such a gap in the engine, `diff/argkey.py`, is on the
+  unmerged MP-04 branch — **no gating signal on `main` reads tool-call arguments at all**. `[M]` It carries an explicit error column because the first
+  version of this probe reported a clean *"0 of 7 vary"* against a host whose key had been
+  revoked: every call raised, every list stayed empty, and an empty set has one distinct
+  element. A measurement harness without an error column manufactures its own null result.
 - **The Google adapter can bill Vertex AI instead of an API key.** Set
   `GOOGLE_GENAI_USE_VERTEXAI=true` (or `GOOGLE_GENAI_USE_ENTERPRISE=true`, the SDK's current
   spelling — both are honoured) and `GOOGLE_CLOUD_PROJECT`, and Modelpin authenticates with
@@ -240,6 +251,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — and the report omits "safe to adopt". See ADR-0018.
 
 ### Fixed
+- **MP-105's diagnosis of the argument corpus is withdrawn — refuted by its own transcript.**
+  It read the first live `arg_*` run (7 scored trials, **all the same scenario**) and concluded
+  that enum / key-order / list-order / rounding / optional-field arguments are schema-constrained
+  and therefore deterministic *regardless of temperature*, proposing we concede in `docs/` that
+  this method cannot test them. `[M]` Recounting the committed transcript, `gemini-2.5-flash`
+  varied on **three** of seven shapes, not one: `arg_numeric_rounding` returned two distinct
+  payloads on **5 of 8** trials and `arg_optional_fields` on **3 of 8**. Those trials were
+  excluded because base and candidate **pools overlapped** — a 1-payload side against a
+  2-payload side containing it gives `p = 1.00` on every channel, so ADR-0022 scores it *could
+  not have fired*. That is the false-positive defence working, not a property of the model. The
+  concession is withdrawn before publication.
+- **How much an argument axis moves is model-dependent, within one vendor.** `[M]` Re-running
+  the same seven files unchanged at `temperature: 0.7`, `arg_numeric_rounding` emits **1**
+  distinct payload in each of two 16-run samples on `gpt-4o-mini`, and **7 then 9** on
+  `gpt-4.1-mini` (10 at n=24, modal 8/24) — real computed-number jitter, `weight_kg` =
+  `3.35658` / `3.35662` / `3.35664` / … `[M]` The count is itself a sample statistic and moved
+  between two runs of the same model at the same n, so the docs publish the spread rather than
+  one figure. `[M]` `arg_optional_fields` varies on **both** models and therefore discriminates
+  neither. `[A]` **Which** axes can move still looks scenario-driven — four shapes held at one
+  payload on every model and every run, and the two models that vary on three shapes vary on the
+  *same* three across two vendors; three models cannot separate those factors. Three qualifications are documented rather than glossed:
+  `[M]` nothing under `modelpin/diff/` reads tool-call arguments on `main` (`structural.py:29`
+  is `tc.name` only), so condition 6 cannot be priced from `main` at any n; `[M]` a
+  high-repertoire candidate is *not* pure good news, because disjoint rounding jitter is already
+  recorded scoring `regression` at 0.992 — a false positive on the north-star metric; and one
+  distinct payload is an **abstention** (ADR-0018), bounded only at **17.1%** by 16 identical
+  runs, never evidence of quietness.
+- **`examples/calibration/README-arguments.md` documented a command that no longer runs.** `[M]`
+  MP-89 landed the role filter that section anticipated, as a *refusal* rather than a default,
+  so the published line now exits with `error: 2 roles declared for this directory (fit,
+  score)`. Corrected to pass `--role score` — and to name `gpt-4.1-mini`, because `[M]` on the
+  `gpt-4o-mini` it used to name, six of the seven shapes cannot fire at all.
+
 - **The Drift Map report no longer approximates counts it can derive exactly, no longer
   over-attributes its own refusal-detector bug, and no longer calls a pair's artifacts a
   genuine change.** Four drifts on the project's most-linked public page, each against the

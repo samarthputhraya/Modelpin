@@ -27,6 +27,13 @@
 > argument signal — one equivalent-looking change that flags is decisive and costs one trial.
 > It cannot establish a low rate, and without MP-89's `--repeats` it most likely establishes
 > nothing.
+>
+> **`[M] 2026-08-25` That 5.0% is not measured on this subset at all.** All three pooled runs
+> (`0 of 8`, `1 of 6`, `0 of 6`) ran the temperature-0 `examples/suite` and the six *semantic*
+> calibration files, which **declare no tools** — argument payloads had nothing to do with the
+> number. It is a prior for the exclusion rate in general, not for `arg_*`. `[M]` The one live
+> `arg_*` run scored **7 of 70 (10.0%)**, all on one scenario, and the section below explains
+> why the other six were excluded.
 
 These seven scenarios are **not** semantic discriminators like the six single-turn files
 described in [`README.md`](README.md). They exist for one job: to price the
@@ -72,6 +79,104 @@ Two more properties are deliberate, and removing either kills the measurement:
 key-order jitter cannot mint a distinct payload key. If this file ever flags, the protection
 regressed — do not "fix" the scenario.
 
+## `[M] 2026-08-25` Why six of seven shapes never scored: the pools OVERLAPPED
+
+MP-105 read the first live run of this subset — `[M]` 7 scored trials, **all of them the same
+scenario** (`arg_freetext_note`) — and concluded the other six shapes are schema-constrained and
+therefore deterministic **regardless of temperature**, proposing that we either author
+free-text-dominant replacements or concede in `docs/` that this method cannot test them at all.
+
+**`[M]` Its own transcript refutes that.** Recounting
+`arg-gate-fp-2026-08-25-gemini-2.5-flash.txt` (committed on the MP-04 branch), the per-side
+distinct-payload counts printed on every row:
+
+| Scenario | `gemini-2.5-flash` max distinct / side | trials with >1 |
+|---|:---:|:---:|
+| `arg_enum_phrasing` | 1 | 0 of 8 |
+| `arg_freetext_note` | 5 | **9 of 9** |
+| `arg_key_order` | 1 | 0 of 9 |
+| `arg_list_order` | 1 | 0 of 9 |
+| `arg_multistep_carry` | 1 | 0 of 9 |
+| **`arg_numeric_rounding`** | **2** | **5 of 8** |
+| **`arg_optional_fields`** | **2** | **3 of 8** |
+
+Gemini varied on **three** of seven shapes, not one. Those trials were excluded because base and
+candidate **pools overlapped** — a 1-payload side against a 2-payload side that contains it
+returns `p = 1.00` on every channel, so ADR-0022 scores it *could not have fired*. That is the
+gate's false-positive defence working exactly as designed. It is **not** a statement about the
+model, and "the corpus does not vary" was the wrong reading of it.
+
+### What a second candidate does add: rate, not kind
+
+Re-running the same seven files unchanged, at the same `temperature: 0.7`, pooling **16 runs on
+one model** (a different instrument from the table above, which counts per 5-run side):
+
+| Scenario | `gpt-4o-mini` (n=16) | `gpt-4.1-mini` (n=16) |
+|---|:---:|:---:|
+| `arg_enum_phrasing` | 1 | 1 |
+| `arg_freetext_note` | **8** | **9** |
+| `arg_key_order` | 1 | 1 |
+| `arg_list_order` | 1 | 1 |
+| `arg_multistep_carry` | 1 | 1 |
+| **`arg_numeric_rounding`** | **1** | **9** |
+| `arg_optional_fields` | **2** | **2** |
+
+`[M]` Both runs are from `fe121d3`, 16/16 successful replays per cell, **zero provider errors**,
+and raw and key-sorted counts agreed in all 14 rows — **no key-order jitter was observed at
+all**, so `arg_key_order` is doing its job as the quiet anchor.
+
+**`arg_numeric_rounding` is the one cell that separates the two models.** `[M]` `gpt-4o-mini`
+returned a single payload in each of two independent 16-run samples; `gpt-4.1-mini` returned 7,
+then 9, and 10 distinct payloads at n=24 (modal 8/24). The values are real computed-number
+jitter — `weight_kg` came back as `3.35658`, `3.35662`, `3.35664` and more. `[M]` **Report the
+spread, not one figure**: the count itself is a sample statistic and moved 7→9 between two runs
+of the same model at the same n.
+
+`[M]` `arg_optional_fields` varies on **both** models (2 payloads each, modal 13/16 and 11/16),
+so it does not discriminate between them. On `gpt-4o-mini` the second payload is a re-wording at
+the same `priority`; on `gpt-4.1-mini` it is `priority` flipping `"normal"` → `"low"` — a
+difference an application would act on. `[M]` It read a single payload in an earlier 16-run
+sample, so at this rate a 16-run sample is not reliable evidence of quietness either.
+
+`[A]` **Which axes can move still looks scenario-driven, and three models cannot separate the
+two factors.** Four shapes (`enum_phrasing`, `key_order`, `list_order`, `multistep_carry`) held
+at one payload on every model and every run so far; the two models that vary on three shapes
+(`gemini-2.5-flash`, `gpt-4.1-mini`) vary on the *same* three, across two vendors. Treat the
+scenario/model split as unresolved rather than settled in either direction.
+
+### What this means for pricing condition 6
+
+**Read this before concluding the good news is good.** Three qualifications, all measured:
+
+1. `[M]` **There is no argument signal on `main`.** `modelpin/diff/structural.py:29` builds a
+   trajectory from `tc.name` only, and nothing under `modelpin/diff/` reads `.arguments`.
+   `diff/argkey.py` lives on the unmerged MP-04 branch. Condition 6 cannot be priced from
+   `main` at any n, on any model.
+2. `[M]` **A high-repertoire candidate cuts both ways.** `ops/LOG.md` already records disjoint
+   rounding jitter (`3.36` vs `3.357` kg) scoring `regression` at confidence 0.992 — a false
+   positive. `gpt-4.1-mini`'s rounding cell (7 distinct in 16) is precisely the
+   disjointness-prone pool that produces it. More scorable trials is not the same as a lower
+   rate, and this is the north-star metric.
+3. `[M]` **One distinct payload is an abstention, never quietness** (ADR-0018). Sixteen
+   identical runs bound the per-run divergence rate only at **17.1%**
+   (`upper_bound_95(0, 16)`), and one of the four steady shapes (`arg_key_order`) is the pinned
+   control that is *designed* not to move. `--repeats` is not useless here, it is **unpriced**:
+   `[M]` `arg_optional_fields` read one payload in one 16-run sample and two in the next, on
+   the same model.
+
+Measure the repertoire before spending a key on the full arm:
+
+<!-- arg-repertoire-command -->
+```bash
+python scripts/arg_repertoire.py --provider openai --model gpt-4.1-mini --runs 16     --scenarios-dir examples/calibration --glob 'arg_*.json'
+```
+
+Committed runs of record, each carrying its own git sha, UTC timestamp, per-scenario
+temperature and full payload *frequencies* (not just the distinct set, so pool disjointness
+stays auditable): [`results/arg-repertoire-gpt-4o-mini.json`](results/arg-repertoire-gpt-4o-mini.json),
+[`results/arg-repertoire-gpt-4.1-mini.json`](results/arg-repertoire-gpt-4.1-mini.json), and the
+n=24 single-scenario deep run [`results/arg-repertoire-rounding-n24.json`](results/arg-repertoire-rounding-n24.json).
+
 `arg_list_order` is its twin and the reason it is here: `[M]` list element order is
 deliberately **not** canonicalised (`_canon` maps a sequence element-wise), so a reordered
 array does mint a distinct key. `[A]` A reordered tag list is the shape most likely to produce
@@ -80,17 +185,25 @@ a real false alarm, because a human calls it identical behaviour.
 ## Running it
 
 ```
-python scripts/fp_measurement.py --provider openai --model gpt-4o-mini --runs 5 --scenarios-dir examples/calibration --no-judge
+python scripts/fp_measurement.py --provider openai --model gpt-4.1-mini --runs 5     --scenarios-dir examples/calibration --role score --no-judge
 ```
 
+> **`[M] 2026-08-25` Two corrections to the line above, both measured.**
+> **`--role score` is now required.** MP-89 landed the filter this section anticipated, as a
+> *refusal* rather than a default: `[M]` the previously documented command now exits with
+> `error: 2 roles declared for this directory (fit, score). ... Re-run naming the one you
+> mean, e.g. --role score.` The old line no longer runs at all.
+> **The model changed for a reason**, not a preference: `[M]` on `gpt-4o-mini` six of the seven
+> `arg_*` shapes emit one payload in 16 runs, so they cannot score. See the section above.
+
 > **`[M] 2026-08-24` This command over-collects, and the surplus is not scorable.**
-> `scripts/fp_measurement.py:517-520` takes a directory and calls `load_scenarios` on all of
+> `scripts/fp_measurement.py:685` takes a directory and calls `load_scenarios` on all of
 > it — it has **no role or subset filter** — so the line above runs all **13** files, the seven
 > `arg_*` **and** the six semantic scenarios `MIN_SEMANTIC_DELTA` was fitted on. Those six are
 > a `fit` set (see [`../roles.json`](../roles.json)); a false-positive rate that includes them
 > is in-sample for 6 of its 13 scenarios and cannot be published as an out-of-sample result.
-> **Until the filter lands (MP-89), score the `arg_*` rows only and say so when you report the
-> number** — do not quote a 13-scenario denominator.
+> **`[M] 2026-08-25` The filter landed.** Pass `--role score`; it is now mandatory for this
+> directory, not advisory. Do not quote a 13-scenario denominator.
 
 Each side is the **same model against itself**, so any verdict other than `unchanged` is a
 false positive by construction. `--runs` must be equal on both sides or the argument gate

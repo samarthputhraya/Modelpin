@@ -1,0 +1,38 @@
+{
+  "generated_utc": "2026-08-25T15:45:35+00:00",
+  "modelpin_version": "0.1.2",
+  "git_sha": "fe121d3",
+  "provider": "openai",
+  "model": "gpt-4.1-mini",
+  "runs": 24,
+  "pace_seconds": 0.4,
+  "scenarios_dir": "examples/calibration",
+  "glob": "arg_numeric_rounding.json",
+  "scenario_temperatures": {
+    "arg_numeric_rounding": 0.7
+  },
+  "scenarios": {
+    "arg_numeric_rounding": {
+      "scored_runs": 24,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 10,
+      "distinct_canonical": 10,
+      "modal_share": "8/24",
+      "varies": true,
+      "varies_beyond_key_order": true,
+      "payload_counts": {
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35658}}]": 8,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.3566}}]": 4,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35756}}]": 2,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35662}}]": 2,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35656}}]": 2,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35664}}]": 2,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35758}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35764}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35657}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35716}}]": 1
+      }
+    }
+  }
+}

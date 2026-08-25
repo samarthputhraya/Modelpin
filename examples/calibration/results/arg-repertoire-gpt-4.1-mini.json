@@ -1,0 +1,130 @@
+{
+  "generated_utc": "2026-08-25T15:34:55+00:00",
+  "modelpin_version": "0.1.2",
+  "git_sha": "fe121d3",
+  "provider": "openai",
+  "model": "gpt-4.1-mini",
+  "runs": 16,
+  "pace_seconds": 0.4,
+  "scenarios_dir": "examples/calibration",
+  "glob": "arg_*.json",
+  "scenario_temperatures": {
+    "arg_enum_phrasing": 0.7,
+    "arg_freetext_note": 0.7,
+    "arg_key_order": 0.7,
+    "arg_list_order": 0.7,
+    "arg_multistep_carry": 0.7,
+    "arg_numeric_rounding": 0.7,
+    "arg_optional_fields": 0.7
+  },
+  "scenarios": {
+    "arg_enum_phrasing": {
+      "scored_runs": 16,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 1,
+      "distinct_canonical": 1,
+      "modal_share": "16/16",
+      "varies": false,
+      "varies_beyond_key_order": false,
+      "payload_counts": {
+        "[{\"name\": \"route_ticket\", \"arguments\": {\"ticket_id\": \"T-4407\", \"queue\": \"billing\", \"channel\": \"email\"}}]": 16
+      }
+    },
+    "arg_freetext_note": {
+      "scored_runs": 16,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 9,
+      "distinct_canonical": 9,
+      "modal_share": "4/16",
+      "varies": true,
+      "varies_beyond_key_order": true,
+      "payload_counts": {
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported office Wi-Fi drops every night around 2am and mentioned they have power-cycled the router twice.\"}}]": 4,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported their office Wi-Fi drops every night around 2am and mentioned they have already power-cycled the router twice.\"}}]": 3,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported that their office Wi-Fi drops every night around 2am and mentioned they have already power-cycled the router twice.\"}}]": 2,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported their office Wi-Fi drops every night around 2am and mentioned they have power-cycled the router twice.\"}}]": 2,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported that their office Wi-Fi drops every night around 2am and mentioned they have power-cycled the router twice.\"}}]": 1,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported that their office Wi-Fi drops every night around 2am and mentioned they have power-cycled the router twice already.\"}}]": 1,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported office Wi-Fi drops every night around 2am; they have power-cycled the router twice already.\"}}]": 1,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reports office Wi-Fi drops every night around 2am and has already power-cycled the router twice.\"}}]": 1,
+        "[{\"name\": \"add_call_note\", \"arguments\": {\"account_id\": \"A-7731\", \"note\": \"Customer reported that their office Wi-Fi drops every night around 2am and that they have already power-cycled the router twice.\"}}]": 1
+      }
+    },
+    "arg_key_order": {
+      "scored_runs": 16,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 1,
+      "distinct_canonical": 1,
+      "modal_share": "16/16",
+      "varies": false,
+      "varies_beyond_key_order": false,
+      "payload_counts": {
+        "[{\"name\": \"submit_expense\", \"arguments\": {\"employee_id\": \"E-2291\", \"expense_date\": \"2026-03-04\", \"amount_usd\": 128.45, \"category\": \"software\", \"receipt_attached\": true}}]": 16
+      }
+    },
+    "arg_list_order": {
+      "scored_runs": 16,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 1,
+      "distinct_canonical": 1,
+      "modal_share": "16/16",
+      "varies": false,
+      "varies_beyond_key_order": false,
+      "payload_counts": {
+        "[{\"name\": \"tag_article\", \"arguments\": {\"article_id\": \"KB-2043\", \"tags\": [\"onboarding\", \"billing\", \"security\"]}}]": 16
+      }
+    },
+    "arg_multistep_carry": {
+      "scored_runs": 16,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 1,
+      "distinct_canonical": 1,
+      "modal_share": "16/16",
+      "varies": false,
+      "varies_beyond_key_order": false,
+      "payload_counts": {
+        "[{\"name\": \"find_reservation\", \"arguments\": {\"confirmation_code\": \"RS-8842\"}}, {\"name\": \"change_reservation_time\", \"arguments\": {\"confirmation_code\": \"RS-8842\", \"new_time\": \"19:30\"}}]": 16
+      }
+    },
+    "arg_numeric_rounding": {
+      "scored_runs": 16,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 9,
+      "distinct_canonical": 9,
+      "modal_share": "5/16",
+      "varies": true,
+      "varies_beyond_key_order": true,
+      "payload_counts": {
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.3566}}]": 5,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35658}}]": 3,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35662}}]": 2,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35656}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35761}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35756}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35763}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35784}}]": 1,
+        "[{\"name\": \"log_parcel_weight\", \"arguments\": {\"parcel_id\": \"P-1188\", \"weight_kg\": 3.35716}}]": 1
+      }
+    },
+    "arg_optional_fields": {
+      "scored_runs": 16,
+      "errors": [],
+      "no_tool_call": 0,
+      "distinct_raw": 2,
+      "distinct_canonical": 2,
+      "modal_share": "11/16",
+      "varies": true,
+      "varies_beyond_key_order": true,
+      "payload_counts": {
+        "[{\"name\": \"create_task\", \"arguments\": {\"title\": \"Rotate the staging TLS certificate\", \"project\": \"Atlas\", \"priority\": \"normal\"}}]": 11,
+        "[{\"name\": \"create_task\", \"arguments\": {\"title\": \"Rotate the staging TLS certificate\", \"project\": \"Atlas\", \"priority\": \"low\"}}]": 5
+      }
+    }
+  }
+}

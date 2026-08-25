@@ -223,11 +223,15 @@ role; roles are declared in [`examples/roles.json`](../examples/roles.json) and 
   headline this section is missing, and no run of it should be reported as having done so.
   **This is the measured case for MP-89's `--repeats`: without more trials per scenario, the
   run most likely returns an abstention rather than a number.**
-- `[M] 2026-08-24` **`scripts/fp_measurement.py` cannot select the subset** (`:517-520` loads a
-  whole directory; no role filter), so `--scenarios-dir examples/calibration` collects all 13
-  files — the seven `arg_*` *and* the six semantic scenarios `MIN_SEMANTIC_DELTA` was fitted on.
-  Until MP-89 lands, report the `arg_*` denominator only; a 13-scenario rate would be in-sample
-  for 6 of them.
+- `[M] 2026-08-25` **`scripts/fp_measurement.py` now refuses to pool across roles.**
+  `--scenarios-dir examples/calibration` names a directory declaring **two** roles — the seven
+  `arg_*` (`score`) and the six semantic scenarios `MIN_SEMANTIC_DELTA` was fitted on (`fit`) —
+  and a rate pooled across them would be in-sample for 6 of its 13. MP-89 landed the filter as a
+  **refusal** rather than a default: the run exits with `error: 2 roles declared for this
+  directory (fit, score) ... Re-run naming the one you mean, e.g. --role score`. Pass
+  `--role score`. *(This entry previously read "cannot select the subset ... Until MP-89 lands";
+  it landed at `0c2e999`, and `:517-520` is now unrelated code — the directory load is at
+  `scripts/fp_measurement.py:685`.)*
 
 ## Detection (control)
 
