@@ -434,7 +434,7 @@ trials" claim is withdrawn — those 8 could not have fired, so the honest score
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; **411 tests passing**, `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; **416 tests passing**, `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

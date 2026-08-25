@@ -9,6 +9,14 @@
 graft examples
 graft docs
 graft tests
+# MP-100: `graft tests` without this shipped a suite that cannot import itself -- [M] an
+# unpacked sdist collected 2 errors, `No module named 'scripts'`, because
+# tests/test_recall_arm.py and tests/test_fp_measurement_repertoire.py do
+# `from scripts.fp_measurement import ...`. It is not only the tests: the Drift Map's own
+# published reproduce command is `python scripts/drift_map.py`, and README links
+# scripts/fp_measurement.py. Enforced by test_packaging_contents.py, which now runs
+# `pytest --collect-only` INSIDE the unpacked sdist -- a name list cannot see this.
+graft scripts
 include data/models.json
 include CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md
 include action.yml

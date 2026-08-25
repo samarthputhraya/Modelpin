@@ -23,14 +23,24 @@ this builds a wheel from a pristine copy of the tree and inspects the archive it
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
 import pytest
 
+# `ops` and `.claude` are DELIBERATELY ABSENT from this list and must stay absent. They are
+# the private half of the open-core split, and the pristine copy carries them ON PURPOSE so
+# that `test_sdist_excludes_private_directories` is actually exercising `MANIFEST.in`'s
+# `prune` lines. `[M]` packaging-verifier 2026-08-25 confirmed both reach the scratch build
+# directory and neither reaches the archive. Adding them here would speed the copy up and
+# make the leak test vacuous — it could never fail, including on the day someone deletes a
+# `prune` line. This looks like an omission; it is the guard.
+#
 # Never copy secrets (.env.local holds real API keys) or build residue into the temp tree.
 # `*.egg-info` is load-bearing, not hygiene: a stale egg-info makes setuptools ship files
 # the current pyproject no longer selects, which produces a FALSE GREEN here.
@@ -192,9 +202,12 @@ _SDIST_REQUIRED = [
 
 
 @pytest.fixture(scope="module")
-def sdist_entries(tmp_path_factory: pytest.TempPathFactory) -> list[str]:
-    import tarfile
+def sdist_tarball(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build the sdist once, through the repo's own build backend.
 
+    Module-scoped on purpose: MP-100 added a second consumer (the unpacked tree), and
+    building it twice would double the slowest fixture in this file for no new evidence.
+    """
     tmp = tmp_path_factory.mktemp("mp01sdist")
     src, out = tmp / "src", tmp / "out"
     shutil.copytree(_repo_root(), src, ignore=_IGNORE)
@@ -213,9 +226,30 @@ def sdist_entries(tmp_path_factory: pytest.TempPathFactory) -> list[str]:
         )
     tarballs = sorted(out.glob("*.tar.gz"))
     assert len(tarballs) == 1, f"expected one sdist, got {[t.name for t in tarballs]}"
-    with tarfile.open(tarballs[0]) as tf:
+    return tarballs[0]
+
+
+@pytest.fixture(scope="module")
+def sdist_entries(sdist_tarball: Path) -> list[str]:
+    with tarfile.open(sdist_tarball) as tf:
         # strip the leading `modelpin-<version>/` component
         return ["/".join(n.split("/")[1:]) for n in tf.getnames()]
+
+
+@pytest.fixture(scope="module")
+def unpacked_sdist(sdist_tarball: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The sdist as a contributor actually receives it: extracted, on disk, runnable.
+
+    `[M]` MP-100: this is the fixture the name-list guard never had. `_SDIST_REQUIRED`
+    asserts four paths are present, and presence is not importability — the gap between
+    them shipped a test suite that collected two errors on every unpacked sdist.
+    """
+    dest = tmp_path_factory.mktemp("mp100unpacked")
+    with tarfile.open(sdist_tarball) as tf:
+        tf.extractall(dest, filter="data")
+    roots = [p for p in dest.iterdir() if p.is_dir()]
+    assert len(roots) == 1, f"expected one top-level dir in the sdist, got {roots}"
+    return roots[0]
 
 
 @pytest.mark.parametrize("required", _SDIST_REQUIRED)
@@ -231,3 +265,141 @@ def test_sdist_excludes_private_directories(sdist_entries: list[str]) -> None:
     reach a source distribution, which unlike the repo IS published to PyPI."""
     leaked = sorted(n for n in sdist_entries if n.startswith(("ops/", ".claude/")))
     assert not leaked, f"private files leaked into the sdist: {leaked}"
+
+
+#: `from <name> import ...` / `import <name>` at the start of a line.
+_TOP_LEVEL_IMPORT = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_]\w*)", re.MULTILINE)
+
+#: A repo-relative path the docs tell a reader to execute or open — `python scripts/x.py`,
+#: `` `scripts/x.py` ``, or a Markdown link to one. Deliberately limited to `scripts/`: those
+#: are the paths the published commands invoke, and widening it would sweep in prose.
+_DOC_INVOKED_PATH = re.compile(r"(?<![\w/.])(scripts/[A-Za-z_][\w.]*\.py)")
+
+
+def _repo_top_level_dirs() -> set[str]:
+    """Directories at the repo root that a test could plausibly import as a package."""
+    return {
+        p.name
+        for p in _repo_root().iterdir()
+        if p.is_dir() and not p.name.startswith((".", "_")) and p.name != "dist"
+    }
+
+
+def test_every_repo_directory_the_shipped_tests_import_is_also_shipped(
+    unpacked_sdist: Path,
+) -> None:
+    """`[M]` MP-100: `graft tests` without `graft scripts`. The shipped suite did
+    `from scripts.fp_measurement import ...` against a `scripts/` the sdist did not carry.
+
+    Derived, not enumerated: this reads the imports out of the tests that ACTUALLY SHIPPED
+    and requires each repo-root directory among them to have shipped too. `_SDIST_REQUIRED`
+    could not see this — it lists four paths, and *"the name list does not generalise"* is
+    the whole finding. Add a test that imports a new top-level directory and this fails
+    without anyone remembering to extend a list.
+    """
+    repo_dirs = _repo_top_level_dirs()
+    shipped = {p.name for p in unpacked_sdist.iterdir() if p.is_dir()}
+
+    missing: dict[str, list[str]] = {}
+    for test_file in sorted((unpacked_sdist / "tests").rglob("*.py")):
+        source = test_file.read_text(encoding="utf-8")
+        for name in set(_TOP_LEVEL_IMPORT.findall(source)):
+            if name in repo_dirs and name not in shipped:
+                missing.setdefault(name, []).append(f"tests/{test_file.name}")
+
+    assert not missing, (
+        "the sdist ships tests that import repo directories it does not ship: "
+        + "; ".join(f"{k}/ (needed by {', '.join(sorted(v))})" for k, v in sorted(missing.items()))
+        + ". MANIFEST.in promises a runnable checkout; add the matching `graft`."
+    )
+
+
+@pytest.mark.parametrize("directory", ["tests", "scripts"])
+def test_every_python_file_in_a_grafted_directory_reaches_the_sdist(
+    sdist_entries: list[str], directory: str
+) -> None:
+    """A directory can ship while the file you need goes missing, and nothing above notices.
+
+    Two measured reasons this exists, one per parameter.
+
+    `tests` — `[M]` MP-100 mutant battery: deleting `graft tests` outright left the suite
+    GREEN, because setuptools already carries `tests/test*.py` by default. The only file the
+    graft actually adds is `tests/docs_extract.py`, whose name misses that pattern. It is a
+    *script* CI invokes, not a module the suite imports, so neither the collect-only backstop
+    nor the import check can see it disappear.
+
+    `scripts` — `[M]` packaging-verifier 2026-08-25, the gate's fourth mutant: deleting
+    `scripts/drift_map.py` and `scripts/calibrate_thresholds.py` while keeping
+    `fp_measurement.py` left all three of the other new guards GREEN — the import check only
+    asks whether the *directory* is present, and collection only imports what a shipped test
+    references. `[M]` But `python scripts/drift_map.py --suite-dir examples/drift-suite` is
+    the Drift Map's own published reproduce command, so that sdist would have failed the
+    documented workflow with a plain "No such file".
+
+    Derived from the repo tree, so a new helper is covered the day it is written.
+    """
+    root = _repo_root() / directory
+    local = {
+        f"{directory}/{p.relative_to(root).as_posix()}"
+        for p in root.rglob("*.py")
+        if "__pycache__" not in p.parts
+    }
+    assert local, f"{directory}/ holds no .py files; this guard has stopped covering anything."
+    missing = sorted(local - set(sdist_entries))
+    assert not missing, (
+        f"the sdist drops {missing} from {directory}/. Presence of the directory is not "
+        "presence of the file, and the public docs invoke these by path."
+    )
+
+
+def test_every_repo_path_the_public_docs_tell_you_to_run_is_in_the_sdist(
+    sdist_entries: list[str],
+) -> None:
+    """The contract in one sentence: the sdist can run what the docs publish.
+
+    `[M]` MP-100: `README.md` links `scripts/fp_measurement.py` and the Drift Map's *Reproduce
+    this* section says `python scripts/drift_map.py --suite-dir examples/drift-suite` — and
+    the sdist shipped neither. Scanning the published commands is the one check whose failure
+    message names the promise being broken rather than a filename, and it needs no list: add a
+    doc that invokes a new path and this covers it immediately.
+    """
+    docs = [_repo_root() / "README.md", *sorted((_repo_root() / "docs").rglob("*.md"))]
+    referenced: dict[str, list[str]] = {}
+    for doc in docs:
+        for match in _DOC_INVOKED_PATH.findall(doc.read_text(encoding="utf-8")):
+            referenced.setdefault(match, []).append(doc.name)
+
+    assert referenced, "no doc invokes a repo script any more; this guard covers nothing."
+    missing = {k: v for k, v in referenced.items() if k not in sdist_entries}
+    assert not missing, (
+        "the sdist omits paths the public docs tell a reader to run: "
+        + "; ".join(
+            f"{k} (cited in {', '.join(sorted(set(v)))})" for k, v in sorted(missing.items())
+        )
+        + ". `pip download --no-binary :all: modelpin` must produce a checkout those commands work in."
+    )
+
+
+def test_the_shipped_test_suite_can_actually_be_collected(unpacked_sdist: Path) -> None:
+    """The closed backstop: presence is not importability.
+
+    `[M]` MP-100, reproduced before the fix — `pytest --collect-only -q` inside an unpacked
+    sdist returned **rc 2**, `297 tests collected, 2 errors`, `ModuleNotFoundError: No
+    module named 'scripts'`. This is the assertion the row asked for, and unlike the check
+    above it does not care *why* collection fails: a missing directory, a missing data file
+    read at import time, a syntax error, a dependency the sdist forgot. Collection only
+    imports; it never executes, so this cannot recurse into another sdist build.
+    """
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
+        cwd=unpacked_sdist,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        tail = "\n".join(ln for ln in proc.stdout.splitlines() if ln.strip())[-2500:]
+        pytest.fail(
+            f"the shipped test suite does not collect (rc={proc.returncode}). A contributor "
+            f"who runs `pip download --no-binary :all: modelpin` and unpacks it gets this:\n"
+            f"{tail}"
+        )

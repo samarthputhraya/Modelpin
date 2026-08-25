@@ -298,6 +298,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name — a mutant spelling the rate "roughly two thirds" passed the first version and is
   blocked only because it is now on the list); and no guard reads the report's non-numeric
   causal prose.
+- **The source distribution ships `scripts/`, so the test suite it also ships can import
+  itself.** `[M]` Reproduced through the repo's own build backend before the fix: sdist build
+  `rc 0`, **154 members**, `scripts/` entries **`[]`** — while `tests/test_recall_arm.py` and
+  `tests/test_fp_measurement_repertoire.py` both shipped, and both do
+  `from scripts.fp_measurement import ...`. Unpacked and collected, that is
+  **`rc 2`, `297 tests collected, 2 errors`, `ModuleNotFoundError: No module named 'scripts'`**.
+  `[M]` It was never only the tests: the Drift Map's own published reproduce command is
+  `python scripts/drift_map.py --suite-dir examples/drift-suite`, and `README.md` links
+  `scripts/fp_measurement.py` — so `pip download --no-binary :all: modelpin` gave a checkout
+  that could run none of the three commands the docs tell you to run. `MANIFEST.in` states the
+  promise this broke in its own header: *"a contributor can `pip download --no-binary` and get
+  a runnable checkout with the suites and the test suite."* Fixed with `graft scripts`.
+- **The sdist guard now asserts the shipped suite *runs*, not that four filenames are present.**
+  `[M]` The existing check (`_SDIST_REQUIRED`) lists four paths and passed throughout — presence
+  is not importability, and that gap is the whole defect. Four derived assertions are now the
+  load-bearing ones. `pytest --collect-only` inside the **unpacked** sdist must exit 0 — closed,
+  so it does not care whether the cause is a missing directory, a data file read at import time
+  or a forgotten dependency. Every repo-root directory imported by a test that actually shipped
+  must have shipped too, read out of the shipped sources rather than a list. Every `.py` under
+  `tests/` and `scripts/` must reach the archive. And every `scripts/*.py` path the public docs
+  tell a reader to **run** must be in there — the one check whose failure names the promise
+  instead of a filename.
+  `[M]` Each of the last two exists because a mutant survived without it, and both survivors
+  were invisible for the same reason: **a directory can ship while the file you need is gone.**
+  Deleting `graft tests` outright left the suite green, since setuptools already carries
+  `tests/test*.py` — the only file that line adds is `tests/docs_extract.py`, a helper CI
+  invokes as a script. And `[M]` the packaging-verifier gate found that dropping
+  `scripts/drift_map.py` and `scripts/calibrate_thresholds.py` while keeping
+  `fp_measurement.py` passed every other new guard, because no shipped test imports them —
+  yet `python scripts/drift_map.py` is the Drift Map's own published reproduce command.
+  `[M]` 5 mutants, 5 red. The sdist is built once per module and the whole file costs 5.2s.
 - **A fresh clone no longer fabricates a regression against Modelpin's own baseline.** `[M]`
   Reproduced verbatim: clone the repo, run `mp init`, write your own
   `scenarios/refund_request.json`, run `mp check` — and get
