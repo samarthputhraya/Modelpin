@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import math
 import time
 
@@ -566,6 +567,93 @@ def build_row(sid, base_scn, cand_scn, verdict_fn):
     return (sid, *(res if res is not None else (None, None, None)))
 
 
+#: Where MP-77's machine-readable fit/score declaration lives, relative to the repo root.
+ROLES_MANIFEST = "examples/roles.json"
+
+
+def load_role_sets(manifest_path: str = ROLES_MANIFEST) -> list[dict]:
+    """The `sets` entries from MP-77's roles manifest, or [] when it cannot be read.
+
+    Absent is not an error: a user pointing this script at their OWN scenarios directory has
+    no manifest and must not be blocked by one.
+    """
+    try:
+        with open(manifest_path, encoding="utf-8") as fh:
+            return json.load(fh).get("sets", [])
+    except (OSError, ValueError):
+        return []
+
+
+def roles_for_dir(sets: list[dict], scenarios_dir: str) -> dict[str, list[str]]:
+    """`role -> declared ids` for every manifest set naming this directory.
+
+    Matched on the directory's basename, because the manifest stores `suite` /`calibration`
+    while the CLI is given `examples/calibration` (or an absolute path, or a trailing slash).
+    """
+    name = os.path.basename(os.path.normpath(scenarios_dir))
+    out: dict[str, list[str]] = {}
+    for entry in sets:
+        if os.path.basename(os.path.normpath(str(entry.get("path", "")))) == name:
+            # `scenarios`, not `ids`. [M] MP-89: the first cut of this read `ids`, which is
+            # absent, so every role resolved to an EMPTY set and `--role score` silently
+            # selected 0 scenarios while the refusal still fired correctly - a partial
+            # success that looks like a working feature. The empty-set guard in
+            # `select_by_role` exists because of this, not in anticipation of it.
+            out.setdefault(str(entry.get("role")), []).extend(entry.get("scenarios", []))
+    return out
+
+
+def select_by_role(scenarios, role_map: dict[str, list[str]], requested: str | None):
+    """REFUSE a multi-role directory rather than silently averaging across roles.
+
+    [M] MP-89: `examples/calibration/` declares TWO roles - `fit` (the 6 semantic scenarios
+    `MIN_SEMANTIC_DELTA` was tuned on) and `score` (the 7 `arg_*` files authored to PRICE a
+    false-positive rate). `load_scenarios` collects all 13, so the documented command produced
+    a rate that was **in-sample for 6 of 13**, straight through ADR-0025's "fitted on or scored
+    on, never both".
+
+    Refusing beats filtering, and the distinction is the whole point of the row: a silent
+    filter leaves the operator believing they measured the directory they named. A refusal
+    makes them say which role they meant, ON THE COMMAND LINE - the surface they actually read,
+    where a README cannot reach them.
+
+    `--role` is therefore an explicit human declaration, not a convenience: passing it is
+    recorded in the shell history next to the number it produced.
+    """
+    if not role_map:
+        return list(scenarios), "roles: undeclared directory (no manifest entry)"
+    if requested is None:
+        if len(role_map) > 1:
+            roles = ", ".join(sorted(role_map))
+            raise SystemExit(
+                f"error: {len(role_map)} roles declared for this directory ({roles}). "
+                "A rate pooled across roles is in-sample for the fitted ones (ADR-0025). "
+                "Re-run naming the one you mean, e.g. --role score."
+            )
+        only = next(iter(role_map))
+        return list(scenarios), f"roles: all {only!r} (single-role directory)"
+    if requested not in role_map:
+        have = ", ".join(sorted(role_map)) or "none"
+        raise SystemExit(f"error: role {requested!r} is not declared here. Declared: {have}.")
+    wanted = set(role_map[requested])
+    if not wanted:
+        # [M] A declared-but-empty role selected 0 scenarios in silence, and the run then
+        # reported 0/0 as if ADR-0022 had excluded everything. An empty manifest entry is a
+        # manifest bug; it must never present as a measurement.
+        raise SystemExit(
+            f"error: role {requested!r} is declared for this directory but names no "
+            "scenarios. That is a bug in examples/roles.json, not an empty result."
+        )
+    picked = [s for s in scenarios if s.id in wanted]
+    missing = sorted(wanted - {s.id for s in picked})
+    if missing:
+        raise SystemExit(
+            f"error: role {requested!r} declares {len(wanted)} ids but "
+            f"{len(missing)} are absent from the directory: {', '.join(missing)}."
+        )
+    return picked, f"roles: {requested!r} only ({len(picked)} of {len(scenarios)} scenarios)"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--provider", default="openai", help="openai | google")
@@ -574,9 +662,30 @@ def main() -> None:
     ap.add_argument("--judge", default="gpt-4o-mini")
     ap.add_argument("--no-judge", action="store_true", help="skip the semantic LLM-judge")
     ap.add_argument("--scenarios-dir", default="examples/suite")
+    ap.add_argument(
+        "--role",
+        default=None,
+        help="which declared role to score (examples/roles.json). REQUIRED when the "
+        "directory declares more than one, because a pooled rate is in-sample for the "
+        "fitted half (ADR-0025).",
+    )
+    ap.add_argument(
+        "--repeats",
+        type=int,
+        default=1,
+        help="independent measurement rounds over the whole set. [M] MP-89: 7 scenarios "
+        "project to 0.35 EXPECTED SCORED trials once ADR-0022 excludes those that could "
+        "not have fired, so a single round's modal outcome is 0/0 - an abstention, not a "
+        "rate. Repeats are how n reaches a publishable size.",
+    )
     args = ap.parse_args()
+    if args.repeats < 1:
+        raise SystemExit("error: --repeats must be >= 1.")
 
     scenarios = load_scenarios(args.scenarios_dir)
+    scenarios, role_note = select_by_role(
+        scenarios, roles_for_dir(load_role_sets(), args.scenarios_dir), args.role
+    )
     adapter = get_adapter(args.provider)
     adapter.preflight()
     judge = None if args.no_judge else build_judge(args.judge)
@@ -584,7 +693,13 @@ def main() -> None:
         judge.preflight()
     print(
         f"FP measurement: provider={args.provider} model={args.model} runs={args.runs} "
-        f"judge={'off' if judge is None else args.judge} scenarios={len(scenarios)}\n"
+        f"judge={'off' if judge is None else args.judge} scenarios={len(scenarios)} "
+        f"repeats={args.repeats}\n"
+        # The selected role is PUBLISHED, not merely honoured. [M] MP-89's defect was that
+        # the operator could not tell from the output which scenarios the rate covered.
+        f"  {role_note}\n"
+        f"  -> {len(scenarios) * args.repeats} trials attempted; ADR-0022 excludes those that "
+        f"could not have fired, so SCORED will be lower.\n"
     )
 
     def _verdict(base_scn, cand_scn, sid):
@@ -616,7 +731,11 @@ def main() -> None:
     print("  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have")
     print("  fired at any ALPHA < 1. Anything the engine flagged is always scored.")
 
-    rows = [build_row(scn.id, scn, scn, _verdict) for scn in scenarios]
+    rows = [
+        build_row(scn.id if args.repeats == 1 else f"{scn.id}#{i + 1}", scn, scn, _verdict)
+        for i in range(args.repeats)
+        for scn in scenarios
+    ]
     t, lines_out = fp_report(rows)
     for line in lines_out:
         print(line)

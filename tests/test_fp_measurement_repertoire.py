@@ -22,6 +22,7 @@ No provider is needed for any of this - ADR-0006 forbids a live call from the su
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,6 +33,9 @@ from modelpin.diff import DiffVerdict  # noqa: E402
 from modelpin.models import ToolCall, Trace  # noqa: E402
 from scripts.fp_measurement import (  # noqa: E402
     FP_OUTCOMES,
+    load_role_sets,
+    roles_for_dir,
+    select_by_role,
     classify,
     fp_outcome,
     fp_report,
@@ -474,3 +478,90 @@ def test_the_exclusion_label_does_not_claim_no_effect_was_measured():
         f"the exclusion label claims no effect was measured: {label!r}. Effects can be "
         "measured and still be unable to fire — say that instead."
     )
+
+
+# --- MP-89: role refusal + repeats -----------------------------------------------------
+#
+# [M] The documented FP command (`--scenarios-dir examples/calibration`) collected all 13
+# files: the 7 `arg_*` authored to PRICE a false-positive rate AND the 6 semantic scenarios
+# `MIN_SEMANTIC_DELTA` was FITTED on. A rate over that denominator is in-sample for 6 of 13 --
+# ADR-0025's "fitted on or scored on, never both", violated by the tool rather than by a human.
+
+
+class TestRoleRefusal:
+    @staticmethod
+    def _scn(*ids):
+        return [SimpleNamespace(id=i) for i in ids]
+
+    def test_a_multi_role_directory_is_REFUSED_not_filtered(self):
+        """The row's own wording: refuse, do NOT filter. A silent filter leaves the operator
+        believing they measured the directory they named; a refusal makes them say which role
+        they meant on the COMMAND LINE -- the surface they read, where a README cannot reach."""
+        rm = {"fit": ["a"], "score": ["b"]}
+        with pytest.raises(SystemExit) as exc:
+            select_by_role(self._scn("a", "b"), rm, None)
+        msg = str(exc.value)
+        assert "2 roles" in msg and "fit" in msg and "score" in msg, msg
+        assert "ADR-0025" in msg, "the refusal must cite the invariant it protects"
+        assert "--role" in msg, "a refusal that does not say how to proceed is a dead end"
+
+    def test_a_single_role_directory_runs_untouched(self):
+        """Guards the direction that would break every existing caller: `examples/suite` is
+        one role, and adding a manifest must not start demanding a flag for it."""
+        picked, note = select_by_role(self._scn("a", "b"), {"score": ["a", "b"]}, None)
+        assert [s.id for s in picked] == ["a", "b"]
+        assert "score" in note
+
+    def test_an_undeclared_directory_is_not_blocked(self):
+        """A user pointing this at their OWN scenarios has no manifest entry and must not be
+        held hostage by one."""
+        picked, note = select_by_role(self._scn("x"), {}, None)
+        assert [s.id for s in picked] == ["x"]
+        assert "undeclared" in note
+
+    def test_naming_a_role_selects_exactly_the_declared_ids(self):
+        picked, note = select_by_role(
+            self._scn("a", "b", "c"), {"fit": ["a"], "score": ["b", "c"]}, "score"
+        )
+        assert [s.id for s in picked] == ["b", "c"]
+        assert "2 of 3" in note, note
+
+    def test_an_empty_declared_role_raises_rather_than_measuring_nothing(self):
+        """[M] THE bug this suite exists to have caught. The first cut read `ids` from the
+        manifest, whose real key is `scenarios`, so every role resolved EMPTY: the refusal
+        still fired correctly and `--role score` silently selected 0 scenarios, which the run
+        would then have reported as `0/0` -- indistinguishable from ADR-0022 excluding
+        everything. A partial success that looks like a working feature."""
+        with pytest.raises(SystemExit, match="names no scenarios"):
+            select_by_role(self._scn("a"), {"score": []}, "score")
+
+    def test_an_undeclared_role_name_is_rejected_with_what_is_available(self):
+        with pytest.raises(SystemExit) as exc:
+            select_by_role(self._scn("a"), {"fit": ["a"]}, "score")
+        assert "fit" in str(exc.value)
+
+    def test_a_declared_id_missing_from_disk_is_an_error_not_a_smaller_n(self):
+        """Silently scoring 6 of 7 would shrink the denominator without saying so -- the
+        exact failure mode `fp_summary` publishes coverage counters to prevent."""
+        with pytest.raises(SystemExit, match="absent from the directory"):
+            select_by_role(self._scn("a"), {"score": ["a", "b"]}, "score")
+
+
+class TestRolesManifestIsReadCorrectly:
+    def test_the_real_manifest_resolves_calibrations_two_roles(self):
+        """Reads the SHIPPED examples/roles.json, not a fixture. [M] This is what catches a
+        key rename: a fixture-only test agreed with the wrong key name `ids` and passed."""
+        rm = roles_for_dir(load_role_sets(), "examples/calibration")
+        assert set(rm) == {"fit", "score"}, rm
+        assert len(rm["score"]) == 7, rm["score"]
+        assert len(rm["fit"]) == 6, rm["fit"]
+        assert all(i.startswith("arg_") for i in rm["score"]), rm["score"]
+
+    def test_the_directory_matches_however_the_path_is_spelled(self):
+        sets = load_role_sets()
+        base = roles_for_dir(sets, "examples/calibration")
+        for spelling in ("examples/calibration/", "calibration", "./examples/calibration"):
+            assert roles_for_dir(sets, spelling) == base, spelling
+
+    def test_a_missing_manifest_is_empty_not_an_exception(self):
+        assert load_role_sets("no/such/roles.json") == []
