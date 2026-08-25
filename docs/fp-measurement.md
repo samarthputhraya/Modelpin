@@ -250,7 +250,7 @@ this arm cannot tell which.** Either way it fails in the safe direction for this
 ([`examples/calibration/results/result-independent-judge.json`](../examples/calibration/results/result-independent-judge.json)
 — 6 labelled pairs, candidate `gpt-3.5-turbo`, judge `gpt-4o-mini`, temperature 0.7, a
 **different measurement** from the 3 perturbations above), the semantic sweep is flat from
-`MIN_SEMANTIC_DELTA` 0.1 to 0.9: recall **4/6** and 0 false alarms at every value. So on that
+`MIN_SEMANTIC_DELTA` 0.1 to 0.9: recall **4/6** and 0 false alarms at every value. `[M]` The 95% one-sided *lower* bound on true detection at 4/6 is **27.1%** — `1 - upper_bound_95(2, 6)` in [`scripts/fp_measurement.py`](../scripts/fp_measurement.py), the same helper the 3-perturbation arm publishes through. **A bare `4/6` reads as 67%; six trials cannot support that**, and the flatness above means this column is not even measuring the floor. So on that
 set the floor is inert and lowering it buys no detection. **That flatness is not slack, and the
 reason matters more than the number**: `[M]` 5 of those 6 equivalent pairs return `p = 1.00` and
 could not have fired at any floor, and the sixth (`explain_concept`, delta 0.20) is blocked by
@@ -271,14 +271,14 @@ runs recorded under [`examples/calibration/results/`](../examples/calibration/re
 
 - **Independent-judge run (the evidence of record):** candidate `gpt-3.5-turbo`, judge
   `gpt-4o-mini` (the judge does **not** grade its own output, so no self-judging bias).
-  At `MIN_SEMANTIC_DELTA=0.5`, `ALPHA=0.05`: **0 false positives**, recall 4/6. One
+  At `MIN_SEMANTIC_DELTA=0.5`, `ALPHA=0.05`: **0 false positives**, recall 4/6 (lower bound **27.1%**, above). One
   equivalent pair scored a noisy `delta=0.20` and was correctly **absorbed by the permutation
   p-gate**. `[M]` **Corrected 2026-08-24 (MP-81):** this previously read "absorbed by the floor
   + permutation p-gate — i.e. the conservative floor earns its keep". It was not the floor.
   That pair (`explain_concept`, delta 0.20, `p = 0.50`) clears even a 0.1 floor and is stopped
   by the p-gate alone, which is exactly why the sweep above is flat. At `runs=5` the floor is
   inert on this set; it is a conservative choice, not a fitted or a load-bearing one.
-- **Self-judge run:** candidate == judge == `gpt-4o-mini`. Cleaner (0/6 FP, recall 5/6) but,
+- **Self-judge run:** candidate == judge == `gpt-4o-mini`. Cleaner (0/6 FP, recall 5/6 — lower bound **41.8%**, `1 - upper_bound_95(1, 6)`) but,
   per an adversarial audit, *too* clean — self-judging inflated the separation, so it is
   kept only as a cross-check, not the justification.
 
@@ -307,7 +307,7 @@ detection *improved* (`classify_sentiment` went `changed_minor` → `regression`
 
 **Known limitations (honest — do not oversell):** the calibration set is small (6 + 6
 pairs), the perturbations are synthetic system-prompt instructions (extreme, not subtle
-drift), recall on subtle changes is imperfect (4/6 — a miss is never a false *alarm*, which is the
+drift), recall on subtle changes is imperfect (4/6, lower bound **27.1%** — a miss is never a false *alarm*, which is the
 safe direction, but whether any given one is a false negative or a correct true negative is
 what this arm cannot tell: `[M]` of those two misses, `explain_concept` is a genuine p-gate
 miss while `define_term` came back judged fully equivalent at `p = 1.00`, indistinguishable

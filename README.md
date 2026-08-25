@@ -259,7 +259,10 @@ So the floor rests on **one** labeled condition — and that one scores 0/1, not
 [`docs/fp-measurement.md`](docs/fp-measurement.md):
 - the calibration set is **small** (≈6+6 pairs) and the perturbations are **synthetic**, not
   harvested from real migrations;
-- recall on subtle changes was 4/6 — it can *miss* a subtle real change (again, the safe direction);
+- recall on subtle changes was 4/6 — `[M]` a 95% one-sided *lower* bound of **27.1%** on
+  true detection, `1 - upper_bound_95(2, 6)` in
+  [`scripts/fp_measurement.py`](scripts/fp_measurement.py). It can *miss* a subtle real
+  change (again, the safe direction);
 - the judge is **OpenAI-only** so far;
 - the structural floors are **not** FP-validated: `[M]` the held-out run contributed 0 scored
   trials, and at the shipped `runs: 5` the floors are **inert** anyway — the p-value gate is
@@ -273,10 +276,14 @@ non-OpenAI judge. We'd rather you know this than discover it.
 Quietness on equivalent behavior is the half **not** yet evidenced (above); the complement — that it catches
 *real* drift — is the **[Modelpin Drift Map #1](docs/reports/modelpin-drift-map-1.md)**. We replayed
 an open, deliberately-hard suite across **5 real migration pairs** (including cross-vendor), 5 runs
-each, judge on. The engine stayed quiet on ~50 of 60 comparisons but surfaced **≥1 genuine behavior
-change on every pair**: an agent that went from *asking for a missing date* to *hallucinating a
-flight booking*, prompt-injection resistance **flipping across a version bump**, and a
-multi-constraint format breaking on an upgrade. The exact raw traces and per-scenario verdicts are
+each, judge on. `[M]` The engine stayed quiet on **50 of 60** comparisons and flagged the other
+10 — 9 `regression`, 1 `changed_minor`. **4 of the 5 pairs** carry a `regression` that survives
+a read of the raw traces: an agent that went from *asking for a missing date* to *hallucinating
+a flight booking*, prompt-injection resistance **flipping across a version bump**, and a
+multi-constraint format breaking on an upgrade. The fifth does not — the report says so, and
+says why. `[M]` Of the 9 `regression` flags, **6** are solid and **3** are soft; we publish
+that split rather than a precision rate, because the 9 land on only 4 distinct scenarios and
+are therefore not exchangeable trials. The exact raw traces and per-scenario verdicts are
 published in [`docs/reports/data/`](docs/reports/data/) — diff against ours without spending a cent.
 It also **discloses a false positive our own refusal detector produced** (a Unicode-apostrophe bug,
 since fixed): flagging our own measurement's soft spots is the whole point of being an independent
@@ -427,7 +434,7 @@ trials" claim is withdrawn — those 8 could not have fired, so the honest score
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; **396 tests passing**, `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; **411 tests passing**, `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

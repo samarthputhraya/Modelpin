@@ -9,9 +9,11 @@ competent models diverge* — because v1 wasn't, and we measured the consequence
 We ran the v1 suite (10 simple, well-specified tasks) across real model-migration pairs and
 **every migration came back UNCHANGED** — every competent model aced the easy tasks identically,
 so the suite could not surface *any* drift. A suite that can never fire tells you nothing. We then
-built this **discriminating** suite and re-ran the *same* 5 pairs: it surfaced **≥1 real
-behavior change on every pair** (9 regressions + 1 minor across 60 comparisons) while the
-engine stayed **~50/60 unchanged** — loud on real drift, quiet on equivalent behavior. Full
+built this **discriminating** suite and re-ran the *same* 5 pairs: it returned 9 `regression`
+and 1 `changed_minor` verdicts across 60 comparisons and stayed **unchanged on the other 50**
+— loud on real drift, quiet on equivalent behavior. The report's own accounting marks **3 of
+those 9 as soft**, two of them artifacts of a since-fixed bug in our refusal detector, and
+names the one pair whose flags do not survive a read of the raw traces. Full
 writeup: [The Modelpin Drift Map](../../docs/reports/). Harness: [`scripts/drift_map.py`](../../scripts/drift_map.py).
 
 ## The 14 scenarios, by the seam they probe

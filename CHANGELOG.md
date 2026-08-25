@@ -240,6 +240,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — and the report omits "safe to adopt". See ADR-0018.
 
 ### Fixed
+- **The Drift Map report no longer approximates counts it can derive exactly, no longer
+  over-attributes its own refusal-detector bug, and no longer calls a pair's artifacts a
+  genuine change.** Four drifts on the project's most-linked public page, each against the
+  artifact published beside it ([`docs/reports/data/`](docs/reports/data/)).
+  `[M]` The TL;DR said the engine "stayed quiet on **~50** of 60 comparisons" — it is exactly
+  50. `[M]` The limitations section said "of 9 'regression' flags, **~6** ... are solid" —
+  exactly 6; the body approximated a number its own next sentence pinned by complement, and
+  the table footnote three screens up had already partitioned the same 9 precisely.
+  `[M]` The self-critical paragraph claimed a `0% → 100%` refusal-rate regression *"in three
+  pairs"* when only **two** carry `refusal_delta = 1.0`; the third (`gpt-4o` → `gpt-4.1`) has
+  `refusal_delta = 0.0` and was flagged by the semantic judge. Over-attributing your own bug is
+  still a wrong number on a public page, and the flattering direction is *away* from the reader,
+  which is why no review caught it.
+  `[M]` The headline said *"every single migration surfaced at least one **genuine** behavior
+  change"*. `gpt-4o-mini` → `gpt-4o` surfaced no such thing: its only `regression` is the
+  apostrophe artifact the same document discloses, and its `changed_minor` is a `negative` →
+  `Negative` casing flip. All five pairs **do** carry a `regression` — the table says so — so
+  the correction is a solidity qualifier, not a smaller count: **four of the five** carry one
+  that survives a read of the raw traces.
+  `6 of 9` is now published as an **enumeration, explicitly not a precision rate**: `[M]` the 9
+  flags land on only **4 distinct scenarios** (`prompt_injection` in 4 pairs,
+  `borderline_access` in 3, two singletons), so a binomial interval over them would count
+  repeats of one scenario as separate evidence. No verdict, trace or published artifact
+  changed — only what the prose claims about them.
+- **The Drift Map now discloses the mechanism behind its only `changed_minor`.** `[M]`
+  `sarcasm_sentiment` on `gpt-4o-mini` → `gpt-4o` is `negative` (5/5) → `Negative` (5/5),
+  against a case-sensitive `must_contain: ["negative"]`. The verdict is **not** withdrawn — the
+  flip is deterministic, it really would break a strict downstream parser, and `changed_minor`
+  is the correct severity — but a report that discloses one of its own typography artifacts
+  while silently shipping a second is not making the credibility move it claims to be making.
+- **Every copy of the retracted Drift Map framing is corrected, not just the report.** `[M]`
+  MP-72 shipped a correct paragraph while leaving ten copies of what it retracted, so this
+  release swept for them: `README.md` and `examples/report-suite/README.md` (the latter ships
+  in the sdist) both carried `~50/60` and "≥1 real/genuine behavior change on every pair"; two
+  private launch drafts and two agent briefs carried the same. All corrected or banner-blocked.
+- **`4/6` and `5/6` recall now travel with the bound this repo's own helper computes.** `[M]`
+  Both shipped bare, and a bare `4/6` reads as 67%. The one-sided 95% Clopper-Pearson *lower*
+  bound is **27.1%** at 4/6 and **41.8%** at 5/6 — `1 - upper_bound_95(misses, checked)`, the
+  same reflection the detection arm already publishes through, so no second formula enters the
+  repo. Corrected on both surfaces, `README.md` and `docs/fp-measurement.md`. `[M]` Even the
+  self-judge run the doc already demotes as circular supports barely half of what its fraction
+  implies: **41.8%** against a point estimate of 83.3%.
+- **`docs/reports/*` gets its first guard**, narrowing a hole ADR-0024 recorded as knowingly
+  accepted. `tests/test_report_claims.py` derives the verdict totals, the solid/soft split, the
+  distinct-scenario counts, the refusal attribution, the solid-pair count and both recall
+  bounds from the run artifact and from `upper_bound_95`. Four literals are pinned as
+  deliberate tripwires (`(9, 3)`, `"Three of the nine"`, `` `6 of 9` ``, the 2/1 refusal split)
+  so that a changed run fails loudly instead of silently re-deriving around the prose. It
+  rejects any `~<digit>` anywhere in the report — the shape of the defect, not the two
+  sentences that carried it — requires each published fraction's interval to sit **within 350
+  characters of it** rather than merely somewhere in the same file, and fails if either
+  self-disclosure (the Unicode-apostrophe writeup, the "Other caveats" block) is deleted.
+  `[M]` **24 mutants applied, 24 red**, including all six that the claims-auditor gate found
+  green against this guard's first version. **Named limits, per ADR-0024:** the precision-rate
+  check is a banned-string list and does not generalise (ADR-0024:63 warns about this shape by
+  name — a mutant spelling the rate "roughly two thirds" passed the first version and is
+  blocked only because it is now on the list); and no guard reads the report's non-numeric
+  causal prose.
 - **A fresh clone no longer fabricates a regression against Modelpin's own baseline.** `[M]`
   Reproduced verbatim: clone the repo, run `mp init`, write your own
   `scenarios/refund_request.json`, run `mp check` — and get
