@@ -216,8 +216,10 @@ the build).
 **Result: the false-positive rate is not yet established.** This section previously read
 "**0/8 false positives** on a held-out 8-scenario suite ... all `unchanged` at confidence 1.00".
 That claim is **withdrawn** as of 2026-08-23. All 8 of those trials ran at temperature 0, and a
-trial in which the engine measures no effect on any channel could not have produced a false
-alarm — counting it as a passed trial credits the engine for a test it could not fail. Scored
+trial in which *every* channel returned `p = 1.00` could not have produced a false alarm at any
+threshold — counting it as a passed trial credits the engine for a test it could not fail. That
+is broader than "nothing moved": it also drops trials where an effect **was** measured but 5
+runs a side could not separate it. Scored
 honestly the same run is **0/0**, whose 95% upper bound is *unbounded*. The harness now says so
 itself. Full writeup: [`docs/fp-measurement.md`](docs/fp-measurement.md), summarised in the
 [changelog](CHANGELOG.md).
@@ -227,15 +229,21 @@ false-positive arm (the recall arm excludes nothing, deliberately), so detection
 **2 of 3** injected perturbations were flagged. The third (`decline_pii`) the model simply
 resisted — it still declined, so nothing changed for the engine to see; the harness scores that a
 **MISS** and we claim no credit for it either way. These are 3 synthetic, deliberately extreme
-system-prompt injections against one model at temperature 0, in a single run: `[M]` the 95%
-one-sided *lower* bound on true detection is 22.4% at 2/2, 13.5% at 2/3. Detection is
-demonstrated, not characterised — and quietness on *equivalent* behavior is not evidenced at all.
+system-prompt injections against one model at temperature 0, in a single run, and the interval
+treats the three as exchangeable trials, which by construction they are not. `[M]` The 95%
+one-sided *lower* bound on true detection is **13.5%** at 2/3 — `1 - upper_bound_95(1, 3)` in
+[`scripts/fp_measurement.py`](scripts/fp_measurement.py). A `2/2` reading, which drops the
+resisted case from the denominator, is **withdrawn**: the harness cannot tell a resisted
+instruction from a dead engine, so it never excludes on that basis. See the correction note in
+[`docs/fp-measurement.md`](docs/fp-measurement.md). Detection is demonstrated, not
+characterised — and quietness on *equivalent* behavior is not evidenced at all.
 
 The semantic judge's escalation threshold is **calibrated** on a labeled set in
+<!-- calibrated = confirmed FP-safe and detection-preserving on a labelled set, NOT fitted -->
 [`examples/calibration/`](examples/calibration/) that is **deliberately distinct from the held-out
 suite** (so it cannot leak into the held-out result). `[M]` On the independent-candidate run of
 record, equivalent pairs land at divergence **0.0–0.20** and real meaning changes at **0.60–1.0**,
-leaving a gap around the 0.5 floor. But `[M]` 5 of those 6 equivalent pairs return `p = 1.00` and
+leaving a gap around the 0.5 floor. **"Calibrated" here means confirmed FP-safe and detection-preserving on that set — not *fitted*:** `[M]` the set cannot discriminate the value, the semantic sweep being flat from 0.1 to 0.9, so **0.5 is a conservative choice rather than a fitted one**. But `[M]` 5 of those 6 equivalent pairs return `p = 1.00` and
 could not have fired at all, so the honest score is **0/1 — 95% upper bound 95.0%**, not 0/6.
 (The cleaner "0.0 versus ≥0.8" figures quoted here previously are the *self-judge* run, which an
 adversarial audit demoted as circular — and which scores **0 trials** under the same predicate.)
@@ -320,6 +328,33 @@ hardcoded, shipped, or stored (cost stays yours; provider ToS stays clean):
 In CI, supply these as repo secrets (see the workflow above). Error text is scrubbed of
 `sk-` / `Bearer` tokens, so a failed call never leaks your key into a log, traceback, or PR comment.
 
+### Google: billing Vertex AI instead of an API key
+
+Google sells Gemini through two doors, and **an AI Studio API key cannot spend Google Cloud
+credit** — that path bills a separate prepaid wallet. If your Gemini budget lives in Cloud
+billing, point Modelpin at Vertex instead. It uses Application Default Credentials, so there is
+no key at all:
+
+```bash
+gcloud auth application-default login          # once
+export GOOGLE_GENAI_USE_VERTEXAI=true          # or GOOGLE_GENAI_USE_ENTERPRISE=true
+export GOOGLE_CLOUD_PROJECT=your-project-id
+modelpin check --to gemini-3.5-flash --provider google
+```
+
+The variable names are the Google GenAI SDK's own. The API-key path stays the default and is
+unchanged.
+
+**Leave `GOOGLE_CLOUD_LOCATION` unset unless you need data residency.** It defaults to `global`,
+which is both the SDK's own default and the only location that serves current models: `[M]` every
+`gemini-3.x` id returns **404 on regional endpoints** such as `us-central1`, where only the legacy
+2.5 family is available. Setting a region keeps processing in that jurisdiction, at the cost of
+the newer models — `global` routes dynamically and makes no residency guarantee.
+
+The two doors do not offer the same catalogue: `[M]` `gemini-2.5-flash` currently returns
+*"no longer available to new users"* on AI Studio while still serving on Vertex — which is the
+sort of divergence Modelpin exists to notice.
+
 ---
 
 ## CLI reference
@@ -385,14 +420,14 @@ is what keeps the false-positive promise honest and the tool small enough to tru
 
 ## Status
 
-**Phase 0 (core engine MVP) — detection DoD met; the false-positive half is NOT met**
+**Phase 0 (core engine MVP) — detection demonstrated but NOT characterised; the false-positive half is NOT met**
 (see [`docs/fp-measurement.md`](docs/fp-measurement.md)); `v0.1.2` live on PyPI. Live-validated cross-vendor
 (OpenAI ↔ Google ↔ Groq/Llama); **false-positive rate not established** (the "0 in 8 held-out
 trials" claim is withdrawn — those 8 could not have fired, so the honest score is 0/0); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; **299 tests passing**, `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; **386 tests passing**, `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

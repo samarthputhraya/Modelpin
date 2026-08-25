@@ -18,8 +18,9 @@ class ScenarioError(Exception):
 
 
 #: Reserved filenames in a scenarios/suite directory that are NOT scenarios (e.g. the public
-#: report suite's manifest). Skipped so they don't fail validation as malformed scenarios.
-_RESERVED_FILES = {"manifest.json"}
+#: report suite's manifest, or the examples tree's fit/score role declaration). Skipped so they
+#: don't fail validation as malformed scenarios.
+_RESERVED_FILES = {"manifest.json", "roles.json"}
 
 
 def load_scenarios(scenarios_dir: str | Path = "scenarios") -> list[Scenario]:

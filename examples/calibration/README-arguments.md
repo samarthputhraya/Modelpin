@@ -1,5 +1,33 @@
 # The argument-jitter subset (`arg_*.json`)
 
+> **Role: SCORE. Never fit a threshold on these files.** They sit in `examples/calibration/`
+> for provenance, but they do **not** carry that directory's tuning role — pricing a
+> false-positive rate is a measurement, and a threshold fitted on the set it is measured on
+> makes that measurement in-sample and void. Declared in [`../roles.json`](../roles.json),
+> enforced by `tests/test_suite_roles.py`, decided in **ADR-0025**.
+>
+> **What this does and does not block.** These are the only tool-bearing scenarios at
+> `temperature > 0` in the repo, so they are both the obvious place to fit an argument
+> threshold and the one place it must not be fitted — a floor fitted on the only surface where
+> a signal can fire, then scored on that same surface, is unfalsifiable. It does **not** block
+> MP-04: `[M]` `MIN_TOOL_ARG_TVD = 1.0` on that branch is documented as a structural rule
+> ("no candidate run used a payload any baseline run used"), derived from exhaustive
+> relabelings under a constructed null with **no scenario set involved**, and it sits at the
+> ceiling of its scale. Nothing was fitted, so nothing needs a fit set. A labelled fit set
+> becomes necessary only if a measured run says 1.0 must move.
+>
+> **Read the bound before spending a key — the likeliest result is no number at all.** `[M]`
+> Seven scenarios give a one-sided 95% Clopper-Pearson upper bound of **34.8%** at zero
+> observed false positives, but only if all seven *score*. They will not: ADR-0022 excludes
+> trials that could not have fired, and across the **three runs of record** in
+> `docs/fp-measurement.md` the scored fraction was **0 of 8**, **1 of 6**, and **0 of 6** —
+> **1 of 20 attempted, 5.0%**. Seven scenarios at that rate project to **0.35 expected scored
+> trials, so the modal outcome is zero**: an abstention (ADR-0018), not a rate. One scored
+> trial gives a **95.0%** bound; reaching 5.0% needs n≈59. This subset can *falsify* the
+> argument signal — one equivalent-looking change that flags is decisive and costs one trial.
+> It cannot establish a low rate, and without MP-89's `--repeats` it most likely establishes
+> nothing.
+
 These seven scenarios are **not** semantic discriminators like the six single-turn files
 described in [`README.md`](README.md). They exist for one job: to price the
 **false-positive rate of the tool-call *argument* signal** (MP-04 / MP-54), which no
@@ -54,6 +82,15 @@ a real false alarm, because a human calls it identical behaviour.
 ```
 python scripts/fp_measurement.py --provider openai --model gpt-4o-mini --runs 5 --scenarios-dir examples/calibration --no-judge
 ```
+
+> **`[M] 2026-08-24` This command over-collects, and the surplus is not scorable.**
+> `scripts/fp_measurement.py:517-520` takes a directory and calls `load_scenarios` on all of
+> it — it has **no role or subset filter** — so the line above runs all **13** files, the seven
+> `arg_*` **and** the six semantic scenarios `MIN_SEMANTIC_DELTA` was fitted on. Those six are
+> a `fit` set (see [`../roles.json`](../roles.json)); a false-positive rate that includes them
+> is in-sample for 6 of its 13 scenarios and cannot be published as an out-of-sample result.
+> **Until the filter lands (MP-89), score the `arg_*` rows only and say so when you report the
+> number** — do not quote a 13-scenario denominator.
 
 Each side is the **same model against itself**, so any verdict other than `unchanged` is a
 false positive by construction. `--runs` must be equal on both sides or the argument gate

@@ -45,20 +45,28 @@ differs or the guard is honored — so a Report from this suite demonstrates the
 false-positive rate), not just a pile of adversarial traps. We measure *behavior change
 relative to the app*, never "which model is best".
 
-## Why a separate suite (three disjoint sets)
+## Why a separate suite (four declared roles)
 
-`examples/suite/` is the **held-out false-positive measurement set** (any out-of-sample claim
-made from it depends
-on it staying frozen). Three disjoint sets keep every claim independent:
+A threshold tuned on the same scenarios a result is scored on makes that result in-sample, so
+every set in `examples/` declares a **role** in [`../roles.json`](../roles.json) — machine-
+readable, and enforced by `tests/test_suite_roles.py` (ADR-0025):
 
-- `examples/suite/` — held-out FP measurement set (frozen).
-- `examples/calibration/` — labeled set for the semantic-judge threshold.
-- `examples/report-suite/` — **this** public report suite (evolves on the public cadence).
+- `examples/suite/` — **`score`**: the held-out FP measurement set (frozen). Never tuned on.
+- `examples/calibration/` — **two roles, not one**. The six semantic files are **`fit`** (where
+  `MIN_SEMANTIC_DELTA` was tuned); the seven `arg_*.json` files are **`score`** — see
+  [`../calibration/README-arguments.md`](../calibration/README-arguments.md). No threshold may
+  ever be fitted on the `arg_*` set.
+- `examples/report-suite/` — **`public`**: **this** suite (evolves on the public cadence).
+- `examples/drift-suite/` — **`fixture`**: the frozen harness copy that produced *The Modelpin
+  Drift Map* (the 12 hard scenarios, without the two anchors). It is intentionally allowed to
+  duplicate this suite; duplicating a `fit` or `score` set is forbidden.
 
-`examples/drift-suite/` is the **frozen harness fixture** that produced *The Modelpin Drift
-Map* (it is the 12 hard scenarios, without the two anchors); it is intentionally allowed to
-share ids with this suite by promotion. The integrity test only requires this report suite to
-be disjoint from the held-out `examples/suite/`.
+**What is actually enforced** (`tests/test_suite_roles.py`), since this section previously
+understated it: this suite must be disjoint from **both** `fit` and `score` — which is all 13
+calibration ids as well as the 8 held-out ones — every scenario file in `examples/` must
+declare a role at any depth, no two roles may share scenario *content* (not just ids) except
+the `public`/`fixture` pair above, each scenario's role is pinned individually, and
+`manifest.json`'s scenario list must agree with `roles.json`.
 
 ## Reproducibility
 

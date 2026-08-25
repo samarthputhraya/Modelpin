@@ -1,7 +1,13 @@
 # Calibration scenarios
 
-This set is for **tuning** the behavioral-diff thresholds — and it is deliberately
-**separate from the held-out DoD suite** in [`examples/suite/`](../suite/).
+> **This directory holds two roles, not one.** The six semantic scenarios described below are
+> for **tuning**. The seven `arg_*.json` files are **not** — they are a scoring set, and no
+> threshold may be fitted on them. See [`README-arguments.md`](README-arguments.md) and
+> **ADR-0025**. Roles are declared machine-readably in [`../roles.json`](../roles.json) and
+> enforced by `tests/test_suite_roles.py`.
+
+This set is deliberately **separate from the held-out DoD suite** in
+[`examples/suite/`](../suite/).
 
 ## Why a separate set (do not merge these)
 
@@ -11,7 +17,16 @@ the suite, a held-out result stops being an honest out-of-sample measurement (cl
 train/test leakage). So:
 
 - **`examples/suite/`** — held-out. Measure FP rate / detection here. Never tune on it.
-- **`examples/calibration/`** — this set. Tune thresholds here, then *re-validate* on the suite.
+- **`examples/calibration/*.json`** (the six semantic files) — tune thresholds here, then
+  *re-validate* on the suite.
+- **`examples/calibration/arg_*.json`** — held-out for the **argument** channel. Measure here;
+  never tune here. It lives in this directory for provenance, not because it shares this
+  directory's role.
+
+**Why the exception exists rather than a tidier directory split:** `[M] 2026-08-24` the `arg_*`
+files are the only scenarios in the repo with both tools and `temperature > 0`, so they are the
+only surface on which an argument-channel false positive is even possible. That makes them the
+scoring set by necessity — and it is exactly why MP-04 may not fit its argument floor on them.
 
 ## What these scenarios are
 

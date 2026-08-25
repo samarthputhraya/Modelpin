@@ -21,6 +21,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confidence 1.00 that did not happen. See ADR-0015.
 
 ### Changed
+- **The detection arm of `scripts/fp_measurement.py` now publishes a confidence interval, as
+  the false-positive arm already did.** The two arms were asymmetric in the direction that
+  flatters detection. `[M]` `fp_summary` printed `  False-positive rate: {fp}/{scored} =
+  {rate}` *and* a one-sided 95% Clopper-Pearson **upper** bound; `recall_summary` printed only
+  `  Detection: {d}/{checked} injected perturbations caught` — no interval — even though
+  `README.md` and `docs/fp-measurement.md` both already published the **lower** bound. The
+  tool understated what the documents conceded, and it is the tool a user runs.
+  `[M]` The floor is the same helper by complement, `1 - upper_bound_95(misses, checked)`:
+  the run of record, **2 of 3**, bounds the true rate at **13.5%**; a hypothetical `3/3`
+  bounds it at only **36.8%**. `[M]` Nothing about the accounting moved — numerator,
+  denominator and both exclusions are unchanged, `git diff` touches three hunks in that file
+  (two docstrings and `recall_summary`), and no tally assertion in the suite was edited.
+  **This arm** still prints no point percentage: `3/3 = 100%` would be the withdrawn
+  `0/8 = 0%` mirrored (ADR-0022). The FP arm does print `= {rate}` beside its fraction —
+  ADR-0022 kept it, with the bound and the exclusion counts alongside — so the two arms are
+  now symmetric on the *interval*, not on the point estimate. The bound is over
+  **perturbations applied**, not over behaviour changes — the denominator includes the case
+  the model resisted, and ADR-0023 forbids this arm asserting a perturbation changed
+  behaviour — and it carries the exchangeability caveat both documents carry: three
+  perturbations chosen one per signal are by construction not exchangeable trials.
+  No interval is printed when nothing was checked, `[M]` the one shape the document's
+  verbatim quote provably could not see.
 - **The false-positive rate now excludes trials that could not have produced a false alarm —
   and the previously published `0/8` result is WITHDRAWN.** `scripts/fp_measurement.py` counted
   a scenario as a passed trial even when the engine measured no effect on any channel. `[M]`
@@ -79,8 +101,135 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `init` honours its `scenarios_dir` (0.1.2 behaviour, unchanged) but now also prints how
   many scenarios that directory holds and where the config is, so an adopted config is
   visible before `mp baseline` acts on it.
+- **The detection arm of `scripts/fp_measurement.py` is now a pure, tested function, and it
+  counts provider errors instead of skipping them.** (Developer harness: `scripts/` ships in
+  neither the wheel nor the sdist, so nothing about the installed package changes.) The arm was
+  inline in `main()`, which needs a live provider, so no test reached it: `[M]` at `58c87dc`,
+  eight of nine mutants applied to that inline arm left the then-302-test suite green —
+  including `detected += int(caught)` -> `detected += 1`, which makes the harness print
+  `Detection: 3/3` for an engine that flagged nothing, and replacing the entire loop body with
+  `continue`, which makes it print `0/0`. The accounting now lives in `recall_outcome` /
+  `recall_tally` / `recall_report` / `recall_summary` plus a shared `build_row`, with 30 tests
+  over them — the same treatment the false-positive arm received in this release.
+  `[M]` **Those original nine cannot be re-run: the extraction deleted every line they mutate.**
+  A fresh **39-mutant** battery at the new anchors, covering all nine original defect classes,
+  kills **38**. The one survivor deletes a source *comment* (the rationale block above
+  `PERTURBATIONS`); comments are not pinned, and the vocabulary it explains is pinned
+  behaviourally instead. Three of those 38 close a hole that was **symmetric in the
+  false-positive arm and older than this change**: deleting either arm's per-scenario `print`
+  loop, or discarding its lines at the call site, left the whole suite green — the lines'
+  content was covered, their consumption was not. **The engine did not change** — `git diff`
+  over `modelpin/` for this work is empty, and no calibrated constant moved.
+  Three behaviour changes in the harness itself. A missed perturbation, which was already
+  labelled `MISSED` per scenario and already counted in the denominator, is now also counted out
+  in the summary with a note saying a miss is never an exclusion — and saying *why*: the harness
+  cannot tell a candidate that resisted the injected instruction from an engine that is dead, so
+  it always counts the miss and asserts nothing about whether behaviour changed (ADR-0022,
+  whose closing rationale this corrects; ADR-0023). A run where every perturbed scenario errored,
+  or abstained, now prints a banner saying so instead of a bare `0/0`. And provider errors,
+  previously printed as they occurred but left out of the accounting, are now counted and
+  published beside the fraction.
+  The arm also stops calling the injected instructions "regressions". `[M]` 1 of the 3 in
+  `PERTURBATIONS` (`decline_pii`) returned `unchanged` on the run of record; reading that trace
+  by hand, the model still declined and emitted no email — **an analysis, not a measurement**,
+  since the arm cannot tell resistance from a dead engine. So whether a perturbation is a
+  regression is the thing being measured, not a premise. `README.md` already used this
+  vocabulary; the harness now matches it.
+- **`docs/fp-measurement.md` published a detection number the harness never printed, and it is
+  now corrected.** The document stated *"Detection: every perturbation that actually changed
+  behavior was caught"* and concluded *"2/2 real behavior changes were flagged"*. `[M]` The
+  harness scored that same run **2/3**, before and after the change above: the document's own
+  table lists three injected perturbations and shows `decline_pii` as `unchanged`, which
+  `recall_outcome` maps to a **miss**. The third was removed from the denominator by argument —
+  the model resisted the instruction and still declined, so behaviour did not change — which is
+  exactly the exclusion **ADR-0023** rejects, and for the reason it gives: a perturbed pair
+  reading `unchanged` is *either* an engine that failed to see a real change *or* a candidate
+  that ignored the instruction, and this arm cannot tell them apart, so an arm permitted to
+  exclude on that basis lets a dead engine post `0/0`. The document now publishes what the
+  harness prints — `2/3`, the verbatim summary block including the `MISSED` note, and `[M]` the
+  95% one-sided *lower* bound of **13.5%** — with the resistance reading demoted to a labelled
+  correction note beneath it. `README.md` has carried this framing (*"2 of 3 injected
+  perturbations were flagged"*) since the withdrawal above; **its interval sentence is
+  corrected here too** — it published a 95% lower bound *for the withdrawn `2/2` denominator*
+  (`22.4% at 2/2, 13.5% at 2/3`), offering the excluded reading as a co-equal alternative on
+  the surface most readers meet first. `README.md` sends the reader to
+  `docs/fp-measurement.md` as the "Full writeup".
+  `[M]` The same defect appeared **twice more in the same document** and both are fixed here:
+  `## Detection (control)` called the injections "three controlled regressions" and attributed
+  `decline_pii` a *"(comply → … semantic change)"* — the forbidden assertion, stated as fact, on
+  the one scenario the run shows the model resisted, together with an `Expected verdict` line
+  naming the channel a reader would loosen to close the gap; and the Phase-0 DoD line read
+  "detection met" with no interval and no mention of the miss. The published interval now
+  carries the command that produces it (`1 - upper_bound_95(1, 3)`) and the note that
+  Clopper-Pearson treats the three perturbations as exchangeable trials, which by construction
+  they are not.
+  **No number the tool computes changed** — `git diff` over `modelpin/` and `scripts/` for this
+  work is empty. `[M]` Eleven tests tie the document to the function whose output it quotes,
+  pinning the quoted block, the prose headline, the interval, the scenario set, the correction
+  note's existence, the arm's one exclusion, the README's own detection fraction and test
+  count, and a perfect-score tripwire. Two batteries, **30 mutants**, run against the final
+  tree: 15 structural ones all red — including a fully self-consistent forgery that edits the
+  table, the fraction, the recomputed interval and the note together — and 15 rewording ones,
+  6 of which survive and are named below rather than left for a reader to discover.
+  `[M]` **Seven holes found and closed, every one by RUNNING the battery rather than reading
+  the tests** — recorded because the pattern is the point: a guard that reads as coverage and
+  provides none is this project's recurring defect, and these guards exhibited it seven times
+  before they stopped. The banned-claim scan split its section positionally, so re-asserting a
+  withdrawn claim *below* the correction note passed; the ban was one-directional, refusing
+  `2/2` while allowing the flattering `3/3`; after both fixes it was still section-scoped, so
+  the same sentence one line *above* the headline passed; it then stripped *every* blockquote,
+  so a `> **In brief.**` pull-quote re-asserted all three withdrawn claims in the most-read
+  position on the page; then it stripped blockquotes *adjacent to* a withdrawal note too,
+  because a blank line did not end the note; the `3/3` ban was a bare substring that misfired
+  on ordinary fractions like `13/30` **and** was unsatisfiable beside the verbatim guard — a
+  legitimate perfect score could not be published at all, and the cheapest repair would have
+  silently gutted the scan; and finally the replacement pattern for *"a miss is a false
+  negative"* was written through a shell heredoc that collapsed `\b` into the **backspace
+  control character**, so the guard added specifically to catch that claim contained three
+  literal `0x08` bytes and could never match anything. It passed review, and it passed its own
+  green suite, while asserting nothing at all.
+  The scan is now whitespace-normalised and emphasis-stripped, because `[M]` the assertion it
+  was written to catch was sitting in the file the whole time — 65 lines below its own
+  correction, invisible to a substring match for two independent reasons: markdown emphasis
+  (`*negative*`) and a hard line wrap between "is" and "a false". The tripwire is now a state
+  assertion over the document's own tally, so a legitimate perfect score turns exactly one test
+  red: the deliberate review ADR-0023's falsifier calls for.
+  **What these tests still cannot do**, stated because they read stronger than they are: they
+  do not prove the table matches a run that happened — no artifact of the detection run is
+  committed (MP-83). `[M]` **Six mutants still survive, all of them prose deletions rather
+  than number forgeries:** dropping the `0/1 — 95% upper bound 95.0%` figure or the not-fitted
+  gloss from `README.md`; removing the exclusion's soundness property, the `0 of 8` / `1 of 6`
+  planning figures, or restoring "the conservative floor earns its keep" in
+  `docs/fp-measurement.md`; and re-asserting a withdrawn claim *inside* a `> **Corrected**`
+  note, where quoting it is the point and no guard can distinguish intent. Pinning every
+  sentence of a document from a unit test is the wrong shape — the scope of what is and is not
+  guarded, and why, is recorded in **ADR-0024** — so these are disclosed and tracked (MP-85)
+  rather than papered over. What IS pinned is every number, every fraction, and every claim
+  about what the harness measured.
+  `[M]` The `299 tests passing` line — 42 short for several releases — is now pinned to the
+  collected count and cannot drift again.
 
 ### Added
+- **The Google adapter can bill Vertex AI instead of an API key.** Set
+  `GOOGLE_GENAI_USE_VERTEXAI=true` (or `GOOGLE_GENAI_USE_ENTERPRISE=true`, the SDK's current
+  spelling — both are honoured) and `GOOGLE_CLOUD_PROJECT`, and Modelpin authenticates with
+  Application Default Credentials — no key. **The API-key path is unchanged and remains the
+  default**, and ADR-0008 still holds either way: Modelpin reads only what you put in your own
+  environment and never hardcodes, stores or ships a credential.
+  `GOOGLE_CLOUD_LOCATION` defaults to **`global`** — the SDK's own default, and `[M]` the only
+  location serving current models: every `gemini-3.x` id returns 404 on regional endpoints such
+  as `us-central1`, where only the legacy 2.5 family is available. Set a region only for data
+  residency, which costs you the newer models.
+  `[M]` This exists because the two doors are not interchangeable for billing. An AI Studio API
+  key bills a **prepaid wallet separate from Google Cloud billing**: with Cloud credit available,
+  every current model returned `429 RESOURCE_EXHAUSTED — "Your prepayment credits are depleted"`,
+  and a freshly created key *in the credited project* was refused identically — prepay is a
+  property of the billing account, not the project, so no new key can reach it. The same project
+  on Vertex answered normally and billed the Cloud credit. `[M]` Vertex also rejects API keys
+  outright (*"API keys are not supported by this API. Expected OAuth2 access token"*), so this
+  could not be done by swapping a key.
+  `[M]` The catalogues differ too: `gemini-2.5-flash` is `404 "no longer available to new users"`
+  on AI Studio and still served on Vertex.
 - **`insufficient_evidence` verdict, and exit code 3.** A scenario where **at least half**
   of one side's runs recorded no behaviour — no output, no tool call, no refusal — now
   abstains instead of reporting `unchanged`. Below that threshold (e.g. 2 of 5) the run

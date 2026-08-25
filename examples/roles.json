@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "_comment": [
+    "Which scenario sets Modelpin FITS thresholds on, and which it SCORES results on.",
+    "A set that is both is train/test leakage: every out-of-sample claim measured on it is",
+    "void. This file is the machine-readable source of that split; tests/test_suite_roles.py",
+    "enforces it, and the prose in each set's README must agree with the role declared here.",
+    "Roles: fit = thresholds may be tuned here, results may NOT be claimed from here.",
+    "       score = results are measured here, NO threshold may ever be fitted here.",
+    "       public = the published Report suite; disjoint from fit and score alike.",
+    "       fixture = a frozen copy that reproduces an already-published report; it may",
+    "                 duplicate a public set by design, but never a fit or score one.",
+    "Adding a scenario file without listing it here fails the test. That is the point:",
+    "the failure MP-77 exists to prevent is a scenario landing with no declared role."
+  ],
+  "sets": [
+    {
+      "path": "suite",
+      "role": "score",
+      "why": "The held-out DoD suite. docs/fp-measurement.md measures the false-positive rate here, so nothing may ever be tuned on it. [M] All 8 run at temperature 0, so there is no run-to-run argument variance for the argument channel to score. [M] Three of them (cancel_subscription, order_status, refund_request) DO declare tools, but as bare strings, which providers/openai.py::_to_tools normalises to an empty parameters block -- a function with no arguments to fill. Either property alone makes this set unable to score the argument channel; see the calibration/arg_* entry.",
+      "scenarios": [
+        "cancel_subscription",
+        "classify_sentiment",
+        "decline_pii",
+        "extract_total",
+        "format_contact_json",
+        "order_status",
+        "refund_request",
+        "summarize_ticket"
+      ]
+    },
+    {
+      "path": "calibration",
+      "role": "fit",
+      "why": "The labeled semantic set MIN_SEMANTIC_DELTA was fitted on (modelpin/diff/__init__.py). Temperature 0.7, no tools. Tuning here is the intended use, and the direct consequence is that no false-positive rate may be claimed from it -- a threshold and the number that scores it cannot come from the same scenarios. See ADR-0025.",
+      "scenarios": [
+        "classify_topic",
+        "define_term",
+        "explain_concept",
+        "reco_decision",
+        "summarize_outcome",
+        "unit_answer"
+      ]
+    },
+    {
+      "path": "calibration",
+      "role": "score",
+      "why": "The argument-jitter subset (MP-54). It shares a directory with the fit set above but not its role: README-arguments.md authored it to price the false-positive rate of the tool-call argument signal, and docs/fp-measurement.md directs the FP-establishing run here. [M] It is the only set in the repo with both tools and temperature>0, so it is the only surface an argument false positive can appear on -- which is exactly why no threshold may be fitted on it: a floor fitted on the only surface where a signal can fire, then scored on that same surface, is unfalsifiable. [M] NOTE the ceiling on what it can show, and that the likeliest outcome is no number at all: 7 scenarios give a 95% one-sided upper bound of 34.8% at zero observed false positives, but only if all 7 score. ADR-0022 excludes trials that could not have fired, and [M] across the THREE runs of record in docs/fp-measurement.md the scored fraction was 0 of 8, 1 of 6, and 0 of 6 -- 1 of 20 attempted, 5.0%. At that rate 7 scenarios project to 0.35 expected scored trials, so the modal outcome is ZERO scored trials: an abstention under ADR-0018, not a rate. One scored trial gives a 95.0% bound. This set can falsify the argument signal; it cannot establish a low rate. No rate has been measured on it -- as of 2026-08-24 the live run does not exist. See ADR-0025.",
+      "scenarios": [
+        "arg_enum_phrasing",
+        "arg_freetext_note",
+        "arg_key_order",
+        "arg_list_order",
+        "arg_multistep_carry",
+        "arg_numeric_rounding",
+        "arg_optional_fields"
+      ]
+    },
+    {
+      "path": "report-suite",
+      "role": "public",
+      "why": "The open, versioned, content-hashed suite behind the public Modelpin Report (ADR-0009). Its own manifest.json claims strict disjointness from suite/ and calibration/; this file is what makes that claim testable rather than asserted.",
+      "scenarios": [
+        "ambiguous_tool_redundant",
+        "borderline_access",
+        "first_primes",
+        "multi_constraint_colors",
+        "nuanced_intent",
+        "prompt_injection",
+        "reason_machines",
+        "reason_pen_rounding",
+        "reason_snail",
+        "sarcasm_sentiment",
+        "strict_json_escape",
+        "summarize_semantic",
+        "tool_missing_param",
+        "tooluse_guarded_action"
+      ]
+    },
+    {
+      "path": "drift-suite",
+      "role": "fixture",
+      "duplicates": "report-suite",
+      "why": "The frozen 12-scenario fixture that produced The Modelpin Drift Map #1 (docs/reports/modelpin-drift-map-1.md). [M] 2026-08-24: all 12 committed files are byte-identical to their report-suite namesakes -- identical blob SHAs under `git ls-files -s`, 12 of 12 -- omitting the two breadth anchors. (.gitattributes pins `* text=auto eol=lf`, so a Windows working copy may show some pairs differing in CRLF vs LF alone; that is a checkout artifact, not a property of the repository.) The duplication is declared here so a pairwise-disjointness test cannot be satisfied by quietly deleting a published report's fixture.",
+      "scenarios": [
+        "ambiguous_tool_redundant",
+        "borderline_access",
+        "first_primes",
+        "multi_constraint_colors",
+        "nuanced_intent",
+        "prompt_injection",
+        "reason_machines",
+        "reason_pen_rounding",
+        "reason_snail",
+        "sarcasm_sentiment",
+        "strict_json_escape",
+        "tool_missing_param"
+      ]
+    }
+  ]
+}

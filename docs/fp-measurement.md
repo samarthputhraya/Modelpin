@@ -14,18 +14,49 @@ This file records how we measure it and the results.
   (`ALPHA=0.05`, `MIN_TOOL_TVD=0.5`, `MIN_REFUSAL_DELTA=0.34`, `MIN_SEMANTIC_DELTA=0.5`).
 - **False-positive rate (the metric).** Replay a *known-equivalent* pair — the **same model
   vs itself**, two independent N-run samples — across the suite. A verdict of `regression` or
-  `changed_minor` is, by construction, a false alarm from model nondeterminism.
+  `changed_minor` is, by construction, a false alarm from model nondeterminism. This arm
+  **excludes a trial that could not have fired** — one where *every* channel returned `p = 1.00`
+  (after rounding, `min(p) >= 0.9995`), so the trial scores `unchanged` at any ALPHA < 1
+  regardless of any change to the engine, and counting it as a passed trial credits the engine
+  for a test it could not fail (ADR-0022). **That is strictly broader than "nothing moved"**:
+  `[M]` golden pairs 3 and 4 in `tests/test_diff.py` have genuinely different tool
+  distributions and are still excluded, because 5 runs a side cannot separate them; so is a
+  refusal rate going 100% → 0%, since the mean statistic is one-sided. `[M]` At `runs=5` the
+  tool channel returns `p = 1.00` across the whole `|i-j| <= 1` band — **16 of 36 cells, 10 of
+  them with genuinely differing sides**, so on that grid `scored` is roughly **half** what a
+  naive reading expects. Do not use 2x as a planning figure: `[M]` on this document's **three**
+  measured runs the observed rate is far worse — **0 of 8** scored on the held-out suite,
+  **1 of 6** on the independent-candidate calibration run, and **0 of 6** on the self-judge run
+  (see the corrections at the end of *Semantic-judge calibration*) — **1 scored trial in 20
+  attempted, 5.0% pooled**, which is the only planning figure this document supports and the
+  one the `arg_*` projection below uses. *An earlier version of this sentence counted two runs
+  and pooled 1-of-14; it omitted the self-judge run, the only one of the three that would drag
+  the figure down.* A run large enough to move a floor would need N≈10,
+  which is where the floors start to bind at all (N=9/11/12, ADR-0002). The exclusion is
+  nonetheless **sound by construction**: a flagged verdict never carries `unchanged`-confidence,
+  so it can never remove a false positive from the numerator.
+  Excluded counts are printed beside the rate, never folded into it.
 - **Coverage (published beside the rate, never folded into it).** A scenario can also come
   back `insufficient_evidence`: at least half the runs on one side recorded no output, no tool
   call and no refusal, so there was nothing to compare. That is neither a false alarm nor a
   clean pass, and counting it as either would corrupt this metric in opposite directions — so
   it is excluded from the denominator and reported separately. **A rate quoted without its
   coverage number is not a result.** A shrinking denominator is how a metric flatters itself.
-- **Detection (the control).** Inject a controlled behavior change into the candidate
+- **Detection (the control).** Inject a **perturbed instruction** into the candidate
   (refuse refunds / leak PII / always answer "Positive") and confirm the engine flags it —
-  so a low FP rate is not merely "always unchanged".
+  so a low FP rate is not merely "always unchanged". The injection changes the *instruction*;
+  whether the candidate's *behavior* changed is precisely what this arm measures, so a
+  perturbed pair that comes back `unchanged` is scored a **miss** and never excluded. This
+  arm excludes nothing but a run that **abstained** (`insufficient_evidence`, ADR-0018);
+  provider errors are reported separately and enter neither numerator nor denominator. Contrast
+  the false-positive arm, which additionally excludes a trial that **could not have fired**
+  (ADR-0022) — an exclusion this arm must never adopt. → ADR-0023
 
 Harness: [`scripts/fp_measurement.py`](../scripts/fp_measurement.py). BYO-key; reproducible.
+
+> `ADR-nnnn` refers to this project's internal decision records, which are not published. They
+> are cited for provenance only — every argument they carry is stated inline here, so nothing
+> on this page depends on reading one.
 
 ```
 python scripts/fp_measurement.py --model gpt-4o-mini --runs 5     # judged, full suite
@@ -50,9 +81,13 @@ reported as a fraction and never as "0%"; the harness now prints the upper bound
 
 It is also measured on the wrong surface to be reassuring: all 8 held-out scenarios run at
 temperature 0, and identical distributions short-circuit to `p=1.0` without the statistic
-running at all. **Zero scenarios in this repository combine tool use with temperature > 0** —
-the one surface where false positives are actually possible. Measured coverage there is `0/0`.
-Closing that is [MP-54]; until it lands, no stronger claim than the sentence above is supported.
+running at all. **This number says nothing about the one surface where false positives are
+actually possible** — tool use at temperature > 0. `[M] 2026-08-24` MP-54 has since landed the
+seven `examples/calibration/arg_*.json` scenarios, which do combine both (temperature 0.7, real
+JSON-Schema tools); they are the repo's only such surface. **Measured coverage there is still
+`0/0`: the scenarios exist, the run does not.** Until it is performed, no stronger claim than
+the sentence above is supported — and see the `arg_*` section below for the bound that run
+could reach even if it goes perfectly.
 
 `scripts/fp_measurement.py --model gpt-4o-mini --runs 5`, semantic judge ON
 (gpt-4o-mini), gpt-4o-mini vs itself across all 8 held-out scenarios — every verdict
@@ -65,17 +100,62 @@ format_contact_json  order_status        refund_request       summarize_ticket
                           => 0 SCORED trials: none could have fired (MP-75)
 ```
 
-**Detection: every perturbation that actually changed behavior was caught.**
+**Detection: `[M]` 2 of 3 injected perturbations were flagged.**
 
-| Injected change | Verdict | Outcome |
+| Injected perturbation | Verdict | Outcome |
 |---|---|---|
-| `refund_request`: never issue refunds | **regression** (conf 0.99) | caught — dropped the `issue_refund` tool call |
-| `classify_sentiment`: always "Positive" | **changed_minor** | caught — assertion violation |
-| `decline_pii`: leak the customer email | **unchanged** | *correct* — the model resisted the instruction and still declined (*"I can't provide personal information…"*, no email), so behavior did **not** change. Not a false negative. |
+| `refund_request`: never issue refunds | **regression** (conf 0.99) | **detected** — dropped the `issue_refund` tool call |
+| `classify_sentiment`: always "Positive" | **changed_minor** | **detected** — assertion violation |
+| `decline_pii`: leak the customer email | **unchanged** | **MISSED** — counted against detection, never excluded |
 
-So 2/2 real behavior changes were flagged, and the one perturbation that the model
-refused to act on correctly produced `unchanged` — the engine did not fabricate a
-regression where none occurred.
+That is what the harness prints, verbatim and unadjusted:
+
+```
+  Detection: 2/3 injected perturbations caught
+  95% lower bound on the true rate: 13.5% (one-sided Clopper-Pearson, n=3)
+  That rate is over perturbations APPLIED, not over behaviour changes; and the
+  interval treats them as exchangeable trials, which by construction they are
+  not - each targets a different signal.
+  Unmeasured (excluded): 0
+
+  NOTE: 1 perturbation(s) MISSED - counted against detection, never
+  excluded. A miss means EITHER the engine failed to see a real change OR the
+  candidate ignored the injected instruction and its behaviour did not change.
+  This arm cannot tell those apart, and one that could would let a dead engine
+  post 0/0 - so it always counts the miss. Read the per-scenario explanation and
+  repertoire above before treating one as an engine defect (ADR-0022).
+```
+
+The third perturbation (`decline_pii`) the model simply resisted — it still declined
+(*"I can't provide personal information…"*, no email), so nothing changed for the engine to
+see; the harness scores that a **MISS** and we claim no credit for it either way. These are 3
+synthetic, deliberately extreme system-prompt injections against one model at temperature 0,
+in a single run — and the interval treats the three as exchangeable trials, which by
+construction they are not, since each was chosen to hit a different signal. `[M]` The 95%
+one-sided *lower* bound at 2/3 is **13.5%**: `1 - upper_bound_95(1, 3)`, the harness's own exact
+Clopper-Pearson helper in [`scripts/fp_measurement.py`](../scripts/fp_measurement.py). `[M]` The
+tool now prints that bound itself — it is the second line of the block above (MP-82); until then
+this page and `README.md` published a floor the executable withheld, leaving the detection arm
+the only one of the two not bounding its own claim.
+Detection is demonstrated, **not characterised**.
+
+> **Corrected 2026-08-24 (MP-81).** This section previously read *"Detection: every
+> perturbation that actually changed behavior was caught"* and concluded *"So 2/2 real
+> behavior changes were flagged"*, removing `decline_pii` from the denominator on the ground
+> that the model resisted, so behavior did not change and it was *"not a false negative"*.
+> The harness scored that same run **2/3**, before and after the correction — the number
+> published here had been adjusted by hand, in the flattering direction.
+>
+> The resistance reading is not illegitimate **as analysis**, and it may well be right. It is
+> not a **measurement**, and this is the one place the distinction bites: a perturbed pair
+> reading `unchanged` is *either* an engine that failed to see a real change *or* a candidate
+> that ignored the injected instruction — both present identically, and this arm cannot tell
+> them apart. An arm permitted to exclude on that basis lets a **dead engine post `0/0`** and
+> read as *"nothing to report"* rather than *"caught nothing"*. So the miss is counted, and
+> the adjudication is left to a human reading this note. → **ADR-0023**, which rejects this
+> exact exclusion. `README.md` has carried the corrected framing (*"2 of 3 injected
+> perturbations were flagged"*) since #46; its interval sentence still published a lower bound
+> for the withdrawn `2/2` denominator and is corrected in the same change as this note.
 
 ### Corroborating evidence
 
@@ -105,20 +185,80 @@ cross-vendor judge fired and found two genuinely different models behaviorally e
 this suite — i.e. the engine did not manufacture a regression where the behaviors actually
 agree. (The run also surfaced + fixed two Gemini-3.x tool-loop bugs.)
 
-**Phase-0 DoD: detection met; false-positive rate NOT established.** `mp check` detects
-genuine regressions between real model behaviors. The false-positive half of that claim is
+**Phase-0 DoD: detection demonstrated but NOT characterised; false-positive rate NOT
+established.** `[M]` `mp check` flagged **2 of 3** injected perturbations on the run of record
+(95% one-sided lower bound **13.5%**), on real model behaviors. The false-positive half of that claim is
 withdrawn as of 2026-08-23: it read "a measured **0% false-positive rate**", which contradicted
 this document's own rule four paragraphs above ("reported as `0/8` and never as `0%`") and, after
 MP-75, rests on 0 scored trials rather than 8. Establishing it needs a live run over
 `examples/calibration/arg_*.json` — tool-using scenarios at temperature > 0, the surface where
 false positives are actually possible. That set exists (MP-54); the run does not.
 
+**The `arg_*` files are a `score` set and no threshold may be fitted on them (ADR-0025).** They
+live under `examples/calibration/` for provenance, but they do not share that directory's tuning
+role; roles are declared in [`examples/roles.json`](../examples/roles.json) and enforced by
+`tests/test_suite_roles.py`. Two consequences bind whoever runs this next:
+
+- **No argument threshold may be fitted here.** These are the only tool-bearing scenarios at
+  temperature > 0 in the repo, which makes them both the obvious place to fit a floor and the
+  one place fitting it would void the number this section is trying to establish. `[M]` This
+  does not block MP-04: `MIN_TOOL_ARG_TVD = 1.0` on that branch is a structural rule derived
+  from exhaustive relabelings under a constructed null, with no scenario set involved, at the
+  ceiling of its scale. A labelled fit set is needed only if a measured run says 1.0 must move.
+- **`[M]` This set cannot establish a low false-positive rate, whatever it returns — and the
+  likeliest outcome is that it measures nothing at all.** Seven scenarios give a one-sided 95%
+  upper bound of **34.8%** (`upper_bound_95(0, 7)`), but that is the *ceiling*, assuming all
+  seven score. They will not. This document records **three runs**, and pooling them is the
+  only honest input: `[M]` **0 of 8** scored on the held-out suite, **1 of 6** on the
+  independent-candidate calibration run, **0 of 6** on the self-judge run — **1 scored trial
+  out of 20 attempted, 5.0%**. At that rate seven scenarios project to **0.35 expected scored
+  trials: the modal outcome is ZERO**, which is `*** THIS RUN MEASURED NOTHING ***` and
+  abstention under ADR-0018. If one trial does score, the bound is **95.0%**; two would need a
+  28.6% scoring rate, nearly 6× the pooled rate, so **77.6% is not reachable here**. `5.0%`
+  needs n≈59 `[M]` (`upper_bound_95(0, 58)` = 5.03%, `(0, 59)` = 4.95%). *An earlier draft of
+  this bullet projected 3–4 trials by halving, and a second projected 1–2 by using only the
+  most favourable of the three runs; both are withdrawn, and both erred in the flattering
+  direction.* What this set can do is *falsify* the signal — one equivalent-looking argument
+  change that flags is decisive, and that costs a single trial. What it cannot do is supply the
+  headline this section is missing, and no run of it should be reported as having done so.
+  **This is the measured case for MP-89's `--repeats`: without more trials per scenario, the
+  run most likely returns an abstention rather than a number.**
+- `[M] 2026-08-24` **`scripts/fp_measurement.py` cannot select the subset** (`:517-520` loads a
+  whole directory; no role filter), so `--scenarios-dir examples/calibration` collects all 13
+  files — the seven `arg_*` *and* the six semantic scenarios `MIN_SEMANTIC_DELTA` was fitted on.
+  Until MP-89 lands, report the `arg_*` denominator only; a 13-scenario rate would be in-sample
+  for 6 of them.
+
 ## Detection (control)
 
-The harness injects three controlled regressions to confirm the engine catches real change
-across signals: `refund_request` (refuse → tool-trajectory + refusal change), `decline_pii`
-(comply → policy/format + semantic change), `classify_sentiment` (always "Positive" →
-assertion + semantic change). Expected verdict: `regression` / `changed_minor`.
+The harness injects three **perturbed instructions**, and that vocabulary is deliberate:
+whether a perturbation produces a behaviour change is what this arm measures, never a premise
+it may assert (ADR-0023). Each targets a different channel: `refund_request` (never issue refunds →
+tool-trajectory + refusal), `decline_pii` (share the customer email → policy/format +
+semantic), `classify_sentiment` (always "Positive" → assertion + semantic). The channel named
+is the one the perturbation *targets*; whether the candidate's behaviour actually changed on it
+is the measurement. A `regression` or `changed_minor` verdict scores a detection; **anything
+else, `unchanged` included, scores a miss; the only exclusion is an abstention that reached
+no verdict at all (ADR-0018)**. `[M]` On the run of record
+above, `decline_pii` returned `unchanged` and is scored a MISS.
+
+**A miss is never a false alarm — it is either a false negative or a correct true negative, and
+this arm cannot tell which.** Either way it fails in the safe direction for this product, and
+**the way to raise `2/3` is more perturbations, never a lower floor.**
+
+`[M]` On the independent-judge calibration run of record
+([`examples/calibration/results/result-independent-judge.json`](../examples/calibration/results/result-independent-judge.json)
+— 6 labelled pairs, candidate `gpt-3.5-turbo`, judge `gpt-4o-mini`, temperature 0.7, a
+**different measurement** from the 3 perturbations above), the semantic sweep is flat from
+`MIN_SEMANTIC_DELTA` 0.1 to 0.9: recall **4/6** and 0 false alarms at every value. So on that
+set the floor is inert and lowering it buys no detection. **That flatness is not slack, and the
+reason matters more than the number**: `[M]` 5 of those 6 equivalent pairs return `p = 1.00` and
+could not have fired at any floor, and the sixth (`explain_concept`, delta 0.20) is blocked by
+the permutation p-gate at `p = 0.50` at every floor value — so at `runs=5` that column measures
+the **p-gate**, not the floor. `[M]` The floors first bind at **N=9 (semantic), 11 (tool), 12
+(refusal)** (ADR-0002), which is where lowering one converts directly into false alarms, and
+where this run cannot see. Converting this miss by moving a floor would require new labelled
+calibration data under [`examples/calibration/`](../examples/calibration/), not this number.
 
 ## Semantic-judge calibration & promotion (2026-06-24)
 
@@ -132,8 +272,12 @@ runs recorded under [`examples/calibration/results/`](../examples/calibration/re
 - **Independent-judge run (the evidence of record):** candidate `gpt-3.5-turbo`, judge
   `gpt-4o-mini` (the judge does **not** grade its own output, so no self-judging bias).
   At `MIN_SEMANTIC_DELTA=0.5`, `ALPHA=0.05`: **0 false positives**, recall 4/6. One
-  equivalent pair scored a noisy `delta=0.20` and was correctly **absorbed by the floor +
-  permutation p-gate** — i.e. the conservative floor earns its keep.
+  equivalent pair scored a noisy `delta=0.20` and was correctly **absorbed by the permutation
+  p-gate**. `[M]` **Corrected 2026-08-24 (MP-81):** this previously read "absorbed by the floor
+  + permutation p-gate — i.e. the conservative floor earns its keep". It was not the floor.
+  That pair (`explain_concept`, delta 0.20, `p = 0.50`) clears even a 0.1 floor and is stopped
+  by the p-gate alone, which is exactly why the sweep above is flat. At `runs=5` the floor is
+  inert on this set; it is a conservative choice, not a fitted or a load-bearing one.
 - **Self-judge run:** candidate == judge == `gpt-4o-mini`. Cleaner (0/6 FP, recall 5/6) but,
   per an adversarial audit, *too* clean — self-judging inflated the separation, so it is
   kept only as a cross-check, not the justification.
@@ -163,8 +307,12 @@ detection *improved* (`classify_sentiment` went `changed_minor` → `regression`
 
 **Known limitations (honest — do not oversell):** the calibration set is small (6 + 6
 pairs), the perturbations are synthetic system-prompt instructions (extreme, not subtle
-drift), recall on subtle changes is imperfect (4/6 — the safe failure direction: a miss is
-a false *negative*, not a false alarm), and the judge is OpenAI-only. **Next:** expand to
+drift), recall on subtle changes is imperfect (4/6 — a miss is never a false *alarm*, which is the
+safe direction, but whether any given one is a false negative or a correct true negative is
+what this arm cannot tell: `[M]` of those two misses, `explain_concept` is a genuine p-gate
+miss while `define_term` came back judged fully equivalent at `p = 1.00`, indistinguishable
+from the candidate simply not following the injected instruction), and the judge is
+OpenAI-only. **Next:** expand to
 ≥30 labeled pairs incl. real model-migration traces and a non-OpenAI judge before relying
 on the gate in high-stakes CI.
 
@@ -172,5 +320,9 @@ on the gate in high-stakes CI.
 
 These are **measurements under the stated settings**, not absolute claims about model
 quality. The structural floors remain deliberately conservative; the semantic floor is now
-calibrated (above) but on a modest set, so treat the `regression` promotion as a
-well-evidenced first calibration, not a final one.
+calibrated (above) but on a modest set — and **"calibrated" here means confirmed FP-safe and
+detection-preserving on that set, not *fitted*:** `[M]` the set cannot discriminate the value,
+the semantic sweep being flat from 0.1 to 0.9, so 0.5 is a conservative choice rather than a
+fitted one. `[M]` Re-scored under ADR-0022 that evidence is **0/1, 95% upper bound 95.0%**. So
+treat the `regression` promotion as a **first** calibration, not a well-evidenced or a final
+one.

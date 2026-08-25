@@ -339,22 +339,33 @@ class TestUpperBound:
         assert upper_bound_95(8, 8) == 1.0
 
 
-def test_the_recall_arm_must_not_adopt_the_fp_arms_exclusion():
-    """ADR-0022 states the recall arm excludes nothing: its perturbation IS a real change,
-    so a model that still answers identically is a genuine MISS. [M] fp-guardian: inserting
-    `if not measurable(r): continue` into the recall arm left all 281 tests green - an
-    ADR-stated invariant with zero coverage, and the one that stops a dead engine posting a
-    flattering recall number beside the FP rate."""
+def test_main_does_not_exclude_inside_the_recall_arm():
+    """ADR-0022's invariant AS IT APPLIES TO `main()` only. Read the scope note below before
+    trusting this test to cover more than it does.
+
+    **This guard went vestigial when MP-79 extracted the arm, and its scope is now narrow.**
+    It slices from the `[ARM:RECALL]` marker, which before MP-79 contained the whole
+    recall arm and now contains ~700 characters of `main()`; `recall_outcome` is defined far
+    above the marker. [M] mutation-sentinel 2026-08-23 measured the consequence: putting
+    `measurable()` or `fp_outcome()` into `recall_outcome` - the two mutations this test was
+    written for - leaves it GREEN. Across 28 mutants its assertions never fired once.
+
+    The real guard is now `tests/test_recall_arm.py::test_the_recall_arm_never_adopts_the_fp
+    _arms_exclusion`, which walks `co_names` over `recall_outcome` / `recall_report` /
+    `recall_tally` / `main` instead of grepping a text window, and which kills both. Kept
+    here, renamed and rescoped, because `main()` is still the one layer no unit test reaches
+    and a `continue` added inline there would bypass the pure functions entirely.
+    """
     src = (Path(__file__).resolve().parent.parent / "scripts" / "fp_measurement.py").read_text(
         encoding="utf-8"
     )
-    recall = src[src.index("INJECTED REGRESSIONS") :]
+    recall = src[src.index("[ARM:RECALL]") :]
     assert "measurable(" not in recall, (
-        "the recall arm now excludes trials the way the FP arm does. A perturbed scenario "
-        "that still reads `unchanged` is a MISS, not an unmeasurable trial; excluding it "
-        "lets a dead engine report 0/0 recall. See ADR-0022."
+        "main()'s recall arm now excludes trials the way the FP arm does. A perturbed "
+        "scenario that still reads `unchanged` is a MISS, not an unmeasurable trial; "
+        "excluding it lets a dead engine report 0/0 recall. See ADR-0022."
     )
-    assert "fp_outcome(" not in recall, "the recall arm must use classify(), not fp_outcome()"
+    assert "fp_outcome(" not in recall, "main()'s recall arm must not use fp_outcome()"
 
 
 class TestFpSummary:
@@ -409,7 +420,7 @@ def _fp_arm_source() -> str:
     src = (Path(__file__).resolve().parent.parent / "scripts" / "fp_measurement.py").read_text(
         encoding="utf-8"
     )
-    return src[src.index("EQUIVALENT PAIRS") : src.index("INJECTED REGRESSIONS")]
+    return src[src.index("[ARM:FP]") : src.index("[ARM:RECALL]")]
 
 
 def test_the_fp_arm_publishes_only_through_the_pinned_helpers():
@@ -424,7 +435,18 @@ def test_the_fp_arm_publishes_only_through_the_pinned_helpers():
     arm = _fp_arm_source()
     assert "fp_report(" in arm, "the FP arm stopped going through fp_report()"
     assert "fp_summary(" in arm, "the FP arm stopped publishing through fp_summary()"
-    assert "print(line)" in arm, "fp_summary's lines are computed but never printed"
+    # BOTH loops, by name and by count. [M] mutation-sentinel 2026-08-23, found while
+    # measuring MP-79's recall arm: this hole is SYMMETRIC and it was here first. Deleting
+    # `for line in lines_out: print(line)` - every per-scenario false-positive line - left all
+    # 332 tests green, because the surviving fp_summary loop satisfies a bare `"print(line)"
+    # in arm`. The per-scenario content is covered by TestFpReport; its consumption was not.
+    assert "lines_out = fp_report(" in arm, "fp_report's per-scenario lines are no longer bound"
+    assert "for line in lines_out:" in arm, "the per-scenario FP lines are no longer printed"
+    assert "for line in fp_summary(" in arm, "fp_summary's lines are no longer printed"
+    assert arm.count("print(line)") == 2, (
+        f"the FP arm has {arm.count('print(line)')} print loops, expected 2 (per-scenario "
+        "evidence, then summary). One of them has been dropped."
+    )
     assert "classify(" not in arm, (
         "the FP arm calls classify() directly. classify() has no exclusion, so this is the "
         "pre-MP-75 accounting restored: invariant trials return to the denominator and the "
