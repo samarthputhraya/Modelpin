@@ -47,7 +47,8 @@ relative to the app*, never "which model is best".
 
 ## Why a separate suite (three disjoint sets)
 
-`examples/suite/` is the **held-out false-positive measurement set** (the `0/8` claim depends
+`examples/suite/` is the **held-out false-positive measurement set** (any out-of-sample claim
+made from it depends
 on it staying frozen). Three disjoint sets keep every claim independent:
 
 - `examples/suite/` — held-out FP measurement set (frozen).

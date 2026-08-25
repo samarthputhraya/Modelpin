@@ -1,6 +1,6 @@
 """Calibrate the semantic diff threshold on a LABELED set that is distinct from the
 held-out DoD suite (`examples/calibration/`, never `examples/suite/` — calibrating on the
-held-out set would leak and void the 0/8 FP claim).
+held-out set would leak and void any out-of-sample FP claim made from it).
 
 Why this exists: the semantic LLM-judge currently escalates only to `changed_minor`, never a
 CI-failing `regression`, because `MIN_SEMANTIC_DELTA` is an uncalibrated, conservative guess

@@ -92,7 +92,7 @@ def test_slug_is_filesystem_safe():
 
 def test_report_suite_ids_disjoint_from_held_out_suite():
     """Integrity guardrail: the public suite must not share scenario files with the
-    held-out false-positive set, or the 0/8 FP claim's independence is compromised."""
+    held-out false-positive set, or any out-of-sample claim made from it is compromised."""
     report_ids = {s.id for s in load_scenarios(REPORT_SUITE)}
     held_out_ids = {s.id for s in load_scenarios(HELD_OUT_SUITE)}
     assert report_ids and held_out_ids

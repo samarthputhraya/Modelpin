@@ -33,11 +33,20 @@ python scripts/fp_measurement.py --model gpt-4o-mini --runs 5     # judged, full
 
 ## Results
 
-**Headline (live, judged, held-out): 0 false alarms in 8 scored trials, 0 unmeasured.**
+**Headline (live, judged, held-out): 0 false alarms in 0 scored trials — this run did not measure the false-positive rate.**
 
-That is an *observation, not a rate.* The exact one-sided 95% upper bound on 0/8 is **~31%**,
-so this result is consistent with a true false-positive rate anywhere from 0% to about a third.
-It is reported here as `0/8` and never as "0%".
+> **Corrected 2026-08-23 (MP-75).** This line previously read *"0 false alarms in 8 scored
+> trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
+> could have fired at ALPHA — counting it as a passed trial credits the engine for a test it
+> could not fail. **Re-scored, not re-run** — no API call was made: the same recorded verdicts
+> (8 × `unchanged` at confidence 1.00) yield `0/0 = n/a` and `*** THIS RUN MEASURED NOTHING ***`.
+> The engine did not change; the accounting did. The paragraphs below already said as much — the
+> headline had not caught up.
+
+Read as `0/8`, that was an *observation, not a rate*: the exact one-sided 95% upper bound on
+0/8 is **~31%**, consistent with a true false-positive rate anywhere from 0% to about a third.
+Read as `0/0` — which is what it actually was — the bound is **unbounded**. Either way it is
+reported as a fraction and never as "0%"; the harness now prints the upper bound itself.
 
 It is also measured on the wrong surface to be reassuring: all 8 held-out scenarios run at
 temperature 0, and identical distributions short-circuit to `p=1.0` without the statistic
@@ -52,7 +61,8 @@ Closing that is [MP-54]; until it lands, no stronger claim than the sentence abo
 ```
 cancel_subscription  classify_sentiment  decline_pii          extract_total
 format_contact_json  order_status        refund_request       summarize_ticket
-                          all 8 -> unchanged  (0 false positives)
+                          all 8 -> unchanged at confidence 1.00
+                          => 0 SCORED trials: none could have fired (MP-75)
 ```
 
 **Detection: every perturbation that actually changed behavior was caught.**
@@ -69,12 +79,17 @@ regression where none occurred.
 
 ### Corroborating evidence
 
-| Evidence | Pairs | False positives |
-|---|---|---|
-| Live judged held-out suite (gpt-4o-mini vs itself, N=5, judge on) | 8 | **0 / 8** |
-| Synthetic noisy-but-equivalent pairs (golden test) | 4 | **0 / 4** |
-| Real same-model split-half (captured gpt-4o-mini + gpt-3.5-turbo traces) | 6 | **0 / 6** |
-| Real cross-model smoke run, gpt-3.5-turbo → gpt-4o-mini | 3 | **0 / 3** |
+| Evidence | Pairs | Scored (could have fired) | Result |
+|---|---|---|---|
+| Live judged held-out suite (gpt-4o-mini vs itself, N=5, judge on) | 8 | **0** | n/a — no trial could fire; was published as `0/8` |
+| Synthetic noisy-but-equivalent pairs (golden test) | 4 | **0** | n/a — `[M]` all four return `unchanged` at confidence 1.0000; was published as `0/4` |
+| Real same-model split-half (captured gpt-4o-mini + gpt-3.5-turbo traces) | 6 | **not re-scored** | `0/6` on the pre-MP-75 accounting — treat as unaudited |
+| Real cross-model smoke run, gpt-3.5-turbo → gpt-4o-mini | 3 | **not re-scored** | `0/3`, and not a known-equivalent pair, so not an FP measurement at all |
+
+> **Corrected 2026-08-23 (MP-75).** When the headline was withdrawn, only row 1 was re-scored.
+> Row 2 has since been re-scored and is also **0 scored trials** — `[M]` reproduce offline, no
+> key needed, from the pairs in `tests/test_diff.py:111-119`. Rows 3–4 have **not** been
+> re-scored and must not be quoted as a false-positive rate until they are.
 
 In the cross-model smoke run, gpt-4o-mini issued a *second* tool call on 1 of 5
 `refund_request` runs — a genuine behavioral difference — and the engine correctly
@@ -90,8 +105,13 @@ cross-vendor judge fired and found two genuinely different models behaviorally e
 this suite — i.e. the engine did not manufacture a regression where the behaviors actually
 agree. (The run also surfaced + fixed two Gemini-3.x tool-loop bugs.)
 
-**Phase-0 DoD: met** — `mp check` detects genuine regressions between real model
-behaviors *and* shows a measured **0% false-positive rate** on a held-out set.
+**Phase-0 DoD: detection met; false-positive rate NOT established.** `mp check` detects
+genuine regressions between real model behaviors. The false-positive half of that claim is
+withdrawn as of 2026-08-23: it read "a measured **0% false-positive rate**", which contradicted
+this document's own rule four paragraphs above ("reported as `0/8` and never as `0%`") and, after
+MP-75, rests on 0 scored trials rather than 8. Establishing it needs a live run over
+`examples/calibration/arg_*.json` — tool-using scenarios at temperature > 0, the surface where
+false positives are actually possible. That set exists (MP-54); the run does not.
 
 ## Detection (control)
 
@@ -106,7 +126,7 @@ The semantic judge **now escalates a consistent meaning change to a CI-failing
 `regression`** (previously it was capped at `changed_minor` because `MIN_SEMANTIC_DELTA`
 was an uncalibrated guess). The promotion is backed by a labeled calibration set —
 [`examples/calibration/`](../examples/calibration/), **deliberately distinct from the
-held-out suite above** so this tuning does not leak into the 0/8 claim — and two raw-data
+held-out suite above** so this tuning does not leak into the held-out result — and two raw-data
 runs recorded under [`examples/calibration/results/`](../examples/calibration/results/):
 
 - **Independent-judge run (the evidence of record):** candidate `gpt-3.5-turbo`, judge
@@ -119,10 +139,27 @@ runs recorded under [`examples/calibration/results/`](../examples/calibration/re
   kept only as a cross-check, not the justification.
 
 **Post-promotion held-out re-validation:** re-ran `fp_measurement.py --model gpt-4o-mini
---runs 5` with the semantic→`regression` promotion **live** → held-out FP rate **still
-0/8**, and detection *improved* (`classify_sentiment` went `changed_minor` → `regression`).
-So FP-safety at the 0.5 floor holds across **three independent conditions** (self-judge
-calibration, independent-judge calibration, held-out suite).
+--runs 5` with the semantic→`regression` promotion **live** → no held-out verdict moved, and
+detection *improved* (`classify_sentiment` went `changed_minor` → `regression`).
+
+> **Corrected 2026-08-23 (MP-75).** This previously read "held-out FP rate **still 0/8**" and
+> concluded FP-safety holds across **three** independent conditions. It holds across **one**.
+> The held-out suite contributed **0 scored trials**, so it is not evidence here. And the two
+> calibration runs are not independent of each other: `[M]` they share the same 6 scenarios and
+> the same 6 perturbation strings (`calibrate_thresholds.py:51-63`), differing only in the
+> *candidate* model — and `[M]` **both used the same judge**: `examples/calibration/results/
+> result-independent-judge.json` and `result-selfjudge.json` each record `"judge":
+> "gpt-4o-mini"`. Since this floor gates the judge's own output, the judge is precisely the
+> factor that would have had to vary, and it provably did not.
+>
+> **Second correction, 2026-08-23:** the figure first published here for the surviving run —
+> "0 false positives in 6 equivalent pairs, upper bound 39.3%" — was itself the *pre-MP-75*
+> accounting, the same error corrected one row above. `[M]` Re-scored: of the 6 equivalent
+> pairs in the independent-candidate run, **5 return p = 1.00** and could not have fired; the
+> only scored trial is `explain_concept` (delta 0.20, p = 0.50). So the evidence of record is
+> **0/1, 95% one-sided upper bound 95.0%**. The self-judge run scores **0/6 → 0 trials**, i.e.
+> it contributes nothing by the same predicate that demoted the held-out suite.
+> `MIN_SEMANTIC_DELTA` is unchanged; only the claimed evidence for it is.
 
 **Known limitations (honest — do not oversell):** the calibration set is small (6 + 6
 pairs), the perturbations are synthetic system-prompt instructions (extreme, not subtle

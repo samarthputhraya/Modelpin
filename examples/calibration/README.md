@@ -7,7 +7,7 @@ This set is for **tuning** the behavioral-diff thresholds — and it is delibera
 
 The false-positive claim in [`docs/fp-measurement.md`](../../docs/fp-measurement.md) depends on
 the suite being *held out* — i.e. the thresholds were **not** fit on it. If you calibrate on
-the suite, the 0/8 result stops being an honest out-of-sample measurement (classic
+the suite, a held-out result stops being an honest out-of-sample measurement (classic
 train/test leakage). So:
 
 - **`examples/suite/`** — held-out. Measure FP rate / detection here. Never tune on it.

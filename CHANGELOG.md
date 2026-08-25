@@ -21,6 +21,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confidence 1.00 that did not happen. See ADR-0015.
 
 ### Changed
+- **The false-positive rate now excludes trials that could not have produced a false alarm —
+  and the previously published `0/8` result is WITHDRAWN.** `scripts/fp_measurement.py` counted
+  a scenario as a passed trial even when the engine measured no effect on any channel. `[M]`
+  `diff/stats.py:128-129` early-exits at `p=1.0` when two sides are distributionally identical,
+  so such a trial scores `unchanged` *regardless of any change to the engine* — counting it as
+  clean credits the engine for a test it could not fail. The temperature-0 held-out suite
+  therefore published `0/8 = 0%`; re-scored (**not** re-run — no API call was made) the same
+  recorded verdicts give **`0/0 = n/a`**, whose 95% upper bound is unbounded. A trial is now
+  excluded iff the engine reports `unchanged` at confidence exactly 1.0 — under ADR-0001 that
+  confidence is `min(p)`, so it holds precisely when nothing could have fired at ALPHA. This is
+  **sound by construction**: a flagged verdict never carries `unchanged`-confidence, so the
+  exclusion can never remove a false positive. Excluded counts are printed beside the rate,
+  never folded into it.
+  `[M]` The same correction applies to the golden-test row: the 4 "noisy-but-equivalent" pairs
+  in `tests/test_diff.py` all return `unchanged` at confidence 1.0000, so `0/4` is also `0/0`.
+  Two further rows in that table have not been re-scored and must not be quoted as an FP rate.
+  The engine did not change — `git diff` over `modelpin/` for this work is comment-only, and no
+  threshold moved. Only the accounting, and the claims resting on it, changed.
+- **The published confidence interval was wrong for every non-zero result.** The harness printed
+  `1 - alpha**(1/n)`, which is the Clopper-Pearson upper bound *only* at k=0. `[M]` at 1/8 it
+  understated 47.1% as 31.2%; at 4/8 it printed 31.2% — an upper bound **below** the 50%
+  observed rate. Replaced with an exact bisection bound.
+- **`MIN_SEMANTIC_DELTA`'s evidence is restated from three independent conditions to one, and
+  that one is weaker than first published.** The held-out re-validation contributed 0 scored
+  trials, and `[M]` the two calibration runs share their scenarios and perturbations and both
+  record `"judge": "gpt-4o-mini"`, differing only in the candidate model — so the judge, which
+  is what this floor gates, provably did not vary. `[M]` Of the surviving run's 6 equivalent
+  pairs, **5 return `p = 1.00`** and could not have fired, so the evidence is **0/1 (95% upper
+  bound 95.0%)**, not 0/6 at 39.3% — that figure was itself the pre-MP-75 accounting, corrected
+  here. The threshold value is unchanged; only the claimed evidence for it.
+
 - **`mp baseline`, `mp check` and `mp report` state how many replays a run will make,
   before making them.** The pre-spend line was `provider=… model=… runs=…`; it now also
   carries `N scenario(s) from <dir> -> M replays, >=M paid calls`, and

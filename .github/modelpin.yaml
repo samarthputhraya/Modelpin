@@ -11,9 +11,10 @@
 # the workflow passes it explicitly with `config:`.
 #
 # This is a self-consistency smoke: baseline gpt-4o-mini, then re-check gpt-4o-mini against
-# that committed baseline. A green check is ONE same-model observation that the engine did not
-# cry wolf on ordinary nondeterminism - at n=8 scenarios a clean run bounds the false-positive
-# rate only at <=31% (95% one-sided) - AND that the GitHub Action works end to end.
+# that committed baseline. A green check confirms the GitHub Action works end to end. It bounds
+# the false-positive rate at NOTHING: every scenario here pins temperature 0, so the engine
+# measures no effect on any channel and no trial can fire at ALPHA (MP-75/ADR-0022). The
+# "<=31% at n=8" figure this comment used to quote assumed 8 scored trials; there are 0.
 # To turn it into a real migration check, point `to:` at a new model id in the workflow.
 #
 # Paths here (scenarios_dir) resolve against the WORKING DIRECTORY, not against this file,
