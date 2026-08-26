@@ -37,7 +37,7 @@ Install (Python 3.12+):
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.1.2
+modelpin version                        # -> modelpin 0.2.0
 ```
 
 > **Windows PowerShell:** run `modelpin …`, not `mp …`. PowerShell ships a built-in `mp` alias
@@ -466,7 +466,7 @@ is what keeps the false-positive promise honest and the tool small enough to tru
 ## Status
 
 **Phase 0 (core engine MVP) — detection demonstrated but NOT characterised; the false-positive half is NOT met**
-(see [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)); `v0.1.2` live on PyPI. Live-validated cross-vendor
+(see [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)); `v0.2.0` live on PyPI. Live-validated cross-vendor
 (OpenAI ↔ Google ↔ Groq/Llama); **false-positive rate not established** (the "0 in 8 held-out
 trials" claim is withdrawn — those 8 could not have fired, so the honest score is 0/0); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not

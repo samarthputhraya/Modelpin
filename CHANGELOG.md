@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-27
+
 ### Changed (breaking)
 - **`--fixtures` is now required with `--provider fake`.** The fake provider no longer
   fabricates a trace when it has no canned one: it raises `MissingCannedTrace` and the CLI
