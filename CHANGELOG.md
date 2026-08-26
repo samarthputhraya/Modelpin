@@ -283,6 +283,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — and the report omits "safe to adopt". See ADR-0018.
 
 ### Fixed
+- **A run that could not have reported a regression no longer says it found none.** `[M]`
+  On the shipped demo, `mp check --runs 2` printed `OK 4 scenario(s) unchanged`, exited 0, and
+  wrote *"No behavioral regressions found; `demo-model-v2` looks safe to adopt"* — while the
+  **same fixtures** at `--runs 5` find **two regressions and a minor**. The cause is not a
+  weak signal, it is a structural one: an exact permutation test over `C(4,2) = 6` relabelings
+  has a hard p-floor of `1/6 = 0.167`, so at 2 runs/side nothing can reach `ALPHA = 0.05` at
+  any effect size. The old warning said the run had less *power*; it never said the run was
+  incapable of a conclusion, and the report then asserted the opposite.
+  Now: `[M]` the pre-spend disclosure states the floor and that the run **cannot report a
+  regression** (ADR-0019, one level up — disclosing a run size that cannot conclude, without
+  saying so, is the same defect); at 3 runs/side it names the narrower trap, that refusal and
+  format drift still fire while the **tool-call and argument** signals cannot reach `ALPHA`
+  under `strict`/`unordered` (floor `0.100`); and no affirmative clearance renders over a
+  blind comparison — the header drops from ✅ to ❔, the `UNCHANGED` bucket loses its green
+  tick, and the footer reads *"is NOT cleared"*. A partially-blind run is reported as
+  *partially cleared*, naming how many scenarios were measurable.
+  `[M]` The floors are **measured from the shipped permutation functions**, not restated as a
+  formula, so they cannot drift from the test they describe — and they are priced on **both
+  sides and the match mode**, because neither is optional: a baseline recorded at 5 runs and
+  checked at 2 is a 5v2 comparison whose floor is `0.048`, *below* the line, and the
+  directional modes (`subset`/`superset`) route the tool and argument signals through the
+  one-sided statistic, so they reach significance at N=3 where `strict`/`unordered` cannot.
+  `[M]` Getting either wrong produces the same defect this entry describes, pointing the other
+  way: priced on the candidate alone the tool asserted *"this run cannot report a regression,
+  whatever the models do"* in an invocation that then reported two of them and exited 1.
+  The README publishes the whole table.
+  **Deliberately unchanged:** `MIN_RUNS`, every effect-size floor, and the exit code — an
+  underpowered run still exits **0**. Those are sensitivity surfaces (ADR-0016, ADR-0002) and
+  moving one needs its own calibration; this change governs only what the tool *claims*. It
+  is the same rule ADR-0018 already draws for a run that measured **nothing**, applied to a
+  run that measured but could not conclude.
 - **The argument gate's "cannot spend the FP metric" claim is retracted, and the gate is
   priced instead.** `[M]` `modelpin/diff/__init__.py` sets `verdict = regression` on
   `arg_regressed` with **no conjunction** with `tool_regressed`, so it is an independent

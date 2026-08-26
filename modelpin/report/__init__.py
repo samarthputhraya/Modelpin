@@ -8,6 +8,7 @@ Matches the target UX in spec section 7. Framing stays measurement/opinion
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from collections.abc import Sequence
 from typing import Any, Optional
 
 from rich.markup import escape
@@ -67,12 +68,45 @@ def _provenance(provider: str | None) -> str:
     return "using your API key"
 
 
+#: MP-55 / ADR-0018's reasoning, one level up. An `unchanged` verdict from a run whose
+#: permutation test could not have returned p <= ALPHA is not a measurement of sameness --
+#: it is the absence of a measurement, wearing the word "unchanged". `[M]` The shipped demo
+#: at `--runs 2` printed `OK 4 scenario(s) unchanged` and "looks safe to adopt", where the
+#: SAME fixtures at `--runs 5` find two regressions and a minor.
+#:
+#: Deliberately NOT a verdict change and NOT an exit-code change: `MIN_RUNS` and the floors
+#: are sensitivity surfaces (ADR-0016, ADR-0002) and moving them needs its own calibration.
+#: This governs only what the tool CLAIMS.
+_UNDERPOWERED_NOTE = (
+    "{n} of {total} scenario(s) were compared at a run count where no signal could reach "
+    "statistical significance, so this run could not have reported a regression in them"
+)
+
+
+def _underpowered_clearance(underpowered: Sequence[str], total: int, to_model: str) -> str | None:
+    """The line that must REPLACE an affirmative clearance, or ``None`` if none is needed."""
+    if not underpowered:
+        return None
+    if len(underpowered) >= total:
+        return (
+            f"→ This run could not have reported a regression at all: no signal could reach "
+            f"statistical significance at this run count. `{to_model}` is NOT cleared — "
+            f"re-run with more runs per side."
+        )
+    return (
+        f"→ No behavioral regressions found in the {total - len(underpowered)} scenario(s) "
+        f"this run could measure; {len(underpowered)} could not have reported one at this "
+        f"run count, so `{to_model}` is only partially cleared."
+    )
+
+
 def render_pr_comment(
     results: list[DiffResult],
     from_model: str,
     to_model: str,
     runs: int,
     provider: str | None = None,
+    underpowered: Sequence[str] = (),
 ) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
@@ -90,6 +124,9 @@ def render_pr_comment(
         header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
     elif minors:
         header = f"⚠️ **Modelpin: minor changes — `{from_model}` → `{to_model}`**"
+    elif underpowered and len(underpowered) >= len(results):
+        # A green check over a run that could not have gone red is the worst header we ship.
+        header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
     else:
         header = f"✅ **Modelpin: no behavioral change — `{from_model}` → `{to_model}`**"
     lines = [
@@ -119,7 +156,16 @@ def render_pr_comment(
                 f"{_MD_MARK[r.verdict]} {_md_inline(r.scenario_id)} — {_md_inline(r.explanation)}"
             )
         lines.append("")
-    lines.append(f"**UNCHANGED ({len(unchanged)})** ✅")
+    blind = sum(1 for r in unchanged if r.scenario_id in set(underpowered))
+    if blind:
+        # A green tick over a scenario that could not have gone red contradicts the very
+        # line below it. Name the blind ones inside the bucket, not only in the footer.
+        lines.append(
+            f"**UNCHANGED ({len(unchanged)})** — ❔ {blind} of these could not have reported "
+            f"a regression at this run count"
+        )
+    else:
+        lines.append(f"**UNCHANGED ({len(unchanged)})** ✅")
     lines.append("")
     if regs or minors:
         lines.append(f"→ Pin to `{from_model}` until resolved, or review the full diff above.")
@@ -131,11 +177,23 @@ def render_pr_comment(
             "cleared. Re-run, or inspect the provider responses."
         )
     else:
-        lines.append(f"→ No behavioral regressions found; `{to_model}` looks safe to adopt.")
+        # MP-55, the same rule one level up: an `unchanged` verdict from a comparison whose
+        # permutation test could not have returned p <= ALPHA is the ABSENCE of a
+        # measurement, not a measurement of sameness. "Safe to adopt" must not render over it.
+        weak = _underpowered_clearance(underpowered, len(results), to_model)
+        lines.append(
+            weak or f"→ No behavioral regressions found; `{to_model}` looks safe to adopt."
+        )
     return "\n".join(lines)
 
 
-def render_cli(results: list[DiffResult], from_model: str, to_model: str, runs: int) -> str:
+def render_cli(
+    results: list[DiffResult],
+    from_model: str,
+    to_model: str,
+    runs: int,
+    underpowered: Sequence[str] = (),
+) -> str:
     """The CLI summary — ASCII text + rich color markup (safe on any console)."""
     _b = _bucket(results)
     regs = _b[DiffVerdict.regression]
@@ -153,7 +211,20 @@ def render_cli(results: list[DiffResult], from_model: str, to_model: str, runs: 
             f"[dim](confidence {r.confidence:.2f})[/]"
         )
     if unchanged:
-        lines.append(f"[green]OK[/] [dim]{len(unchanged)} scenario(s) unchanged[/]")
+        blind = set(underpowered)
+        n_blind = sum(1 for r in unchanged if r.scenario_id in blind)
+        if n_blind:
+            # Never "OK" over a scenario that could not have gone red. `unchanged` here is
+            # the absence of a measurement, not a measurement of sameness.
+            lines.append(
+                f"[yellow]??[/] [dim]{n_blind} scenario(s) reported `unchanged` at a run "
+                f"count that could not reach significance -- NOT a clean result[/]"
+            )
+            rest = len(unchanged) - n_blind
+            if rest:
+                lines.append(f"[green]OK[/] [dim]{rest} scenario(s) unchanged[/]")
+        else:
+            lines.append(f"[green]OK[/] [dim]{len(unchanged)} scenario(s) unchanged[/]")
     if regs or minors:
         lines.append("")
         lines.append(f"[yellow]-> Pin to[/] [bold]{from_model}[/] until resolved.")

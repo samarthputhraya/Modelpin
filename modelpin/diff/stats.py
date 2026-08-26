@@ -138,3 +138,30 @@ def permutation_pvalue_distribution(
         if total_variation_distance(base_group, cand_group) >= observed - _EPS:
             hits += 1
     return hits / total if total else 1.0
+
+
+def min_achievable_pvalue_mean(n_baseline: int, n_candidate: int) -> float:
+    """The SMALLEST p-value ``permutation_pvalue_mean`` can return at these run counts.
+
+    An exact permutation test over ``C(nb+nc, nc)`` relabelings has a hard floor: even a
+    maximally separated sample cannot score below ``1/C(nb+nc, nc)``. Below a certain N that
+    floor sits ABOVE ``ALPHA``, and the signal is not merely weak -- it is structurally
+    incapable of ever reporting a regression, at any effect size.
+
+    Measured by construction, not asserted: this runs the REAL test on the most extreme input
+    the statistic admits, so the number can never drift from the implementation it describes.
+    """
+    return permutation_pvalue_mean([0.0] * n_baseline, [1.0] * n_candidate)
+
+
+def min_achievable_pvalue_distribution(n_baseline: int, n_candidate: int) -> float:
+    """The SMALLEST p-value ``permutation_pvalue_distribution`` can return at these run counts.
+
+    Two-sided, so with EQUAL run counts its floor is twice the mean statistic's: the maximally
+    separated labelling and its mirror both tie the observed TVD. With UNEQUAL counts no such
+    mirror exists at the required group sizes and the two floors coincide -- `[M]` at 5 vs 2
+    both are 0.047619, not 0.095238. Trusting the doubled form off the diagonal flips the
+    `> ALPHA` answer at 5v2 and 6v2, which is a regime `modelpin check` reaches whenever a stored
+    baseline holds more runs than `--runs`. See ``min_achievable_pvalue_mean``.
+    """
+    return permutation_pvalue_distribution(["b"] * n_baseline, ["c"] * n_candidate)

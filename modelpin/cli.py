@@ -15,6 +15,7 @@ import json
 import shlex
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Sequence
 from typing import NoReturn, Optional
 
 import typer
@@ -35,11 +36,16 @@ from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_TO, write_demo
 from modelpin.detector import scan_repo
 from modelpin.diff import (
     ALPHA,
+    EQUIVALENCE_MODES,
     MIN_REFUSAL_DELTA,
     MIN_SEMANTIC_DELTA,
     MIN_TOOL_ARG_TVD,
     MIN_TOOL_TVD,
     diff_scenario,
+)
+from modelpin.diff.stats import (
+    min_achievable_pvalue_distribution,
+    min_achievable_pvalue_mean,
 )
 from modelpin.models import DiffResult, DiffVerdict, Scenario
 from modelpin.providers import ProviderAdapter, ProviderError, get_adapter
@@ -317,14 +323,53 @@ def _resolve_provider(provider: Optional[str], cfg: ModelpinConfig) -> str:
     return provider or (cfg.providers[0] if cfg.providers else DEFAULT_PROVIDER)
 
 
-def _resolve_runs(runs: Optional[int], cfg: ModelpinConfig) -> int:
+def _resolve_runs(
+    runs: Optional[int],
+    cfg: ModelpinConfig,
+    *,
+    mode: str = "strict",
+    baseline_sizes: Sequence[int] | None = None,
+) -> int:
     n = cfg.runs if runs is None else runs  # an explicit --runs 0 must hit the floor, not coerce
     if n < MIN_RUNS:
         _fail(
             f"--runs must be >= {MIN_RUNS}: the diff compares run *distributions*, and "
             f"a single run can't form one (got {n})."
         )
-    if n < RECOMMENDED_RUNS:
+    # ADR-0019 discloses the run SIZE before a command spends. A size that cannot reach
+    # ALPHA is the same disclosure one level up: the user is about to pay for a run that is
+    # structurally incapable of reporting a regression, and "less power" does not say that.
+    # [M] MP-55: the shipped demo at `--runs 2` printed `OK 4 scenario(s) unchanged`, exit 0,
+    # and wrote "looks safe to adopt" -- where the SAME fixtures at `--runs 5` find two
+    # regressions and a minor.
+    #
+    # Priced on BOTH sides and on the MODE, or the warning becomes the very defect it exists
+    # to prevent. [M] Pricing it on the candidate alone asserted "this run cannot report a
+    # regression" over `baseline --runs 5` + `check --runs 2` -- an invocation that then
+    # reported two regressions and exited 1, because the real 5v2 floor is 0.047619, below
+    # ALPHA. [M] And the distribution floor only gates the tool/argument signals under the
+    # EQUIVALENCE modes; the directional ones route through the mean statistic
+    # (`diff/__init__.py`), so warning about them under `--match subset` was simply false --
+    # reproduced firing a `subset` tool-call regression in the same invocation as the warning
+    # that said it could not.
+    nb = min(baseline_sizes) if baseline_sizes else n
+    floor = min_achievable_pvalue_mean(nb, n)
+    if floor > ALPHA:
+        console.print(
+            f"[bold yellow]warning:[/] at {nb} vs {n} runs/side the exact permutation test "
+            f"cannot return a p-value below {floor:.3f}, so NO signal can reach p <= {ALPHA}. "
+            f"[bold]This run cannot report a regression[/], whatever the models do. "
+            f"Use --runs {RECOMMENDED_RUNS}."
+        )
+    elif mode in EQUIVALENCE_MODES and min_achievable_pvalue_distribution(nb, n) > ALPHA:
+        dist_floor = min_achievable_pvalue_distribution(nb, n)
+        console.print(
+            f"[yellow]warning:[/] at {nb} vs {n} runs/side the tool-call and argument signals "
+            f"cannot reach p <= {ALPHA} under `{mode}` (their floor is {dist_floor:.3f}). The "
+            f"one-sided signals — refusal, format drift and the semantic judge — reach "
+            f"{floor:.3f}. Use --runs {RECOMMENDED_RUNS}."
+        )
+    elif n < RECOMMENDED_RUNS:
         console.print(
             f"[yellow]warning:[/] only {n} runs/scenario; {RECOMMENDED_RUNS}+ gives the "
             "statistical diff real power and a lower false-positive rate."
@@ -514,7 +559,7 @@ def check(
         _fail(str(e))
     except BaselineError as e:
         _fail(str(e))
-    n = _resolve_runs(runs, cfg)
+    n = _resolve_runs(runs, cfg, mode=mode, baseline_sizes=[len(v) for v in base.values() if v])
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
     # Only scenarios that HAVE a baseline are replayed (the rest are skipped below), so
@@ -546,7 +591,24 @@ def check(
     if not results:
         _fail("nothing to compare. Record a baseline first with `modelpin baseline`.")
 
-    console.print(render_cli(results, from_model, to, n))
+    # MP-55. Which scenarios were compared at run counts where NO signal could reach ALPHA?
+    # Computed per scenario, because a stored baseline can hold a different number of runs
+    # than `--runs` gives the candidate (`baseline --runs 5` then `check --runs 2` is 5v2),
+    # and the permutation floor depends on BOTH sides.
+    def _blind(sid: str) -> bool:
+        nb = len(base[sid])
+        if min_achievable_pvalue_mean(nb, n) > ALPHA:
+            return True  # no signal at all could have fired
+        # [M] And the narrower trap, which is a MORE confident false clearance than the one
+        # above: at 3v3 `strict` the demo's `refund_request` -- whose only change is the
+        # tool-call trajectory -- rendered `✅ no behavioral change` and "looks safe to adopt",
+        # while N=4 on identical fixtures reports a regression. The equivalence modes route
+        # the tool and argument signals through the two-sided test, whose floor is higher.
+        return mode in EQUIVALENCE_MODES and min_achievable_pvalue_distribution(nb, n) > ALPHA
+
+    underpowered = [s.id for s in scenarios if base.get(s.id) and _blind(s.id)]
+
+    console.print(render_cli(results, from_model, to, n, underpowered))
 
     # Decide the CI exit code BEFORE any side effect, so a report-write failure
     # can never silently mask a real regression.
@@ -557,7 +619,8 @@ def check(
     try:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(
-            render_pr_comment(results, from_model, to, n, prov), encoding="utf-8"
+            render_pr_comment(results, from_model, to, n, prov, underpowered),
+            encoding="utf-8",
         )
         console.print(f"\n[dim]PR-style Markdown report written to {report_path}[/]")
     except OSError as exc:
