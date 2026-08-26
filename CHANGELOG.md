@@ -241,6 +241,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could not be done by swapping a key.
   `[M]` The catalogues differ too: `gemini-2.5-flash` is `404 "no longer available to new users"`
   on AI Studio and still served on Vertex.
+- **Tool-call *arguments* are now compared, not just tool names.** Up to and including 0.1.2
+  the behavioral diff read only the tool-call *names*, so a candidate that called the right
+  tool with a catastrophically wrong argument — `issue_refund(amount=49.99)` becoming
+  `issue_refund(amount=4999.00)` — was reported as `unchanged` at **confidence 1.00**.
+  Nothing else caught it: with the output text identical, the semantic judge short-circuits
+  and is never invoked, so the tool signal was the only place an argument could register.
+  The new signal is deliberately narrow, because widening a detector is how a tool starts
+  crying wolf. It fires only when the two sides' argument payloads are fully **disjoint** (no
+  run on one side used a payload any run on the other used), and only when the tool-name
+  trajectory is stable across both sides, both sides recorded arguments on every run, and
+  both used the same `--runs`. A single odd run is still noise. `DiffSignals` gains
+  `tool_arg_match`, where `null` means the argument comparison did not run — which is not
+  the same as `1.0`.
+  **The signal ships ADVISORY.** It raises a scenario to `changed_minor` and can never reach a
+  build-failing `regression` on its own, because its effect-size floor `MIN_TOOL_ARG_TVD` has
+  no labelled calibration set behind it — the same cap the semantic judge shipped under until
+  `37b63a1` calibrated it. `[M]` Uncapped, the gate failed a build with the **same model on
+  both sides**: identical tool names, identical output text, no refusal, one optional argument
+  field present on every baseline run and absent on every candidate run returned `regression`
+  at confidence 0.992 at the shipped `runs: 5`, where 0.1.2 returned `unchanged` at 1.0.
+  **State the cost plainly: the headline example above no longer fails a build.** `[M]`
+  `mp check` exits **0** on an argument-only change (`cli.py` gates `exit 1` on `regression`
+  alone), and `action.yml` gates its red X on that exit code — so a 100× refund argument now
+  arrives as a warning a human must read, not as a stopped pipeline. `[M]` Nothing is
+  *withheld*: `action.yml` posts the PR comment regardless of verdict, and a minor still gets a
+  report header, a MINOR CHANGES section and a "Pin to … until resolved" line. `[M]` It also
+  moves no published figure, because `scripts/fp_measurement.py` already scores
+  `changed_minor` as a false positive. The
+  falsifiable condition for promoting it later is in **ADR-0029**; `runs` is explicitly not a
+  knob for this, as the cost is non-monotone in N.
+  `tool_arg_match` is rendered as an **Arg match** column in the Report's per-scenario table,
+  where `—` means the comparison did not run.
 - **`insufficient_evidence` verdict, and exit code 3.** A scenario where **at least half**
   of one side's runs recorded no behaviour — no output, no tool call, no refusal — now
   abstains instead of reporting `unchanged`. Below that threshold (e.g. 2 of 5) the run
@@ -251,6 +283,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — and the report omits "safe to adopt". See ADR-0018.
 
 ### Fixed
+- **The argument gate's "cannot spend the FP metric" claim is retracted, and the gate is
+  priced instead.** `[M]` `modelpin/diff/__init__.py` sets `verdict = regression` on
+  `arg_regressed` with **no conjunction** with `tool_regressed`, so it is an independent
+  verdict-raising path: same model both sides, identical tool names on every run, disjoint
+  float jitter returns `regression` at confidence 0.9520 where `main` returns `unchanged` at
+  1.0. `[M]` The `+0.0056 pp` defence (1.2654% -> 1.2710% over 72,072 relabelings) comes from a
+  null carrying **two payloads**, and the gate fires only when the two sides are disjoint AND
+  each side is internally concentrated — so that null prices a different signal from the one
+  that ships. Retracted in all four code sites, with the narrower claim that survives put in
+  its place and verified more strongly than the one withdrawn: `[M]` the two gates are mutually
+  exclusive **per pool** (0 counterexamples over 191,808 pool pairs x 4 match modes), and the
+  argument channel does not raise the name gate's worst-case **per-pool ceiling** — exhaustive
+  over every payload multiset, N=3..6 read 0/20, 2/70, 12/252, 44/924 on both channels, with
+  the N=5 argument worst pool reached at repertoire 6-7 rather than 2. **A ceiling is not a
+  rate**, and conflating the two is how the retracted claim was born.
+- **`scripts/arg_gate_price.py` prices that cost offline, with no API key.** `[M]` Dealing the
+  committed repertoires' actual runs into two disjoint sides and driving the real
+  `diff_scenario` through the repo's own ADR-0022 predicate: the worst cell is **4.18% of
+  scored trials** (`arg_optional_fields`, `gpt-4.1-mini`, `--match subset`, N=3), with 26 of 48
+  cells non-zero over a **0.08%-4.18%** range, against **0/0** on `main` where the harness
+  prints *** THIS RUN MEASURED NOTHING ***. Three findings change how the gate should be
+  described. `[M]` **Disjointness is not the firing condition** — a fully disjoint
+  `a,a,a,b,c` vs `d,d,e,f,g` does not fire (p=0.0873) and ten pooled distinct payloads give
+  p=1.0, because the permutation test is relabeling-invariant and the gate goes SILENT at
+  maximum jitter. `[M]` **The match modes invert**: at N=3 the equivalence modes cannot fire at
+  all while `subset` reaches 4.18%; by N=5 that reverses. `[M]` **Where the N-curve peaks is an
+  artifact of the estimator** — without replacement the peak is N=6, with replacement N=5, on
+  the same 16 runs. Deliberately published with **no interval over replicates**: those are
+  draws from an assumed population, a Clopper-Pearson bound over them shrinks with compute
+  (3.82% at 1k, 3.27% at 4k), and `[M]` `upper_bound_95` raises `OverflowError` past n~3,000 —
+  now documented as a guard rail rather than a defect. The binding uncertainty is stated
+  instead: Good-Turing puts **31-44%** of the payload mass on values the 16 runs never saw, and
+  truncating that tail moves the rate in **both** directions.
+- **Two guards on the argument gate that CI could not defend.** `[M]` `MIN_TOOL_ARG_TVD` could
+  be mutated `1.0 -> 0.8`, `0.6` or `0.0` with the whole suite green, because the only
+  assertion read `tvd >= MIN_TOOL_ARG_TVD` where `tvd` was literally `1.0`. `[M]` Deleting the
+  equal-runs precondition also left the suite green, and by the branch's own numbers that
+  clause separates a 0.1953% true-null rate from **1.9204%** at 5v2 — reachable as
+  `mp baseline --runs 5` then `mp check --runs 2`. Both are now pinned by value and by
+  behaviour, with the concrete harm named: at a 0.8 floor a candidate pool sharing **one** of
+  five payloads with the baseline scores `tvd = 0.80, p = 0.04762` and fires, and overlap is
+  precisely what the structural rule excludes. `[M]` 6 mutants, 6 red; the three that previously
+  survived are caught by the new guards specifically.
 - **MP-105's diagnosis of the argument corpus is withdrawn — refuted by its own transcript.**
   It read the first live `arg_*` run (7 scored trials, **all the same scenario**) and concluded
   that enum / key-order / list-order / rounding / optional-field arguments are schema-constrained

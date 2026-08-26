@@ -37,6 +37,7 @@ from modelpin.diff import (
     ALPHA,
     MIN_REFUSAL_DELTA,
     MIN_SEMANTIC_DELTA,
+    MIN_TOOL_ARG_TVD,
     MIN_TOOL_TVD,
     diff_scenario,
 )
@@ -689,6 +690,11 @@ def report(
         diff_thresholds={
             "alpha": ALPHA,
             "min_tool_tvd": MIN_TOOL_TVD,
+            # ADR-0009: a public Report must publish every floor that gated a verdict in it.
+            # The argument floor is advisory-only (ADR-0029) but it still GATES -- omitting it
+            # hands the reader an `Arg match` number and a `changed_minor` verdict with no way
+            # to tell which threshold produced them.
+            "min_tool_arg_tvd": MIN_TOOL_ARG_TVD,
             "min_refusal_delta": MIN_REFUSAL_DELTA,
             "min_semantic_delta": MIN_SEMANTIC_DELTA,
         },

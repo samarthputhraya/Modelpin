@@ -15,6 +15,7 @@ adds a calibrated semantic-divergence signal through the same distributional tes
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Optional
 
 from modelpin.diff.stats import (
@@ -23,15 +24,20 @@ from modelpin.diff.stats import (
     total_variation_distance,
 )
 from modelpin.diff.semantic import Judge, semantic_divergence_flags
+from modelpin.diff.argkey import describe_argument_change
 from modelpin.diff.structural import (
     EQUIVALENCE_MODES,
     MatchMode,
     assertion_violation_flags,
     canonical_sequence,
     degenerate_count,
+    has_tool_arguments,
+    modal_arg_sequence,
     modal_sequence,
+    name_trajectory_is_stable,
     refusal_rate,
     refused_flags,
+    tool_arg_sequence,
     tool_call_sequence,
     trajectory_match,
 )
@@ -65,6 +71,46 @@ DEGENERATE_SIDE_NUMERATOR = 2
 #: A tool-call distribution must shift by at least this total-variation distance to
 #: count — guards against trivially-significant jitter once N grows large.
 MIN_TOOL_TVD = 0.5
+#: The ARGUMENT distributions must be fully DISJOINT before the argument gate fires (MP-04).
+#:
+#: 1.0 is not a fitted dial, it is a structural rule: "no run on the candidate side used a
+#: payload any baseline run used." It was chosen over the obvious alternative -- halving ALPHA
+#: for the second gate -- because [M] that alternative's meaning is NOT STABLE IN N, and this
+#: engine has already shipped two comments stating guarantees that held only at the default N:
+#:     N=3  equivalence modes: a fully disjoint change fires at neither (p = 0.100000);
+#:          DIRECTIONAL modes differ -- they route through permutation_pvalue_mean, whose
+#:          floor is 1/C(2N,N) not 2/C(2N,N), so `--match subset --runs 3` fires at exactly
+#:          p = ALPHA. The dead zone is mode-dependent: equivalence N<=3, directional N<=2.
+#:     N=4  a fully disjoint change does NOT fire at ALPHA/2 at all (p = 0.028571 > 0.025)
+#:          -- ALPHA/2 silently disables this entire signal at a legal `runs` setting
+#:     N=5  ALPHA/2 coincides exactly with disjointness (the default, hence the trap)
+#:     N>=6 ALPHA/2 fires on NON-disjoint changes (N=6, 5-of-6: p = 0.015152)
+#: [M] The floor stated here is exactly "disjoint and significant" at every N in 3..8, and it
+#: costs nothing AGAINST THAT ALTERNATIVE (halving ALPHA): over 72,072 exhaustive relabelings
+#: under a true null both land on 916/72072 = 1.2710% (status quo 912/72072 = 1.2654%), both
+#: hold the worst pool at 12/252, and both give 0.0722% / 0.1804% on the pure argument-jitter
+#: channel. That is a comparison of two candidate floors, NOT a statement that the signal is
+#: free: this null carries two payloads and cannot price a real repertoire.
+#:
+#: [A] DISCHARGED 2026-08-25 -- its own falsifier fired. This previously read: "no corpus in
+#: this repo contains RUN-TO-RUN argument variance ... so the REAL-WORLD false-positive rate
+#: of this signal is unmeasured, and every number above is synthetic. Falsifier: MP-54's live
+#: tool scenarios at temperature > 0 flag one scenario whose argument change a human calls
+#: equivalent." [M] MP-105 committed measured repertoires under examples/calibration/results/
+#: that DO carry run-to-run argument variance (arg_numeric_rounding: 10 distinct payloads in
+#: 24 runs on gpt-4.1-mini), and pricing the gate against them gives a peak added
+#: false-positive rate near 3.5% at the shipped `runs: 5`, against 0.0000% before this signal
+#: existed. The numbers above are still synthetic; they are no longer the only ones.
+#: [M] The equality is exact for every disjoint shape through N=21; at N=22 a genuinely
+#: disjoint pool scores 0.9999999999999999 and the gate silently does NOT fire (0 of 199,836
+#: non-disjoint pools ever reached 1.0, so the drift is one-directional and false-NEGATIVE).
+#:
+#: THIS FLOOR IS UNCALIBRATED, so the signal it gates is ADVISORY: it escalates only to
+#: `changed_minor` and can never fail a build on its own (ADR-0029, and the verdict block
+#: below). Do NOT read the pricing above as a licence to promote it, and do NOT tune
+#: `DEFAULT_RUNS` against it -- the cost is non-monotone in N and `arg_*` is the fitted-on
+#: set (ADR-0025).
+MIN_TOOL_ARG_TVD = 1.0
 #: Ignore refusal-rate rises smaller than this even if "significant" (one run in three).
 MIN_REFUSAL_DELTA = 0.34
 #: Candidate semantic-divergence rate must exceed the baseline's by at least this much.
@@ -95,7 +141,7 @@ def _scenario_task(scenario: Optional[Scenario]) -> Optional[str]:
     return None
 
 
-def _mean(values: list[float]) -> float:
+def _mean(values: Sequence[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
@@ -196,6 +242,71 @@ def diff_scenario(
         tool_p = permutation_pvalue_mean(base_viol, cand_viol)
     tool_regressed = tool_p <= ALPHA and tool_tvd >= MIN_TOOL_TVD
 
+    # --- tool-call ARGUMENTS (MP-04; spec 6A defines a call as "name + args") --------
+    # A SECOND signal over the same machinery, never a richer key for the first. [M] Folding
+    # arguments into the name key does not sharpen that signal, it DESTROYS it: the
+    # permutation test is relabeling-invariant, so once per-run argument jitter makes every
+    # key distinct, a total tool swap (web_search on all 5 baseline runs -> sql_query on all
+    # 5 candidate runs) flips from `regression` at 0.992 to `unchanged` at 1.0.
+    #
+    # [A] SYNTHETIC, and labelled as such because it was briefly mismarked [M]: across the
+    # 286-pool ENUMERATION 42.98% of name-gate firings go silent under the folded key. On the
+    # REAL corpus that figure is 0.00% (0 of 10), because no tracked scenario carries the
+    # run-to-run argument variance the enumeration assumes. The folded key is still correctly
+    # rejected, but on a different [M] number: it fires on 44 corpus cells against 10.
+    #
+    # The gate runs ONLY when the name trajectory is stable on both sides and identical
+    # across them. When names are themselves jittery the NAME gate is already the
+    # responsible signal, and letting both fire on one pool is what turns two tests into a
+    # raised error rate. [M] That precondition holds the rate at 1.2654% -> 1.2710% over
+    # 72,072 exhaustive relabelings, worst pool unchanged at 12/252 -- but see the retraction
+    # in `name_trajectory_is_stable`: that null has TWO payloads and cannot see the channel
+    # this gate actually opens. The fix is NOT false-positive-neutral. [M] Priced on the
+    # committed repertoires it peaks near 3.5% at the shipped `runs: 5`.
+    #
+    # It also requires EQUAL runs per side, which is reachable: cli.py replays the candidate at
+    # the current `runs` against a PERSISTED baseline, so `baseline --runs 5` then
+    # `check --runs 2` gives 5 vs 2. [M] The 72,072-relabeling figure above is conditioned on a
+    # fixed pool shape and structurally cannot see that regime; the UNCONDITIONAL true-null
+    # rate there is far worse -- 0.1953% at 5v5, but 1.9204% at 5v2 and 2.2968% at 8v2 (1 in
+    # 44), against a status quo of 0.0000% because arguments were not diffed at all. Everything
+    # stays under ALPHA, as a permutation test must, but "bounded by 5%" is not
+    # "false-positive-neutral". Until MP-54 prices that, the argument gate simply declines.
+    arg_tvd = 0.0
+    arg_p = 1.0
+    arg_regressed = False
+    # AND, never OR: one side alone having arguments means the other side's `{}` becomes a
+    # comparable payload, and `{}` vs a populated payload is disjoint by construction. [M] The
+    # OR form fired on 34 corpus cells and flipped 136 verdicts, 136/136 cross-vendor.
+    args_compared = (
+        len(baseline_traces) == len(candidate_traces)
+        and has_tool_arguments(baseline_traces)
+        and has_tool_arguments(candidate_traces)
+        and name_trajectory_is_stable(baseline_traces, candidate_traces, mode)
+    )
+    if args_compared:
+        if mode in EQUIVALENCE_MODES:
+            base_akeys = [canonical_sequence(tool_arg_sequence(t), mode) for t in baseline_traces]
+            cand_akeys = [canonical_sequence(tool_arg_sequence(t), mode) for t in candidate_traces]
+            arg_tvd = total_variation_distance(base_akeys, cand_akeys)
+            arg_p = permutation_pvalue_distribution(base_akeys, cand_akeys)
+        else:
+            # Mirror the name signal's own dispatch. Bucketing a directional mode by a key
+            # would flag the very change the mode PERMITS: under `subset` a dropped whole
+            # call must stay legal even though dropping it changes the argument key too.
+            ref_aseq = modal_arg_sequence(baseline_traces, mode)
+            base_aviol = [
+                0 if trajectory_match(ref_aseq, tool_arg_sequence(t), mode) else 1
+                for t in baseline_traces
+            ]
+            cand_aviol = [
+                0 if trajectory_match(ref_aseq, tool_arg_sequence(t), mode) else 1
+                for t in candidate_traces
+            ]
+            arg_tvd = max(0.0, _mean(cand_aviol) - _mean(base_aviol))
+            arg_p = permutation_pvalue_mean(base_aviol, cand_aviol)
+        arg_regressed = arg_p <= ALPHA and arg_tvd >= MIN_TOOL_ARG_TVD
+
     # --- refusal rate ----------------------------------------------------------
     refusal_delta = refusal_rate(candidate_traces) - refusal_rate(baseline_traces)
     refusal_p = permutation_pvalue_mean(
@@ -236,7 +347,17 @@ def diff_scenario(
     )
 
     signals = DiffSignals(
-        tool_call_match=round(1.0 - tool_tvd, 3),  # 1.0 == identical distributions
+        # The WORSE of the two tool sub-signals. Spec 6A defines a tool call as name + args,
+        # so a run that matched on name and diverged on arguments has NOT matched -- and
+        # publishing 1.0 here would be a positive claim of sameness that is false. This is
+        # the field report/, scripts/drift_map.py and every persisted baseline read.
+        # [M] Corpus impact, measured by A/B replay rather than inferred from the census:
+        # with the argument gate correctly quantified (see has_tool_arguments) 0 of 2,240
+        # corpus comparisons change verdict, so no published number moves. An earlier draft
+        # asserted that from the census alone -- 5 arg-bearing calls, all identical -- and was
+        # WRONG, because the census cannot see the `{}`-vs-populated asymmetry.
+        tool_call_match=round(1.0 - max(tool_tvd, arg_tvd), 3),  # 1.0 == identical
+        tool_arg_match=round(1.0 - arg_tvd, 3) if args_compared else None,
         format_valid=not fmt_drift,
         refusal_delta=round(refusal_delta, 3),
         semantic_score=semantic_score,
@@ -276,6 +397,34 @@ def diff_scenario(
             f"refusal rate {refusal_rate(baseline_traces):.0%} -> {refusal_rate(candidate_traces):.0%}"
         )
     minor_pvalues: list[float] = []
+    if arg_regressed:
+        # ADVISORY, not CI-failing (ADR-0029). `MIN_TOOL_ARG_TVD` has no labelled calibration
+        # set behind it -- it is a guess, exactly as `MIN_SEMANTIC_DELTA` was before `37b63a1`,
+        # and this is that commit's patch shape run in reverse. [M] Uncapped, the gate fails a
+        # stranger's build ALONE: same model both sides, identical tool names, one optional
+        # field jittering -> `regression` @ 0.992 at the shipped `runs: 5`, where `main`
+        # @ `13a715c` reads `unchanged` @ 1.0. [M 2026-08-25 @ 0e81392] Priced offline over the
+        # committed repertoires, the worst of 48 cells is 66/1580 = 4.18% of scored trials
+        # (arg_optional_fields, gpt-4.1-mini, --match subset, N=3), 26 cells non-zero over
+        # 0.08%-4.18%, against 0/0 before this signal existed. Method, artifact and the
+        # uncertainty that binds it: docs/fp-measurement.md, "No argument threshold may be
+        # fitted here".
+        #
+        # PROMOTE to a hard regression only on a labelled argument set under
+        # `examples/calibration/` (behaviour change vs provider jitter), scored under ADR-0025,
+        # re-priced across every match mode and N=3..6 -- the cost is NON-MONOTONE in N, so no
+        # `runs` value buys this down and `runs` must NOT be tuned here. See ADR-0029 for the
+        # falsifiable promotion condition. Tracked as MP-54.
+        if verdict != DiffVerdict.regression:
+            verdict = DiffVerdict.changed_minor
+        minor_pvalues.append(arg_p)
+        reasons.append(
+            "tool-call arguments changed: "
+            + describe_argument_change(
+                modal_arg_sequence(baseline_traces, mode),
+                modal_arg_sequence(candidate_traces, mode),
+            )
+        )
     if fmt_drift:
         if verdict != DiffVerdict.regression:
             verdict = DiffVerdict.changed_minor
@@ -304,7 +453,7 @@ def diff_scenario(
     elif verdict == DiffVerdict.changed_minor:
         confidence = round(1.0 - min(minor_pvalues), 3)
     else:
-        confidence = round(min(tool_p, refusal_p, fmt_p, semantic_p), 3)
+        confidence = round(min(tool_p, arg_p, refusal_p, fmt_p, semantic_p), 3)
 
     explanation = "; ".join(reasons) if reasons else "no statistically significant behavior change"
 

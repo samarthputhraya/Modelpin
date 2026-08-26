@@ -494,3 +494,96 @@ def test_init_scaffolds_when_the_dir_holds_only_reserved_files(tmp_path):
     )
     assert "no scenarios found" not in after.output
     assert "fixtures" in after.output.lower(), after.output
+
+
+# --- ADR-0029: an advisory verdict must not fail the build -------------------------------
+#
+# `[M] 2026-08-26` mutation-sentinel: widening `cli.py`'s exit gate from `regression` to
+# `regression or changed_minor` left the ENTIRE suite green. That gate is the boundary where a
+# build actually goes red, and it is the sole reason the argument-gate assertions in
+# `tests/test_tool_arguments.py` were allowed to weaken from `regression` to `changed_minor`.
+# It is now pinned at the CLI, offline, on an argument-only change.
+
+
+def _arg_only_sandbox(tmp_path):
+    """A one-scenario suite whose ONLY difference between the two models is a tool ARGUMENT.
+
+    Same tool name every run, same output text, no refusal, no assertion drift -- so the
+    argument channel is the only signal that can fire, and the verdict it produces is the
+    verdict under test.
+    """
+    scen_dir = tmp_path / "scenarios"
+    scen_dir.mkdir()
+    (scen_dir / "refund_amount.json").write_text(
+        json.dumps(
+            {
+                "id": "refund_amount",
+                "name": "Refund the right amount",
+                "kind": "agent",
+                "input": {
+                    "messages": [{"role": "user", "content": "Refund order 123 for $49.99."}],
+                    "tools": ["issue_refund"],
+                },
+                "assertions": {"expected_tool_calls": ["issue_refund"], "must_contain": ["refund"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    fixtures = tmp_path / "traces.json"
+    fixtures.write_text(
+        json.dumps(
+            [
+                {
+                    "scenario_id": "refund_amount",
+                    "model_id": model,
+                    "tool_calls": [{"name": "issue_refund", "arguments": {"amount": amount}}],
+                    "final_output": "Your refund has been issued.",
+                    "tokens_out": 40,
+                    "latency_ms": 500.0,
+                }
+                for model, amount in (("arg-model-v1", 49.99), ("arg-model-v2", 4999.00))
+            ]
+        ),
+        encoding="utf-8",
+    )
+    config = tmp_path / "modelpin.yaml"
+    config.write_text(
+        "models:\n  - arg-model-v1\nscenarios_dir: scenarios\nproviders:\n  - fake\nruns: 5\n",
+        encoding="utf-8",
+    )
+    return str(scen_dir), str(fixtures), str(config), str(tmp_path / ".modelpin")
+
+
+def test_an_argument_only_change_is_reported_but_does_not_fail_the_build(tmp_path):
+    """ADR-0029 decision 1 + 4, at the boundary that decides a red X."""
+    scen, fixtures, config, store = _arg_only_sandbox(tmp_path)
+    common = [
+        "--provider",
+        "fake",
+        "--fixtures",
+        fixtures,
+        "--scenarios-dir",
+        scen,
+        "--config",
+        config,
+        "--store-dir",
+        store,
+        "--runs",
+        "5",
+    ]
+    base = runner.invoke(app, ["baseline", "--model", "arg-model-v1", *common])
+    assert base.exit_code == 0, base.output
+
+    chk = runner.invoke(app, ["check", "--to", "arg-model-v2", "--from", "arg-model-v1", *common])
+
+    # The finding is DISCLOSED ...
+    assert "refund_amount" in chk.output, chk.output
+    report = (tmp_path / ".modelpin" / "last-report.md").read_text(encoding="utf-8")
+    assert "arguments changed" in report, report
+    assert "MINOR" in report, report
+    assert "Pin to" in report, "an advisory verdict must still carry the recommendation"
+    # ... and the build stays GREEN. `action.yml` gates the red X on this exit code.
+    assert chk.exit_code == 0, (
+        f"an argument-only change exited {chk.exit_code}; ADR-0029 caps the argument signal at "
+        f"changed_minor precisely so it cannot fail a stranger's build.\n{chk.output}"
+    )

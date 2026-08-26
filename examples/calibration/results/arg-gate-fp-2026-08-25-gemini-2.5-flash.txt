@@ -1,0 +1,106 @@
+FP measurement: provider=google model=gemini-2.5-flash runs=5 judge=off scenarios=7 repeats=10
+  roles: 'score' only (7 of 13 scenarios)
+  -> 70 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  arg_numeric_rounding#7 ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_optional_fields#7  ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_enum_phrasing#8    ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_freetext_note#8    ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_key_order#8        ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_list_order#8       ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_multistep_carry#8  ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_numeric_rounding#8 ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_optional_fields#8  ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_enum_phrasing#9    ERROR  (Gemini call for model 'gemini-2.5-flash' failed [ConnectError: [Errno )
+  arg_enum_phrasing#1    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#1    unchanged      conf=0.52  [tools 1|1 args 5|3 text 1|1]
+  arg_key_order#1        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#1       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#1  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#1 unchanged      conf=1.00  [tools 1|1 args 1|2 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#1  unchanged      conf=1.00  [tools 1|1 args 2|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_enum_phrasing#2    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#2    unchanged      conf=0.68  [tools 1|1 args 4|5 text 1|1]
+  arg_key_order#2        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#2       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#2  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#2 unchanged      conf=1.00  [tools 1|1 args 2|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#2  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_enum_phrasing#3    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#3    unchanged      conf=0.68  [tools 1|1 args 4|5 text 1|1]
+  arg_key_order#3        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#3       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#3  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#3 unchanged      conf=1.00  [tools 1|1 args 1|2 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#3  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_enum_phrasing#4    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#4    unchanged      conf=1.00  [tools 1|1 args 5|4 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_key_order#4        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#4       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#4  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#4 unchanged      conf=1.00  [tools 1|1 args 1|2 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#4  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_enum_phrasing#5    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#5    unchanged      conf=1.00  [tools 1|1 args 5|5 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_key_order#5        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#5       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#5  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#5  unchanged      conf=1.00  [tools 1|1 args 1|2 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_enum_phrasing#6    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#6    unchanged      conf=0.71  [tools 1|1 args 3|4 text 1|1]
+  arg_key_order#6        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#6       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#6  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#6 unchanged      conf=1.00  [tools 1|1 args 2|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#6  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|2]  <-- p=1.00 everywhere; could not have fired
+  arg_enum_phrasing#7    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#7    unchanged      conf=0.81  [tools 1|1 args 4|5 text 1|1]
+  arg_key_order#7        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#7       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#7  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#9    unchanged      conf=0.17  [tools 1|1 args 5|3 text 1|1]
+  arg_key_order#9        unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#9       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#9  unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#9  unchanged      conf=1.00  [tools 1|1 args 2|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_enum_phrasing#10   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note#10   unchanged      conf=0.30  [tools 1|1 args 4|3 text 1|1]
+  arg_key_order#10       unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order#10      unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/7 = 0%
+  95% upper bound on the true rate: 34.8% (one-sided Clopper-Pearson, n=7)
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 53
+  Provider errors (never reached a verdict): 10
+
+  NOTE: the rate is over the 7 scenario(s) in which something could have
+  fired; 53 could not, and are excluded.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+
+  Detection: 0/0 injected perturbations caught
+  Unmeasured (excluded): 0
+
+  *** THE DETECTION ARM CHECKED NOTHING. ***
+  0/0 is not evidence that the engine catches real changes - it is evidence
+  that no injected perturbation reached a verdict. Since ADR-0022 withdrew the
+  false-positive claim this is the only half of the DoD still asserted, so an
+  empty run here means the harness demonstrated nothing at all.
+
+
+[exited with code 0]

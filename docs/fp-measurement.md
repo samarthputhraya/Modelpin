@@ -205,6 +205,34 @@ role; roles are declared in [`examples/roles.json`](../examples/roles.json) and 
   does not block MP-04: `MIN_TOOL_ARG_TVD = 1.0` on that branch is a structural rule derived
   from exhaustive relabelings under a constructed null, with no scenario set involved, at the
   ceiling of its scale. A labelled fit set is needed only if a measured run says 1.0 must move.
+  `[M] 2026-08-25 @ 0e81392` **A measured run did say so, and the answer was a cap, not a fit.**
+  Priced offline against the committed repertoires — no API key, no scenario fitted — the worst
+  of 48 cells is **66 / 1580 = 4.18% of scored trials** (`arg_optional_fields`, `gpt-4.1-mini`,
+  `--match subset`, N=3), with 26 cells non-zero over 0.08%–4.18%, against **0 / 0** before the
+  signal existed. Raw artifact and the reading of it:
+  [`examples/calibration/results/arg-gate-price.json`](../examples/calibration/results/arg-gate-price.json)
+  and [`README-arg-gate-fp.md`](../examples/calibration/results/README-arg-gate-fp.md).
+  Regenerate with:
+
+  ```
+  python scripts/arg_gate_price.py --reps 3000 --seed 20260825
+  ```
+
+  `[A]` **The committed artifact predates that command being reproducible.** It records
+  `seed: 20260825`, but the script mixed `hash(mode)` — salted per process (PEP 456) — into the
+  RNG, so the stored cells are not byte-re-derivable; the seed is honoured from `0e81392`'s
+  successor onward, where a sha256 salt replaced it. `[M]` No interval is published over
+  replicates, deliberately: those are draws from an assumed population and a Clopper-Pearson
+  bound over them shrinks with compute (3.82% at 1k, 3.27% at 4k). The binding uncertainty is
+  stated instead — Good-Turing puts 31–44% of the payload mass on values the runs never saw.
+
+  Because that cost is real and the floor behind it is uncalibrated, the argument signal
+  escalates only to `changed_minor` and can never fail a build alone (**ADR-0029**; the shape
+  is the semantic judge's own 2026-06 cap, three sections below). The fitting ban above is
+  therefore load-bearing in both directions: it is also why the floor was *not* tuned, and why
+  `runs` was not tuned either — the cost is non-monotone in N, so no default is safe, and
+  `arg_*` is the fitted-on set. Promotion needs the labelled set this bullet forbids building
+  here.
 - **`[M]` This set cannot establish a low false-positive rate, whatever it returns — and the
   likeliest outcome is that it measures nothing at all.** Seven scenarios give a one-sided 95%
   upper bound of **34.8%** (`upper_bound_95(0, 7)`), but that is the *ceiling*, assuming all

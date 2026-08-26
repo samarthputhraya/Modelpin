@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 
 from modelpin.models import DiffResult, DiffSignals, DiffVerdict
 from modelpin.report import (
@@ -114,6 +115,7 @@ def _meta(**overrides):
         diff_thresholds={
             "alpha": 0.05,
             "min_tool_tvd": 0.5,
+            "min_tool_arg_tvd": 1.0,
             "min_refusal_delta": 0.34,
             "min_semantic_delta": 0.5,
         },
@@ -222,6 +224,92 @@ def test_report_md_table_reads_diff_signals():
     assert "dropped a tool call" in md
 
 
+def _scenario_row(md, scenario_id="s1"):
+    """The per-scenario table row, split into cells and KEYED BY HEADER NAME.
+
+    `[M] 2026-08-26` The first draft of these tests asserted a bare substring, `"| 1.00 | — |"`.
+    That pair matches (Arg match, Refusal Δ) just as happily as (Tool match, Arg match), so
+    mutating the Arg cell to render `None` as `1.00` -- the exact ADR-0018 violation the test
+    names -- left the whole suite green. A positional assertion is not a column assertion.
+    """
+    rows = [line for line in md.splitlines() if line.startswith("|")]
+    header_line = next(line for line in rows if line.startswith("| Scenario |"))
+    sep_line = rows[rows.index(header_line) + 1]
+    row_line = next(line for line in rows if line.startswith(f"| {scenario_id} |"))
+    cells = lambda line: [c.strip() for c in line.strip("|").split("|")]  # noqa: E731
+    header, sep, row = cells(header_line), cells(sep_line), cells(row_line)
+    assert len(row) == len(header), f"row has {len(row)} cells, header has {len(header)}"
+    assert len(sep) == len(header), f"separator has {len(sep)} cells, header has {len(header)}"
+    return dict(zip(header, row))
+
+
+def test_report_md_table_renders_the_argument_sub_signal():
+    """`tool_arg_match` was computed and displayed NOWHERE (MP-112 / ADR-0029 decision 5).
+    An advisory-only signal whose number is invisible is advice the reader cannot audit."""
+    sig = DiffSignals(tool_call_match=0.0, tool_arg_match=0.25)
+    r = DiffResult(
+        scenario_id="s1",
+        from_model="gpt-4o",
+        to_model="gpt-4.1",
+        verdict=DiffVerdict.changed_minor,
+        explanation="tool-call arguments changed: search(dropped limit)",
+        confidence=0.99,
+        signals=sig,
+    )
+    row = _scenario_row(render_report_md([r], _meta()))
+    assert "Arg match" in row, f"the argument sub-signal has no column: {list(row)}"
+    assert row["Arg match"] == "0.25", row
+    assert row["Tool match"] == "0.00", row
+
+
+def test_report_md_argument_column_is_a_dash_when_the_gate_did_not_run():
+    """`None` means NOT MEASURED (ADR-0018), never 1.0 -- the same distinction the field's own
+    docstring draws. A `1.00` here would be a positive claim of sameness nobody measured."""
+    sig = DiffSignals(tool_call_match=1.0, tool_arg_match=None)
+    r = DiffResult(
+        scenario_id="s1",
+        from_model="gpt-4o",
+        to_model="gpt-4.1",
+        verdict=DiffVerdict.unchanged,
+        explanation="no statistically significant behavior change",
+        confidence=1.0,
+        signals=sig,
+    )
+    row = _scenario_row(render_report_md([r], _meta()))
+    assert row["Arg match"] == "—", f"not-measured rendered as {row['Arg match']!r}"
+    assert row["Tool match"] == "1.00", row
+
+
+def test_report_md_table_columns_line_up_for_every_verdict():
+    """Header, separator and row width are three unlinked string literals. A separator one
+    `---` short leaves the suite green and stops GitHub rendering the table as a table."""
+    for verdict in DiffVerdict:
+        md = render_report_md(
+            [
+                DiffResult(
+                    scenario_id="s1",
+                    from_model="a",
+                    to_model="b",
+                    verdict=verdict,
+                    explanation="x",
+                    confidence=0.5,
+                    signals=DiffSignals(tool_call_match=1.0, tool_arg_match=1.0),
+                )
+            ],
+            _meta(),
+        )
+        row = _scenario_row(md)  # raises on any width mismatch
+        assert "Arg match" in row, verdict
+
+
+def test_report_methodology_calls_the_argument_signal_advisory():
+    """ADR-0029: the published method must not imply arguments can fail a build."""
+    md = render_report_md([_r("s1", DiffVerdict.unchanged)], _meta())
+    assert "tool-call ARGUMENT match" in md
+    assert "advisory" in md
+    assert "five behavioral signals" in md
+
+
 def test_report_md_semantic_dash_when_judge_off():
     # signals.semantic_score is None when no judge ran -> the cell shows an em dash, not 0%.
     md = render_report_md([_r("s1", DiffVerdict.unchanged)], _meta())
@@ -236,3 +324,86 @@ def test_to_report_sidecar_is_json_serializable():
     assert len(payload["results"]) == 2
     assert payload["meta"]["suite_hash"] == "sha256:813ed928284b"
     assert "gpt-4.1" in text
+
+
+def test_report_publishes_every_floor_that_gated_a_verdict(tmp_path):
+    """ADR-0009. `[M] 2026-08-26` The Report said "five behavioral signals" beside a Settings
+    row listing four floors, so a reader was handed an `Arg match` number and a
+    `changed_minor` verdict with no way to tell which threshold produced them."""
+    from modelpin.diff import ALPHA, MIN_TOOL_ARG_TVD, MIN_TOOL_TVD
+
+    md = render_report_md([_r("s1", DiffVerdict.unchanged)], _meta())
+    settings = md[md.index("## Settings (reproducibility)") :]
+    for token in (f"α={ALPHA}", f"tool-TVD≥{MIN_TOOL_TVD}", f"arg-TVD≥{MIN_TOOL_ARG_TVD}"):
+        assert token in settings, f"{token!r} missing from the reproducibility block"
+    assert "advisory" in settings, "the argument floor must be marked advisory (ADR-0029)"
+
+
+def test_report_renders_a_sidecar_written_before_the_argument_floor_existed():
+    """A Report re-rendered from a 0.1.2 sidecar has four threshold keys. Omit the fifth --
+    never default it, because a fabricated floor in a reproducibility block is worse than an
+    absent one."""
+    meta = _meta(
+        diff_thresholds={
+            "alpha": 0.05,
+            "min_tool_tvd": 0.5,
+            "min_refusal_delta": 0.34,
+            "min_semantic_delta": 0.5,
+        }
+    )
+    md = render_report_md([_r("s1", DiffVerdict.unchanged)], meta)
+    assert "arg-TVD" not in md
+    assert "α=0.05" in md
+
+
+def test_the_public_report_never_cites_a_document_the_reader_cannot_open():
+    """`ops/` is gitignored and has zero tracked files. `[M] 2026-08-26` a draft of the
+    Methodology paragraph sent readers of a PUBLIC report to "(ADR-0029)" for the promotion
+    condition. Every prior ADR reference in shipped code is a `#` comment, never rendered text.
+    """
+    md = render_report_md([_r("s1", DiffVerdict.unchanged)], _meta())
+    assert not re.search(r"ADR-\d{4}", md), re.findall(r".{60}ADR-\d{4}.{60}", md)
+
+
+def test_every_effect_size_floor_in_the_engine_reaches_the_published_report():
+    """The renderer reads whatever `cli.py` assembles, and the fixture above is hand-written,
+    so a NEW floor can ship gating verdicts while no public Report ever names it -- which is
+    exactly what happened to `MIN_TOOL_ARG_TVD`. Pin the wiring, not the fixture."""
+    import modelpin.diff as diff_mod
+
+    floors = {n for n in dir(diff_mod) if n.startswith("MIN_") and n != "MIN_RUNS"}
+    assert floors, "no effect-size floors found; this guard has gone blind"
+
+    src = (Path(__file__).resolve().parent.parent / "modelpin" / "cli.py").read_text(
+        encoding="utf-8"
+    )
+    block = src[src.index("diff_thresholds={") : src.index("diff_thresholds={") + 900]
+    block = block[: block.index("},") + 2]
+    missing = sorted(f for f in floors if f not in block)
+    assert not missing, (
+        f"{missing} gate verdicts but never reach `diff_thresholds`, so no public Report "
+        f"publishes them. ADR-0009 requires the settings a reader would need to re-run."
+    )
+
+
+def test_a_minors_only_run_still_carries_the_recommendation_and_never_reads_as_cleared():
+    """ADR-0029 decision 4: the cap de-escalates, it does not withhold. `[M] 2026-08-26`
+    narrowing `if regs or minors:` to `if regs:` on either surface left the suite green --
+    and a minors-only run then fell through to the affirmative clearance text under a WARN
+    header. The advisory cap makes minors-only runs strictly more common, so both surfaces
+    are pinned here."""
+    results = [_r("m1", DiffVerdict.changed_minor, "tool-call arguments changed: f(a 1->2)")]
+
+    pr = render_pr_comment(results, "gpt-4o", "gpt-4.1", 5)
+    assert "MINOR CHANGES (1)" in pr
+    assert "Pin to" in pr, pr
+    assert not _BANNED.search(pr), pr
+
+    cli = render_cli(results, "gpt-4o", "gpt-4.1", 5)
+    assert "Pin to" in cli, cli
+
+    # The public Report has no "Pin to" line (that is the PR/CLI surface), but the minor must
+    # still appear in its table with its explanation intact.
+    md = render_report_md(results, _meta())
+    assert "changed_minor" in md, md
+    assert "arguments changed" in md, md

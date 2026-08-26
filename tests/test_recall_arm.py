@@ -1041,8 +1041,15 @@ def test_the_readmes_test_count_is_the_real_one():
     against an actual 341, across multiple releases, and MP-81 had to correct it by hand.
 
     It is the cheapest possible claim for a reader to check and the one most likely to be
-    quietly wrong, which is exactly the combination that costs credibility. Pinned to the
-    collected count so it cannot drift again; a test added means a one-character README edit.
+    quietly wrong, which is exactly the combination that costs credibility.
+
+    `[M] 2026-08-26` It went wrong a second way, in the flattering direction, and this guard
+    permitted it: the README said `461 tests passing` while `pytest -q` reported **458 passed,
+    3 xfailed**. Three `xfail(strict=True)` markers pin an OPEN defect (the MP-05 scenario-id
+    collision) -- they are not passes, and publishing them as passes overstates the suite by
+    exactly the count of the bugs it has conceded. Comparing the claim to `collected` could
+    never see that. The README now publishes BOTH numbers and this guard checks the
+    arithmetic between them, without re-running the suite inside the suite.
     """
     import subprocess
 
@@ -1058,7 +1065,14 @@ def test_the_readmes_test_count_is_the_real_one():
     text = (root / "README.md").read_text(encoding="utf-8")
     claimed = re.search(r"\*\*(\d+) tests passing\*\*", text)
     assert claimed, "README.md no longer states a test count"
-    assert int(claimed.group(1)) == collected, (
-        f"README.md claims {claimed.group(1)} tests passing; pytest collects {collected}. "
-        "This exact number was 42 short for several releases before MP-81 caught it."
+    xfailed = re.search(r"\+(\d+) `xfail`", text)
+    assert xfailed, (
+        "README.md states a passing count but no longer states the xfail count. Both are "
+        "required: an xfail pins an OPEN defect and must never be published as a pass."
+    )
+    assert int(claimed.group(1)) + int(xfailed.group(1)) == collected, (
+        f"README.md claims {claimed.group(1)} passing + {xfailed.group(1)} xfailed = "
+        f"{int(claimed.group(1)) + int(xfailed.group(1))}; pytest collects {collected}. "
+        "This exact number was 42 short for several releases before MP-81 caught it, and "
+        "3 too high in the flattering direction before MP-112 caught it."
     )

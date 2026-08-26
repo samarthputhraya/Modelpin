@@ -165,7 +165,13 @@ class DiffVerdict(str, Enum):
 
 
 class DiffSignals(BaseModel):
+    #: The worse of the two tool sub-signals (name trajectory, argument payload).
     tool_call_match: Optional[float] = None
+    #: The argument sub-signal alone. ``None`` means the argument gate did not RUN -- either
+    #: no run on either side carried arguments, or the name trajectory was not stable enough
+    #: to compare them. ``None`` is NOT 1.0; it means "not measured", the same distinction
+    #: ADR-0018 draws for IncompleteReason.
+    tool_arg_match: Optional[float] = None
     format_valid: Optional[bool] = None
     refusal_delta: Optional[float] = None
     semantic_score: Optional[float] = None

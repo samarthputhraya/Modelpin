@@ -179,6 +179,11 @@ minimum 2 — a single run can't form a distribution, so `--runs 1` is rejected 
 **2. Structural signals** (per run, no network, deterministic):
 - **Tool-call trajectory match** with four modes — `strict | unordered | subset | superset`
   (`--match`) — so you choose how strict "same plan" means for your agent.
+- **Tool-call argument match** — the right tool called with the wrong argument is still a
+  behavior change (`issue_refund(amount=49.99)` → `issue_refund(amount=4999.00)` is a 100×
+  financial error that a names-only diff scores as identical). This signal is **advisory**: its
+  floor is not yet calibrated on a labelled set, so it raises a scenario to `changed_minor` and
+  never fails your build on its own. See *the false-positive evidence* below.
 - **Output format / assertion validity** — your scenario's `must_contain` / `must_not_contain`
   text assertions, checked as a rate across runs.
 - **Refusal detection** — did the model start declining requests it used to answer?
@@ -199,7 +204,10 @@ stay reproducible). A signal counts as a regression only when **both**:
 - the candidate distribution differs from baseline at **p ≤ 0.05** (`ALPHA`), **and**
 - the effect clears a conservative **size floor** — tool-call shift ≥ 0.5 total-variation distance
   (`MIN_TOOL_TVD`), refusal-rate rise ≥ 0.34 (`MIN_REFUSAL_DELTA`), or semantic-divergence rate
-  ≥ 0.5 over baseline (`MIN_SEMANTIC_DELTA`).
+  ≥ 0.5 over baseline (`MIN_SEMANTIC_DELTA`). The argument signal has a fifth floor —
+  fully-disjoint payloads, TVD ≥ 1.0 (`MIN_TOOL_ARG_TVD`) — which is **uncalibrated**, and is
+  why that signal is capped at `changed_minor`. Every floor that gated a verdict is printed in
+  the report's *Settings (reproducibility)* block.
 
 The size floor is what stops a *statistically* significant but *practically* trivial jitter from
 firing once N grows large. These floors are intentionally conservative — biased toward missing a
@@ -208,8 +216,10 @@ direction for a trust product), while a false alarm erodes trust permanently.
 
 **Output:** each scenario gets a verdict, a confidence score, the underlying signals, and a one-line
 explanation. A structural tool-call / refusal break or a calibrated semantic divergence is a
-**CI-failing `regression`**; format/assertion drift alone is `changed_minor` (reported, doesn't fail
-the build).
+**CI-failing `regression`**; format/assertion drift alone, or a tool-call **argument** change
+alone, is `changed_minor` — reported in full, with the recommendation to pin, but `mp check`
+exits 0 and your build stays green. That is deliberate: an uncalibrated floor is allowed to tell
+you something, never to stop you.
 
 ### The false-positive evidence — and its limits, stated plainly
 
@@ -434,7 +444,8 @@ trials" claim is withdrawn — those 8 could not have fired, so the honest score
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; **416 tests passing**, `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **466 tests passing** (+3 `xfail` pinning the open
+MP-05 scenario-id collision, so 469 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

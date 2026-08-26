@@ -137,7 +137,9 @@ def repertoire(
         canon.append(json.dumps(canonical(payload), ensure_ascii=False, sort_keys=True))
         time.sleep(pace)
 
-    modal = Counter(raw).most_common(1)[0][1] if raw else 0
+    tallies = Counter(raw).most_common()
+    order = [payload for payload, _ in tallies]
+    modal = tallies[0][1] if tallies else 0
     return {
         "scored_runs": len(raw),
         "errors": errors,
@@ -151,6 +153,11 @@ def repertoire(
         # 7-payload rounding distribution was unrecoverable from the artifact and the
         # disjointness risk it implies could not be audited. Counts, not a set.
         "payload_counts": dict(Counter(raw).most_common()),
+        # [M] 2026-08-25: counts alone also discard ORDER, which makes exchangeability
+        # untestable -- no way to check for drift or lag-1 correlation across a run burst,
+        # and `scripts/arg_gate_price.py` has to ASSUME i.i.d. draws because of it. An index
+        # per run into the key order of `payload_counts` restores that at negligible size.
+        "payload_sequence": [order.index(r) for r in raw],
     }
 
 

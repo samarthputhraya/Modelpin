@@ -1,0 +1,42 @@
+FP measurement: provider=google model=gemini-2.5-flash runs=5 judge=off scenarios=7 repeats=1
+  roles: 'score' only (7 of 13 scenarios)
+  -> 7 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  arg_enum_phrasing      unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_freetext_note      unchanged      conf=0.71  [tools 1|1 args 4|3 text 1|1]
+  arg_key_order          unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_list_order         unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_multistep_carry    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_numeric_rounding   unchanged      conf=1.00  [tools 1|1 args 1|2 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  arg_optional_fields    unchanged      conf=1.00  [tools 1|1 args 2|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/1 = 0%
+  95% upper bound on the true rate: 95.0% (one-sided Clopper-Pearson, n=1)
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 6
+
+  NOTE: the rate is over the 1 scenario(s) in which something could have
+  fired; 6 could not, and are excluded.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+
+  Detection: 0/0 injected perturbations caught
+  Unmeasured (excluded): 0
+
+  *** THE DETECTION ARM CHECKED NOTHING. ***
+  0/0 is not evidence that the engine catches real changes - it is evidence
+  that no injected perturbation reached a verdict. Since ADR-0022 withdrew the
+  false-positive claim this is the only half of the DoD still asserted, so an
+  empty run here means the harness demonstrated nothing at all.
+
+
+[exited with code 0]

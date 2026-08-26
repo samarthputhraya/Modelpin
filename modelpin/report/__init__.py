@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
+from rich.markup import escape
+
 from modelpin.models import DiffResult, DiffVerdict
 
 # CLI uses ASCII tokens (+ rich color) so it never hits a UnicodeEncodeError on a
@@ -147,7 +149,7 @@ def render_cli(results: list[DiffResult], from_model: str, to_model: str, runs: 
     ]
     for r in regs + unmeasured + minors:
         lines.append(
-            f"{_CLI_MARK[r.verdict]} [bold]{r.scenario_id}[/]: {r.explanation} "
+            f"{_CLI_MARK[r.verdict]} [bold]{r.scenario_id}[/]: {escape(r.explanation)} "
             f"[dim](confidence {r.confidence:.2f})[/]"
         )
     if unchanged:
@@ -261,9 +263,15 @@ def _report_header(meta: ReportMeta, results: list[DiffResult]) -> list[str]:
 def _report_settings(meta: ReportMeta, n_scenarios: int) -> list[str]:
     """The reproducibility block — a keyed table a reader/provider can re-run from."""
     t = meta.diff_thresholds
+    # `.get`, not `[...]`: a Report rendered from a sidecar written before the argument signal
+    # existed has four keys, and re-rendering it must not raise. A missing floor is omitted,
+    # never defaulted -- a fabricated threshold in the reproducibility block is worse than an
+    # absent one.
+    arg_floor = t.get("min_tool_arg_tvd")
     thresholds = (
         f"α={t['alpha']}, tool-TVD≥{t['min_tool_tvd']}, "
-        f"refusal Δ≥{t['min_refusal_delta']}, semantic Δ≥{t['min_semantic_delta']}"
+        + (f"arg-TVD≥{arg_floor} (advisory), " if arg_floor is not None else "")
+        + f"refusal Δ≥{t['min_refusal_delta']}, semantic Δ≥{t['min_semantic_delta']}"
     )
     return [
         "## Settings (reproducibility)",
@@ -291,9 +299,12 @@ def _report_methodology(meta: ReportMeta) -> list[str]:
         f"Each scenario is replayed {meta.runs} times on **both** models using the caller's "
         "own API key. A verdict comes from the *distribution* of runs, not a single sample: "
         f"a two-sample permutation test (p ≤ {meta.diff_thresholds['alpha']}) gated by a "
-        "minimum effect size. We compare four behavioral signals — tool-call trajectory match "
-        f"({meta.match_mode}), refusal-rate change, output-format / assertion drift, and (when "
-        "a judge runs) calibrated LLM-as-judge semantic equivalence. The north-star is a low "
+        "minimum effect size. We compare five behavioral signals — tool-call trajectory match "
+        f"({meta.match_mode}), tool-call ARGUMENT match, refusal-rate change, output-format / "
+        "assertion drift, and (when a judge runs) calibrated LLM-as-judge semantic "
+        "equivalence. The argument signal is **advisory**: its effect-size floor is not yet "
+        "calibrated on a labelled set, so it can raise a scenario to *minor* but never to a "
+        "build-failing *regression* — see `docs/fp-measurement.md`. The north-star is a low "
         "false-positive rate: a flagged regression should be a real, repeated change, not model "
         "nondeterminism. Full method: `docs/fp-measurement.md`.",
     ]
@@ -309,16 +320,17 @@ def _report_table(results: list[DiffResult]) -> list[str]:
     lines = [
         "## Per-scenario results",
         "",
-        "| Scenario | Verdict | Tool match | Refusal Δ | Semantic | Latency Δ (ms) | "
-        "Token Δ | Confidence | What we observed |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Scenario | Verdict | Tool match | Arg match | Refusal Δ | Semantic | "
+        "Latency Δ (ms) | Token Δ | Confidence | What we observed |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in regs + unmeasured + minors + unchanged:
         s = r.signals
         semantic = "—" if s.semantic_score is None else format(s.semantic_score, ".0%")
         lines.append(
             f"| {_cell(r.scenario_id)} | {_MD_MARK[r.verdict]} {r.verdict.value} "
-            f"| {_fmt(s.tool_call_match, '.2f')} | {_fmt(s.refusal_delta, '+.2f')} "
+            f"| {_fmt(s.tool_call_match, '.2f')} | {_fmt(s.tool_arg_match, '.2f')} "
+            f"| {_fmt(s.refusal_delta, '+.2f')} "
             f"| {semantic} | {_fmt(s.latency_delta_ms, '+.0f')} "
             f"| {_fmt(s.token_delta, '+d')} | {format(r.confidence, '.2f')} "
             f"| {_cell(r.explanation)} |"

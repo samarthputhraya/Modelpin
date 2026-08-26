@@ -151,22 +151,55 @@ class TestMeasurable:
             "the defect fp-guardian blocked, reintroduced."
         )
 
-    def test_argument_only_jitter_is_excluded_while_the_engine_cannot_see_arguments(self):
-        """[M] no gating signal on this branch reads `tc.arguments` (argkey.py is on the
-        unmerged MP-04 branch), so an args-only trial is guaranteed `unchanged` at 1.0. It
-        must not inflate the denominator with a trial that cannot fail. When MP-04 lands
-        this stops being vacuous on its own - the engine starts measuring the channel."""
+    def test_argument_only_jitter_is_a_SCORED_TRIAL_once_the_engine_reads_arguments(self):
+        """The MP-04 inversion this test was written to expect. Its previous form asserted
+        `measurable(r) is False` because no gating signal read `tc.arguments`; its own
+        docstring said "when MP-04 lands this stops being vacuous - the engine starts
+        measuring the channel". It has landed, so the assertion flips.
+
+        [M] What the engine now does with pure rounding jitter, same model both sides:
+
+            identical args            unchanged  1.0000  excluded (could not have fired)
+            DISJOINT jitter pools     regression 0.9920  SCORED, and it is a FALSE POSITIVE
+            OVERLAPPING jitter pools  unchanged  1.0000  excluded
+
+        `3.36` vs `3.357` kg is a rounding difference, not a behaviour change, and the gate
+        calls it a regression at 0.992. The ONLY thing standing between that and a constant
+        false alarm is pool OVERLAP - the gate requires the two sides' payloads to be fully
+        disjoint. So the argument gate's true false-positive rate is exactly the rate at
+        which a real model produces fully-disjoint argument pools across two same-model
+        samples, and NOTHING in this repo measures that: [M] the corpus has 5 argument-bearing
+        tool calls across 45 files and all are byte-identical. That is #38's open condition 6,
+        and it is why every FP number in that PR says `[A]`, not `[M]`.
+
+        This test therefore pins the SHAPE of the risk, not a rate. It must not be read as
+        evidence that the gate is safe.
+        """
         from modelpin.diff import diff_scenario
         from modelpin.models import Scenario
 
+        scn = Scenario(id="s", name="s", kind="agent", input={"messages": []})
         base = [_t(args={"kg": 3.36}) for _ in range(5)]
         cand = [_t(args={"kg": 3.357}) for _ in range(5)]
         assert repertoire(base + cand)["args"] == 2, "the pools really do differ on args"
-        scn = Scenario(id="s", name="s", kind="agent", input={"messages": []})
         r = diff_scenario("s", "m", "m", base, cand, scn, "strict", judge=None)
-        assert measurable(r) is False, (
-            f"args-only jitter was scored as a real trial, but the engine returned "
-            f"{r.verdict.value} at {r.confidence} because it reads no argument signal."
+        assert measurable(r) is True, (
+            "the engine no longer reads the argument channel; MP-04's gate has regressed "
+            "and this trial went back to being one that could not fail."
+        )
+        assert classify(r.verdict) == "fp", (
+            f"disjoint argument jitter scored {r.verdict.value}. If this ever stops being a "
+            "false positive the gate has been widened or narrowed - either way, re-price it."
+        )
+
+        # ...and the one thing that keeps it from firing constantly: overlap.
+        mixed_b = [_t(args={"kg": 3.36})] * 3 + [_t(args={"kg": 3.357})] * 2
+        mixed_c = [_t(args={"kg": 3.357})] * 3 + [_t(args={"kg": 3.36})] * 2
+        r2 = diff_scenario("s", "m", "m", mixed_b, mixed_c, scn, "strict", judge=None)
+        assert measurable(r2) is False, (
+            f"overlapping argument pools scored {r2.verdict.value} at {r2.confidence}. "
+            "Disjointness is the gate's entire false-positive defence; if overlap no longer "
+            "excludes, every jittering scenario becomes a standing false alarm."
         )
 
 

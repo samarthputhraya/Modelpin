@@ -128,6 +128,16 @@ def upper_bound_95(k: int, n: int, alpha: float = 0.05) -> float:
     complement, not a second formula. [M] Both published figures reduce to this one helper:
     13.5% at 2/3 detected, 36.8% at 3/3.
 
+    [M] 2026-08-25: this helper RAISES OverflowError above n ~= 3,000 -- k=100,n=3000 returns
+    0.03924 but k=165,n=5000 dies in `math.comb(n, i) * pp**i`. Do not "fix" that by switching
+    to a normal approximation. `n`
+    here is a count of REAL TRIALS, and this project has never run 3,000 of them; if you are
+    passing thousands you are almost certainly feeding it Monte-Carlo replicates from a
+    simulation, and a binomial interval over replicates measures compute spent rather than
+    uncertainty about the world (it shrinks as you draw more). `scripts/arg_gate_price.py`
+    deliberately reports no interval of this kind for exactly that reason. The overflow is a
+    guard rail, not a defect.
+
     The `k >= n` guard is therefore reached from both ends, and means different things at
     each: for the FP arm it is "every trial failed, so the rate could be anything up to 1";
     for the detection arm the reflected argument makes it "nothing was detected, so the floor
