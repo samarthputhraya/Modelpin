@@ -62,7 +62,9 @@ your OpenAI baseline against Google or a free Llama host:
 ```
 
 `provider` accepts `openai | google | anthropic | groq | openrouter | together | cerebras`.
-A free Groq/Llama key (`GROQ_API_KEY`) makes a zero-cost third vendor.
+A free Groq/Llama key (`GROQ_API_KEY`) adds a third vendor whose *replays* cost nothing.
+The judge is billed separately and is OpenAI-only — that is what the `OPENAI_API_KEY` line
+above is for. Omit `judge_model` to keep the run structural and free.
 
 ## Inputs
 

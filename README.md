@@ -338,13 +338,22 @@ a separate judge model arbitrates meaning-equivalence.
   equivalent on this suite.
 - `gpt-4o-mini` vs `llama-3.3-70b-versatile` on **Groq**, same suite → **8/8 `unchanged`**.
 
-**Free third vendor, zero cost:** [Groq](https://console.groq.com) serves Llama models over the
-OpenAI-compatible API and has a free tier, so a free key makes a zero-cost cross-vendor check:
+**Free third vendor:** [Groq](https://console.groq.com) serves Llama models over the
+OpenAI-compatible API and has a free tier, so the *replay* side of a cross-vendor check costs
+nothing — `check` reads its baseline off disk and replays only the candidate:
 
 ```bash
 export GROQ_API_KEY=...     # free at console.groq.com
 modelpin check --provider groq --from gpt-4o-mini --to llama-3.3-70b-versatile
 ```
+
+**The judge is a separate bill, and it is not Groq.** `mp init` scaffolds
+`judge_model: gpt-4o-mini`, and the semantic judge is OpenAI-only — so with the scaffolded
+config that run bills your `OPENAI_API_KEY`, or exits 1 asking for it if only `GROQ_API_KEY`
+is set. For a genuinely free run, remove `judge_model:` from `modelpin.yaml`; the diff then
+stays purely structural, exactly as in
+[How the behavioral diff works](#how-the-behavioral-diff-works-the-moat). The judge cost is
+disclosed before it is spent, in the `+ up to N judge calls` clause of the pre-spend line.
 
 A caveat worth stating: open-model *hosts* rotate ids but don't retire on a lab's fixed schedule the
 way the big providers do, so Groq/OpenRouter/etc. are a genuine cross-vendor bonus and an
@@ -463,8 +472,8 @@ trials" claim is withdrawn — those 8 could not have fired, so the honest score
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **488 tests passing** (+3 `xfail` pinning the open
-MP-05 scenario-id collision, so 491 collected), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **491 tests passing** (+3 `xfail` pinning the open
+MP-05 scenario-id collision, so 494 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

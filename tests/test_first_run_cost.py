@@ -21,8 +21,11 @@ These tests pin the user-visible contract, not the remedy: after `mp init`, the 
 
 from __future__ import annotations
 
+import json
+import re
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import pytest
 import yaml
@@ -33,6 +36,7 @@ from modelpin.config import load_config
 from modelpin.models import Scenario, Trace
 from modelpin.providers.base import ProviderAdapter
 from modelpin.scenarios import load_scenarios
+from modelpin.storage import save_baseline
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -210,8 +214,10 @@ class TestReplayPlan:
 
     def test_a_configured_judge_is_disclosed_as_its_own_axis(self) -> None:
         plan = _replay_plan(8, "examples/suite", 5, "openai", judge_model="gpt-4o-mini")
-        # semantic_divergence_flags judges at most once per run per side => 2 per
-        # scenario-run. That equals 2 per replay only when ONE side is replayed live.
+        # semantic_divergence_flags judges at most once per run per side. BOTH sides hold
+        # `runs` traces in this call, so the bound is 2 x scenarios x runs; that is a
+        # property of this input, NOT a general rule -- `check` against a stored baseline of
+        # a different depth discloses `sum(len(stored)) + scenarios x runs` (ADR-0026).
         assert "up to 80 judge calls" in plan, plan
 
     def test_no_judge_configured_means_no_judge_claim(self) -> None:
@@ -235,7 +241,9 @@ class TestReplayPlan:
         The judge scores every run on BOTH sides whatever their origin (semantic.py:68-69),
         so its bound is 2 x scenarios x runs and is INDEPENDENT of how many sides were
         replayed live. [M] the same 14-scenario suite: `check` queues 70 replays, `report`
-        queues 140, and both make at most 126 judge calls. Deriving the judge count from
+        queues 140, and `report` makes at most 126 judge calls. `check` matches that figure
+        only when the stored baseline holds `runs` traces per scenario -- otherwise its
+        reference side is the RECORDED count (MP-72, `ref_runs`). Deriving the judge count from
         `replays` would bill `report`'s user a claim 2x too large - ADR-0019's rejected
         false-point-estimate defect, pointed the other way.
         """
@@ -244,8 +252,42 @@ class TestReplayPlan:
         assert "up to 140 judge calls" in one, one
         assert (
             "up to 140 judge calls" in two
-        ), f"the judge axis must not scale with sides - it is per scenario-run: {two!r}"
+        ), f"the judge axis must not scale with sides - it counts RUNS per side: {two!r}"
         assert "280" not in two, f"judge calls derived from replays instead of runs: {two!r}"
+
+    def test_ref_runs_defaults_to_the_pre_MP_72_line(self) -> None:
+        """`ref_runs=None` and `ref_runs=count*runs` must both render the OLD string.
+
+        MP-72 widened the judge axis for `check` only. `baseline` passes no judge at all and
+        `report` replays both sides itself, so both keep `count * runs` references and must
+        be byte-identical to before -- a diff in either is a regression, not an improvement.
+        """
+        args = (8, "examples/suite", 5, "openai", "gpt-4o-mini")
+        expected = (
+            "8 scenario(s) from examples/suite -> 40 replays, >=40 paid calls "
+            "+ up to 80 judge calls"
+        )
+        assert _replay_plan(*args) == expected
+        assert _replay_plan(*args, ref_runs=40) == expected, "the no-op default is not a no-op"
+        two = _replay_plan(14, "examples/report-suite", 5, "openai", "gpt-4o-mini", sides=2)
+        assert "up to 140 judge calls" in two, f"report's judge axis moved: {two!r}"
+
+    def test_a_larger_stored_baseline_widens_the_judge_bound(self) -> None:
+        """MP-72: the reference side is what was RECORDED, not `--runs`.
+
+        [M] a 20-run baseline checked at `--runs 5` issues 24 judge calls (19 baseline --
+        the modal run is the reference and skips the judge -- plus 5 candidate). The bound
+        must cover that. It stays `up to`: 25 >= 24 because bounding at the raw stored count
+        is honest and simple, where subtracting the modal run per scenario would be a
+        point estimate of exactly the kind ADR-0019 rejects.
+        """
+        plan = _replay_plan(1, "scenarios", 5, "openai", "gpt-4o-mini", ref_runs=20)
+        assert "up to 25 judge calls" in plan, plan
+        assert "up to 10 judge calls" not in plan, f"still bounded by --runs: {plan!r}"
+        # A SMALLER stored baseline must narrow it too - the bound tracks the recording.
+        assert "up to 8 judge calls" in _replay_plan(
+            1, "scenarios", 5, "openai", "gpt-4o-mini", ref_runs=3
+        )
 
     def test_a_two_sided_fake_run_still_claims_no_cost(self) -> None:
         plan = _replay_plan(14, "examples/report-suite", 5, "fake", "gpt-4o-mini", sides=2)
@@ -322,4 +364,115 @@ def test_report_states_the_size_of_the_run_before_spending(
     assert out.index(planned) < out.index("Modelpin:"), (
         "the run size reached the user only alongside the results - i.e. after the money was "
         "spent. That ordering IS the MP-32/MP-70 defect."
+    )
+
+
+class CountingJudge:
+    """Stands in for the paid LLM-judge and records every equivalence call it is asked for."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def equivalent(self, reference: str, candidate: str, task: Optional[str] = None) -> bool:
+        self.calls.append((reference, candidate))
+        return True  # always "equivalent": this test is about the bill, not the verdict
+
+
+def _disclosed_judge_calls(output: str) -> int:
+    """The number the pre-spend line PROMISED, read back off the line the user saw."""
+    flat = " ".join(output.split())  # Rich hard-wraps; assert on text, not terminal geometry
+    match = re.search(r"up to (\d+) judge calls", flat)
+    assert match, f"no judge-call disclosure in the pre-spend line: {flat}"
+    return int(match.group(1))
+
+
+def test_check_judge_disclosure_bounds_the_judge_calls_it_makes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MP-72 - `up to N judge calls` must be a BOUND, including on an older, larger baseline.
+
+    THE DEFECT, in the past tense because it is fixed: `_replay_plan` USED TO derive the
+    judge axis from `2 x scenarios x --runs`, which assumes both sides hold `--runs` traces.
+    Only the candidate side does: `load_baseline` returns however many runs were RECORDED,
+    `check` passes them straight into `diff_scenario`, and `semantic_divergence_flags` then
+    scores every run on BOTH sides. A baseline recorded at `--runs 20` and checked at
+    `--runs 5` therefore issued 24 judge calls for ONE scenario (19 baseline - the modal run
+    IS the reference and skips the judge - plus 5 candidate) against a disclosed bound of
+    `2 x 1 x 5 = 10`. It NOW sums the stored traces off disk (ADR-0026); the current rule is
+    `J = <reference runs> + <candidate runs>`.
+
+    Asserted against what the judge was actually ASKED to do, so the number cannot drift away
+    from the behaviour. `mp report` is NOT affected - `replay()` hands it exactly `runs`
+    traces per side - and the sides test above pins that half, so do not "fix" this one by
+    scaling the judge axis with `sides`.
+    """
+    monkeypatch.chdir(tmp_path)  # hermetic: never adopt a dev's local modelpin.yaml
+    (tmp_path / "scenarios").mkdir()
+    (tmp_path / "scenarios" / "one.json").write_text(
+        json.dumps(
+            {
+                "id": "one",
+                "name": "one scenario",
+                "kind": "single",
+                "input": {"messages": [{"role": "user", "content": "say something"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "modelpin.yaml").write_text(
+        "models: [old-model]\n" "scenarios_dir: scenarios\n" "judge_model: gpt-4o-mini\n",
+        encoding="utf-8",
+    )
+    # A baseline recorded at --runs 20, i.e. before the user lowered --runs to keep CI cheap.
+    # Distinct outputs per run: the modal one becomes the reference, the other 19 are judged.
+    save_baseline(
+        {
+            "one": [
+                Trace(
+                    scenario_id="one",
+                    model_id="old-model",
+                    run_idx=i,
+                    final_output=f"baseline answer {i}",
+                )
+                for i in range(20)
+            ]
+        },
+        "old-model",
+        tmp_path / ".store",
+    )
+
+    adapter = CountingAdapter()
+    judge = CountingJudge()
+    monkeypatch.setattr("modelpin.cli._adapter", lambda provider, fixtures: adapter)
+    monkeypatch.setattr("modelpin.cli._build_judge", lambda provider, cfg: judge)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "check",
+            "--to",
+            "new-model",
+            "--from",
+            "old-model",
+            "--provider",
+            "openai",  # the PAID branch: the only one that discloses a judge bill
+            "--runs",
+            "5",
+            "--scenarios-dir",
+            str(tmp_path / "scenarios"),
+            "--config",
+            str(tmp_path / "modelpin.yaml"),
+            "--store-dir",
+            str(tmp_path / ".store"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    disclosed = _disclosed_judge_calls(result.output)
+    assert len(judge.calls) <= disclosed, (
+        f"`mp check` disclosed `up to {disclosed} judge calls` and then made "
+        f"{len(judge.calls)}. The baseline on disk holds 20 runs, not --runs 5, and the "
+        f"semantic judge scores every run on BOTH sides. `up to` is a promise about "
+        f"someone's bill (ADR-0019); under-disclosing a paid axis is the same defect class "
+        f"as claiming an exact count, pointed the other way."
     )

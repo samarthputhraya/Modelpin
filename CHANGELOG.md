@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fully correct `check --fixtures` against such a baseline reports regressions at
   confidence 1.00 that did not happen. See ADR-0015.
 
+### Fixed
+- **The README no longer promises a "zero cost" cross-vendor check that bills your OpenAI key.**
+  `README.md` and `actions/README.md` both offered a free Groq key as a zero-cost third vendor.
+  `[M]` The command printed under that heading loads the default `modelpin.yaml`, which
+  `mp init` scaffolds with `judge_model: gpt-4o-mini`; the semantic judge is OpenAI-only, so a
+  reader who exported only `GROQ_API_KEY` — exactly as the surrounding text instructs — got
+  `error: semantic judge ('gpt-4o-mini'): OPENAI_API_KEY is not set` and exit 1 **before any
+  replay**, while a reader whose OpenAI key was still exported was silently billed. Only the
+  *replay* side is free: `check` reads its baseline off disk and replays only the candidate.
+  Both passages now say so and point at removing `judge_model` for a genuinely free run. The
+  `--provider fake` "zero cost and no key" claim is unaffected and remains true — that path
+  builds no judge at all.
+
 ### Changed
 - **The detection arm of `scripts/fp_measurement.py` now publishes a confidence interval, as
   the false-positive arm already did.** The two arms were asymmetric in the direction that
@@ -77,13 +90,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mp baseline`, `mp check` and `mp report` state how many replays a run will make,
   before making them.** The pre-spend line was `provider=… model=… runs=…`; it now also
   carries `N scenario(s) from <dir> -> M replays, >=M paid calls`, and
-  `+ up to 2M judge calls` when a `judge_model` is configured. The `>=` is deliberate: one
+  `+ up to J judge calls` when a `judge_model` is configured. The `>=` is deliberate: one
   replay is one adapter call, but a `kind: agent` scenario's replay drives a tool loop of up
   to `MAX_TOOL_TURNS` completions, so replays are a **floor** on the paid calls of a run that
   completes, never a ceiling. (A run cut short — a provider error, a skipped scenario — bills
   less.) `mp check` counts only scenarios that have a baseline, since the rest are skipped
   rather than replayed. `--provider fake` claims no cost at all — that path replays canned
   traces and bills nothing. See ADR-0019.
+
+  `J` is the judge axis, and it counts **runs, not replays**: the semantic judge scores every
+  run on both sides, so `J = <reference runs> + <candidate runs>`. For `baseline` there is no
+  judge; for `mp report` both sides come from this run's own `replay()`, so both are `runs`
+  and `J = 2 × scenarios × runs`. For `mp check` the reference side is whatever
+  `mp baseline` **recorded**, which `--runs` does not bound — a baseline recorded at
+  `--runs 20` and checked at `--runs 5` scores 20 reference runs against 5 candidate ones.
+  `check` therefore reads the stored run count off disk rather than assuming `--runs` of
+  them. `[M]` before this was fixed, that pairing disclosed `up to 10 judge calls` for one
+  scenario and then made **24** — reproduce with
+  `pytest tests/test_first_run_cost.py -k check_judge_disclosure_bounds`. Under-disclosing a
+  paid axis is the same ADR-0019 violation as publishing an exact count, pointed the other
+  way. The
+  bound stays loose on purpose: an output identical to the modal reference skips the judge,
+  so a real run makes fewer calls than `J`, and `up to` is the honest word for that.
 - **`mp report` discloses a two-sided run as two-sided.** It replays `--from` *and* `--to`,
   so its line reads `N scenario(s) from <dir> x 2 models -> M replays` and its replay and
   paid-call figures are **twice** what the same suite costs under `mp check` — exactly twice
@@ -94,8 +122,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   user saw `runs=5` with no hint that 140 replays were queued, and learned the scenario count
   only from the results table — after the calls had been billed. The judge figure is
   deliberately **not** doubled: for `report` the semantic judge scores every run on both
-  sides whether or not both were replayed live, so it is bounded by `2 × scenarios × runs`,
-  the same figure `mp check` discloses over the same suite. The header also drops its
+  sides whether or not both were replayed live, so it is bounded by `2 × scenarios × runs`.
+  `mp check` discloses that same figure over the same suite **only when the stored baseline
+  holds exactly `runs` traces per scenario** — otherwise its reference side is the recorded
+  count, per the judge-axis note above. The header also drops its
   now-redundant `suite=<dir>` token, which the disclosure line names.
 - **`mp init` names the scenario set it adopted.** When a `modelpin.yaml` already exists,
   `init` honours its `scenarios_dir` (0.1.2 behaviour, unchanged) but now also prints how
