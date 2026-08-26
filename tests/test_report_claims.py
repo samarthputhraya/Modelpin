@@ -400,3 +400,48 @@ def test_every_published_recall_fraction_carries_the_bound_its_own_helper_comput
         assert (
             closed_form not in text
         ), f"{where} publishes {closed_form}, the closed form ADR-0022 records as wrong at k>0."
+
+
+def test_the_readme_publishes_no_relative_links():
+    """MP-30. `pyproject.toml` makes README.md the PyPI **long description**, and PyPI renders
+    it on its own domain where a relative path resolves to nothing. Worse, the wheel ships no
+    `docs/` at all (ADR-0011), so those targets do not exist for an installed user either.
+
+    `[M] 2026-08-27` 16 of 22 README links were relative, every one of them dead on PyPI. A
+    description is FIXED AT UPLOAD -- it cannot be amended without cutting a new version --
+    so this guard runs before a release, not after one.
+    """
+    import re
+    from pathlib import Path
+
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
+    relative = [
+        f"[{label}]({url})"
+        for label, url in re.findall(r"\[([^\]]*)\]\(([^)]+)\)", readme)
+        if not url.startswith(("http://", "https://", "#"))
+    ]
+    assert (
+        not relative
+    ), "README.md is the PyPI long description; these links are dead there: " + ", ".join(relative)
+
+
+def test_a_published_report_never_cites_a_path_the_reader_cannot_open():
+    """A Report travels: it lands as a PR comment on someone else's repo, and the wheel ships
+    no `docs/`. A bare `docs/fp-measurement.md` resolves for nobody outside this checkout."""
+    import sys as _sys
+
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from test_report import _meta, _r  # the canonical fixtures, not a second copy
+
+    from modelpin.models import DiffVerdict
+    from modelpin.report import render_report_md
+
+    md = render_report_md([_r("s1", DiffVerdict.unchanged)], _meta())
+    # Strip COMPLETE markdown links first. A link LABEL may legitimately read `docs/...` so
+    # long as its target is absolute; what survives the strip is a bare path with nothing to
+    # resolve it. A lookahead on `)` cannot make that distinction -- the label is followed by
+    # a backtick, so the first draft of this guard flagged its own correct link.
+    stripped = re.sub(r"\[[^\]]*\]\(https?://[^)]+\)", "", md)
+    bare = re.findall(r"docs/[\w./-]+\.md", stripped)
+    assert not bare, f"published report cites unreachable path(s): {sorted(set(bare))}"
+    assert "https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md" in md

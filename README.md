@@ -115,7 +115,7 @@ Scenarios can also be agent runs: set `"kind": "agent"`, add `"tools"` (and cann
 to `input`, and Modelpin drives a multi-turn model↔tool loop so trajectories like
 `lookup_order → issue_refund` actually emerge during replay. Eight worked examples spanning tool
 trajectories, semantic equivalence, refusals, and output format live in
-[`examples/suite/`](examples/suite/).
+[`examples/suite/`](https://github.com/samarthputhraya/modelpin/tree/main/examples/suite/).
 
 ---
 
@@ -161,7 +161,7 @@ Action inputs: `to` (required), `from`, `provider`, `config`, `scenarios-dir`, `
 3 at least one scenario could not be measured) and `report-path`. The usual pattern is to
 **commit your baseline** so CI only replays the candidate; flip `baseline: "true"` to record fresh
 (needs the old model still reachable). Copy-paste workflow:
-[`examples/github-workflow.yml`](examples/github-workflow.yml).
+[`examples/github-workflow.yml`](https://github.com/samarthputhraya/modelpin/blob/main/examples/github-workflow.yml).
 
 ---
 
@@ -250,8 +250,8 @@ threshold — counting it as a passed trial credits the engine for a test it cou
 is broader than "nothing moved": it also drops trials where an effect **was** measured but 5
 runs a side could not separate it. Scored
 honestly the same run is **0/0**, whose 95% upper bound is *unbounded*. The harness now says so
-itself. Full writeup: [`docs/fp-measurement.md`](docs/fp-measurement.md), summarised in the
-[changelog](CHANGELOG.md).
+itself. Full writeup: [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md), summarised in the
+[changelog](https://github.com/samarthputhraya/modelpin/blob/main/CHANGELOG.md).
 
 What that run **does** still support, and how far: the accounting change touches only the
 false-positive arm (the recall arm excludes nothing, deliberately), so detection is unaffected.
@@ -261,15 +261,15 @@ resisted — it still declined, so nothing changed for the engine to see; the ha
 system-prompt injections against one model at temperature 0, in a single run, and the interval
 treats the three as exchangeable trials, which by construction they are not. `[M]` The 95%
 one-sided *lower* bound on true detection is **13.5%** at 2/3 — `1 - upper_bound_95(1, 3)` in
-[`scripts/fp_measurement.py`](scripts/fp_measurement.py). A `2/2` reading, which drops the
+[`scripts/fp_measurement.py`](https://github.com/samarthputhraya/modelpin/blob/main/scripts/fp_measurement.py). A `2/2` reading, which drops the
 resisted case from the denominator, is **withdrawn**: the harness cannot tell a resisted
 instruction from a dead engine, so it never excludes on that basis. See the correction note in
-[`docs/fp-measurement.md`](docs/fp-measurement.md). Detection is demonstrated, not
+[`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md). Detection is demonstrated, not
 characterised — and quietness on *equivalent* behavior is not evidenced at all.
 
 The semantic judge's escalation threshold is **calibrated** on a labeled set in
 <!-- calibrated = confirmed FP-safe and detection-preserving on a labelled set, NOT fitted -->
-[`examples/calibration/`](examples/calibration/) that is **deliberately distinct from the held-out
+[`examples/calibration/`](https://github.com/samarthputhraya/modelpin/tree/main/examples/calibration/) that is **deliberately distinct from the held-out
 suite** (so it cannot leak into the held-out result). `[M]` On the independent-candidate run of
 record, equivalent pairs land at divergence **0.0–0.20** and real meaning changes at **0.60–1.0**,
 leaving a gap around the 0.5 floor. **"Calibrated" here means confirmed FP-safe and detection-preserving on that set — not *fitted*:** `[M]` the set cannot discriminate the value, the semantic sweep being flat from 0.1 to 0.9, so **0.5 is a conservative choice rather than a fitted one**. But `[M]` 5 of those 6 equivalent pairs return `p = 1.00` and
@@ -285,12 +285,12 @@ Since this floor gates the judge's own output, the judge is the factor that woul
 So the floor rests on **one** labeled condition — and that one scores 0/1, not 0/6.
 
 **This is a first calibration. Do not over-trust it.** The honest limitations, documented in
-[`docs/fp-measurement.md`](docs/fp-measurement.md):
+[`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md):
 - the calibration set is **small** (≈6+6 pairs) and the perturbations are **synthetic**, not
   harvested from real migrations;
 - recall on subtle changes was 4/6 — `[M]` a 95% one-sided *lower* bound of **27.1%** on
   true detection, `1 - upper_bound_95(2, 6)` in
-  [`scripts/fp_measurement.py`](scripts/fp_measurement.py). It can *miss* a subtle real
+  [`scripts/fp_measurement.py`](https://github.com/samarthputhraya/modelpin/blob/main/scripts/fp_measurement.py). It can *miss* a subtle real
   change (again, the safe direction);
 - the judge is **OpenAI-only** so far;
 - the structural floors are **not** FP-validated: `[M]` the held-out run contributed 0 scored
@@ -303,7 +303,7 @@ non-OpenAI judge. We'd rather you know this than discover it.
 ### Proof it actually *fires*: the Drift Map
 
 Quietness on equivalent behavior is the half **not** yet evidenced (above); the complement — that it catches
-*real* drift — is the **[Modelpin Drift Map #1](docs/reports/modelpin-drift-map-1.md)**. We replayed
+*real* drift — is the **[Modelpin Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md)**. We replayed
 an open, deliberately-hard suite across **5 real migration pairs** (including cross-vendor), 5 runs
 each, judge on. `[M]` The engine stayed quiet on **50 of 60** comparisons and flagged the other
 10 — 9 `regression`, 1 `changed_minor`. **4 of the 5 pairs** carry a `regression` that survives
@@ -313,7 +313,7 @@ multi-constraint format breaking on an upgrade. The fifth does not — the repor
 says why. `[M]` Of the 9 `regression` flags, **6** are solid and **3** are soft; we publish
 that split rather than a precision rate, because the 9 land on only 4 distinct scenarios and
 are therefore not exchangeable trials. The exact raw traces and per-scenario verdicts are
-published in [`docs/reports/data/`](docs/reports/data/) — diff against ours without spending a cent.
+published in [`docs/reports/data/`](https://github.com/samarthputhraya/modelpin/tree/main/docs/reports/data/) — diff against ours without spending a cent.
 It also **discloses a false positive our own refusal detector produced** (a Unicode-apostrophe bug,
 since fixed): flagging our own measurement's soft spots is the whole point of being an independent
 voice. The same capability is wired behind `mp report` — point it at any model launch.
@@ -466,24 +466,24 @@ is what keeps the false-positive promise honest and the tool small enough to tru
 ## Status
 
 **Phase 0 (core engine MVP) — detection demonstrated but NOT characterised; the false-positive half is NOT met**
-(see [`docs/fp-measurement.md`](docs/fp-measurement.md)); `v0.1.2` live on PyPI. Live-validated cross-vendor
+(see [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)); `v0.1.2` live on PyPI. Live-validated cross-vendor
 (OpenAI ↔ Google ↔ Groq/Llama); **false-positive rate not established** (the "0 in 8 held-out
 trials" claim is withdrawn — those 8 could not have fired, so the honest score is 0/0); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
-[Drift Map #1](docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **491 tests passing** (+3 `xfail` pinning the open
-MP-05 scenario-id collision, so 494 collected), `ruff` + `black` clean. The Anthropic
+[Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
+`pip install "modelpin[providers]"`; `[M]` **493 tests passing** (+3 `xfail` pinning the open
+MP-05 scenario-id collision, so 496 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 
-The full false-positive measurement lives in [`docs/fp-measurement.md`](docs/fp-measurement.md),
-and the multi-model Drift Map in [`docs/reports/`](docs/reports/). Next up: the first public
+The full false-positive measurement lives in [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md),
+and the multi-model Drift Map in [`docs/reports/`](https://github.com/samarthputhraya/modelpin/tree/main/docs/reports/). Next up: the first public
 **Modelpin Report** on a real model launch (the harness is launch-ready), then the Anthropic adapter.
 
 ## License
 
-**Apache-2.0.** See [`LICENSE`](LICENSE). The open-source core (CLI, engine, Action) is and stays
+**Apache-2.0.** See [`LICENSE`](https://github.com/samarthputhraya/modelpin/blob/main/LICENSE). The open-source core (CLI, engine, Action) is and stays
 open; any future hosted tier lives in a separate, proprietary package.
 
 Repo: <https://github.com/samarthputhraya/modelpin>

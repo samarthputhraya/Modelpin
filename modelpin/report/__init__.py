@@ -375,9 +375,9 @@ def _report_methodology(meta: ReportMeta) -> list[str]:
         "assertion drift, and (when a judge runs) calibrated LLM-as-judge semantic "
         "equivalence. The argument signal is **advisory**: its effect-size floor is not yet "
         "calibrated on a labelled set, so it can raise a scenario to *minor* but never to a "
-        "build-failing *regression* — see `docs/fp-measurement.md`. The north-star is a low "
+        "build-failing *regression* — see [the method](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md). The north-star is a low "
         "false-positive rate: a flagged regression should be a real, repeated change, not model "
-        "nondeterminism. Full method: `docs/fp-measurement.md`.",
+        "nondeterminism. Full method: [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md).",
     ]
 
 
@@ -454,7 +454,7 @@ def render_report_md(results: list[DiffResult], meta: ReportMeta) -> str:
         "candidate's behavior diverged from the reference on this suite; for some apps that "
         "divergence may be neutral or even desirable. The suite is small and the semantic "
         "judge is calibrated on a modest, partly-synthetic set with a single-vendor judge "
-        "(see `docs/fp-measurement.md` for the known limitations). Models are "
+        "(see [the known limitations](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)). Models are "
         "non-deterministic, so exact numbers vary run to run; the distribution-level verdict "
         f"is what reproduces. {_DISCLAIMER}",
         "",
@@ -472,7 +472,7 @@ def render_report_md(results: list[DiffResult], meta: ReportMeta) -> str:
         f"Open suite: `{meta.suite_path}` ({meta.suite_id} v{meta.suite_version}, "
         f"`{meta.suite_hash}`). A machine-readable JSON sidecar with the raw per-scenario "
         "results is written alongside this report. Harness + scenarios are open source under "
-        "Apache-2.0. Method & false-positive measurement: `docs/fp-measurement.md`.",
+        "Apache-2.0. Method & false-positive measurement: [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md).",
     ]
     return "\n".join(sections) + "\n"
 

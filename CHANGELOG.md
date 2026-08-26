@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confidence 1.00 that did not happen. See ADR-0015.
 
 ### Fixed
+- **The README's links, and a published Report's method citation, now resolve for someone who
+  is not standing in this checkout.** `[M]` 16 of README's 22 links were relative — and
+  `pyproject.toml` makes `README.md` the **PyPI long description**, which PyPI renders on its
+  own domain where a relative path resolves to nothing. The wheel ships no `docs/` at all
+  (ADR-0011), so those targets do not exist for an installed user either. All 16 are now
+  absolute. A **PyPI description is fixed at upload** and cannot be amended without cutting a
+  new version, so this had to land *before* a release rather than after one; a guard in
+  `tests/test_report_claims.py` now fails on any relative link in `README.md`.
+  The same defect travelled further than the README: a rendered Modelpin Report cited a bare
+  `` `docs/fp-measurement.md` `` in four places, and a Report is posted as a PR comment on
+  *someone else's* repository. Those are absolute links now, with a second guard that strips
+  complete markdown links before hunting bare paths — the first draft of that guard flagged
+  its own correct link, because a label is followed by a backtick, not a `)`.
 - **The README no longer promises a "zero cost" cross-vendor check that bills your OpenAI key.**
   `README.md` and `actions/README.md` both offered a free Groq key as a zero-cost third vendor.
   `[M]` The command printed under that heading loads the default `modelpin.yaml`, which
@@ -551,9 +564,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Anthropic adapter (currently a stub; needs a paid key).
 - Edge-probing scenario generator (helping users author discriminating scenarios — "scenario
   quality is the product").
-- An "underpowered" annotation at low `--runs`. `insufficient_evidence` does **not** cover
-  this: at `--runs 2` neither signal can reach `p ≤ ALPHA`, and at `--runs 3` the tool
-  signal cannot, yet both still report `unchanged` and exit 0. See ADR-0018 non-goal 2.
+- **An underpowered run still exits 0**, so CI does not notice it. The *labelling* half of
+  this shipped above: a run whose permutation test could not reach `p ≤ ALPHA` is now told so
+  before it spends, is never called clean, and its report reads "NOT cleared". But the verdict
+  is still `unchanged` and `mp check` still exits **0**, which is deliberate — the exit code
+  and `MIN_RUNS` are sensitivity surfaces (ADR-0016, ADR-0002) and moving either needs its own
+  calibration, not a text change. What remains is an annotation on `DiffResult.confidence`
+  itself, and a decision about what such a run should exit. See ADR-0018 non-goal 2.
 - A verdict that reads tool-turn truncation. `Trace.incomplete_reason` now records it, but
   nothing gates on it — an exhausted tool loop implies a tool call, so the abstention
   predicate is provably unable to fire on it. See ADR-0018 non-goal 1.
