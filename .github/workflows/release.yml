@@ -464,10 +464,19 @@ jobs:
           # CLOSED, like the wheel contract -- not a deny-list of the two directories someone
           # happened to think of. The sdist is the archive that carries everything, and a leak
           # there is public on PyPI permanently. Measured on the 0.1.2 sdist (138 members):
+          #
+          # [M] 2026-08-27: this list REFUSED the 0.2.0 release over `scripts`, and it was the
+          # LIST that was stale, not the artifact. `MANIFEST.in:19 graft scripts` was added by
+          # MP-100 (`fe121d3`, after 0.1.2 was measured) because the unpacked sdist's own tests
+          # do `from scripts.fp_measurement import ...` and collected two errors without it --
+          # and because the Drift Map's PUBLISHED reproduce command is `python
+          # scripts/drift_map.py`. So the gate behaved correctly and caught a real drift; the
+          # remedy is to re-measure, not to loosen. MANIFEST.in is the source of truth for what
+          # belongs here, and this hand-copy of it is the defect class: see MP-121.
           _SDIST_TOP_ALLOWED = {
               "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "MANIFEST.in",
               "PKG-INFO", "README.md", "SECURITY.md", "action.yml", "data", "docs", "examples",
-              "modelpin", "modelpin.egg-info", "pyproject.toml", "setup.cfg", "tests",
+              "modelpin", "modelpin.egg-info", "pyproject.toml", "scripts", "setup.cfg", "tests",
           }
           top = {m.split("/")[0] for m in members if m}
           unexpected = sorted(top - _SDIST_TOP_ALLOWED)
