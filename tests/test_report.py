@@ -2,8 +2,11 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from modelpin.models import DiffResult, DiffSignals, DiffVerdict
 from modelpin.report import (
+    ChannelCensus,
     ReportMeta,
     render_cli,
     render_pr_comment,
@@ -149,12 +152,34 @@ def test_report_md_reproducibility_block_present():
     assert "| Runs per scenario | 5 |" in md
 
 
-def test_report_md_uses_measurement_framing_and_no_banned_words():
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        pytest.param({}, id="no-census"),
+        pytest.param({"census": ChannelCensus(False, False, False)}, id="fully-inert"),
+        pytest.param({"census": ChannelCensus(True, True, True)}, id="fully-armed"),
+        pytest.param({"census": ChannelCensus(False, True, False)}, id="assertions-only"),
+        pytest.param({"underpowered": ["s1", "s2"]}, id="fully-underpowered"),
+        pytest.param(
+            {"census": ChannelCensus(False, False, False), "underpowered": ["s1"]},
+            id="both-axes",
+        ),
+    ],
+)
+def test_report_md_uses_measurement_framing_and_no_banned_words(overrides):
+    """ADR-0009's Consequences make this guard the enforcement mechanism for the whole
+    document, so it must run over every SHAPE the document can take.
+
+    `[M] 2026-08-31` claims-auditor: it did not. The bare ``_meta()`` sets no census and no
+    ``underpowered``, so MP-140's entire coverage block and both new `❔` headline branches
+    were unreachable from this test -- the prose most likely to editorialise was the prose
+    the banned-words guard could not see. (It was clean; that was luck, not coverage.)
+    """
     results = [
         _r("s1", DiffVerdict.regression, "tool-call behavior changed: dropped issue_refund"),
         _r("s2", DiffVerdict.unchanged, "no statistically significant behavior change"),
     ]
-    md = render_report_md(results, _meta())
+    md = render_report_md(results, _meta(**overrides))
     assert "we observed" in md
     hit = _BANNED.search(md)
     assert hit is None, f"banned comparative-quality word leaked: {hit and hit.group(0)}"
@@ -320,10 +345,42 @@ def test_to_report_sidecar_is_json_serializable():
     results = [_r("s1", DiffVerdict.regression, "boom"), _r("s2", DiffVerdict.unchanged)]
     payload = to_report_sidecar(results, _meta())
     text = json.dumps(payload)  # must not raise
-    assert set(payload) == {"meta", "results"}
+    # MP-140 added `coverage`. Pinned as an exact set on purpose: the sidecar is a published
+    # audit artifact, so a key appearing or vanishing is a contract change and must be a
+    # deliberate edit here rather than something a reader discovers in a file.
+    assert set(payload) == {"meta", "results", "coverage"}
     assert len(payload["results"]) == 2
     assert payload["meta"]["suite_hash"] == "sha256:813ed928284b"
     assert "gpt-4.1" in text
+
+
+def test_a_report_with_no_census_asserts_nothing_about_coverage():
+    """MP-140. ``census=None`` means no census was TAKEN, which is not the same claim as
+    "every channel was live" -- and the difference is the whole point of the field. A
+    Report rendered by a caller that never measured coverage (or re-rendered from a sidecar
+    written before the field existed) must stay silent rather than imply full coverage.
+
+    `[M]` The precedent is `_report_settings`, which omits a threshold it does not have
+    rather than defaulting one: a fabricated number in a reproducibility block is worse
+    than an absent one.
+    """
+    meta = _meta()  # no census, no underpowered
+    md = render_report_md([_r("s1", DiffVerdict.unchanged)], meta)
+    assert "## Coverage" not in md
+    assert "✅ **No behavioral change observed.**" in md  # unqualified, because unmeasured
+    coverage = to_report_sidecar([_r("s1", DiffVerdict.unchanged)], meta)["coverage"]
+    assert coverage["channels_live"] is None, "null means 'not measured', [] means 'none live'"
+    assert coverage["channels_inert"] is None
+    assert coverage["underpowered_scenarios"] == []
+
+
+def test_the_coverage_block_carries_the_alpha_it_was_priced_against():
+    """A blind-run-count disclosure that does not name the threshold it failed to reach is
+    the unmarked number CLAUDE.md's evidence vocabulary treats as an assumption."""
+    meta = _meta(underpowered=["s1"])
+    md = render_report_md([_r("s1", DiffVerdict.unchanged)], meta)
+    assert "## Coverage" in md
+    assert f"p ≤ {meta.diff_thresholds['alpha']}" in md
 
 
 def test_report_publishes_every_floor_that_gated_a_verdict(tmp_path):

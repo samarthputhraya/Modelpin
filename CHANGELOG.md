@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A channel census: both `modelpin check` and the public Modelpin Report now disclose what
+  they could not measure.** `check` gained it first in this cycle (MP-138) and `modelpin
+  report` — the artifact that goes to strangers — did not, so a Report over a suite with no
+  `tools` and no `judge_model` still
+  headlined `No behavioral change observed` with nothing said about which detectors were
+  switched off. `[M]` A published Report now carries a `## Coverage` section listing the
+  channels that could report a regression, the ones that are advisory-only, the ones that
+  were inert and why, and how many scenarios were compared at a run count where no signal
+  could reach significance. When no channel could have produced a regression on a change in
+  content, the affirmative headline is replaced rather than qualified.
+
+### Changed
+- **The report JSON sidecar gained a top-level `coverage` object** alongside `meta` and
+  `results` — `channels_live`, `channels_inert`, `underpowered_scenarios`. A consumer
+  pinning the sidecar's exact key set will see one new key. **`null` and `[]` mean different
+  things and are not interchangeable:** `null` means no census was taken for that run (a
+  Report rendered by a caller that never measured coverage), while `[]` means a census was
+  taken and found none. `meta` also gained `census` and `underpowered`; both default to
+  absent, so a sidecar written by an earlier version still re-renders.
 ### Fixed
 - **The `Homepage` link on the PyPI project page was dead.** `pyproject.toml` set
   `Homepage = https://modelpin.dev`; `[M]` `nslookup modelpin.dev` returns a name with **no

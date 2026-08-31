@@ -200,11 +200,15 @@ def test_report_exits_zero_even_on_regression(tmp_path):
 
     # The JSON sidecar is the machine-readable audit artifact — validate its structure.
     sidecar = json.loads(jsons[0].read_text(encoding="utf-8"))
-    assert set(sidecar) == {"meta", "results"}
+    assert set(sidecar) == {"meta", "results", "coverage"}  # MP-140 added `coverage`
     assert sidecar["meta"]["suite_hash"].startswith("sha256:")
     assert sidecar["meta"]["candidate_model"] == DEMO_TO
     assert len(sidecar["results"]) == len(list(Path(SCEN).glob("*.json")))
     assert any(r["verdict"] == "regression" for r in sidecar["results"])
+    # MP-140: a flagged verdict is auditable only alongside what could have fired at all.
+    # This suite declares `tools`, so the trajectory channel is live and recorded as such.
+    assert "tool trajectory" in sidecar["coverage"]["channels_live"]
+    assert sidecar["coverage"]["underpowered_scenarios"] == []
 
 
 def test_report_same_model_runs_and_exits_zero(tmp_path):

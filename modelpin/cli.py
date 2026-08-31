@@ -52,6 +52,7 @@ from modelpin.providers import ProviderAdapter, ProviderError, get_adapter
 from modelpin.providers.fake import FakeProvider
 from modelpin.replay import replay
 from modelpin.report import (
+    ChannelCensus,
     ReportMeta,
     render_cli,
     render_pr_comment,
@@ -402,6 +403,53 @@ def _resolve_runs(
     return n
 
 
+def _cannot_reach_alpha(nb: int, nc: int, mode: str) -> bool:
+    """True when NO signal could have reached ``p <= ALPHA`` at these run counts (MP-55).
+
+    Shared by ``check`` and ``report`` (MP-140) so one rule produces the disclosure on
+    every surface. ``check`` reads ``nb`` off the STORED baseline, which can hold a
+    different depth than ``--runs`` gives the candidate; ``report`` replays both sides
+    itself, so ``nb == nc``.
+
+    Priced on both sides and on the MODE. `[M]` The narrower trap is a MORE confident false
+    clearance than the blunt one: at 3v3 `strict` the demo's ``refund_request`` -- whose
+    only change is the tool-call trajectory -- rendered "no behavioral change" and "looks
+    safe to adopt", while N=4 on identical fixtures reports a regression. The equivalence
+    modes route the tool and argument signals through the two-sided test, whose floor is
+    higher; the directional signals do not, so applying it under `subset`/`superset` would
+    assert blindness about signals that can and do fire.
+    """
+    if min_achievable_pvalue_mean(nb, nc) > ALPHA:
+        return True  # no signal at all could have fired
+    return mode in EQUIVALENCE_MODES and min_achievable_pvalue_distribution(nb, nc) > ALPHA
+
+
+def _channel_census(
+    scenarios: Sequence[Scenario], judge: object | None, prov: str
+) -> ChannelCensus:
+    """MP-138's census, read off the scenarios that were actually COMPARED (MP-140).
+
+    Shared by ``check`` and ``report``. Read off the suite and the config, never off the
+    traces: a channel the scenarios never armed could not have fired however the models
+    behaved, which is exactly what a clearance must not paper over.
+
+    `[M]` The judge reason is computed HERE from the provider rather than inferred from
+    ``judge is None`` downstream: the offline `fake` provider disables the judge regardless
+    of config (``_build_judge``), so inferring "no judge_model configured" would put a false
+    statement inside the disclosure that exists to be honest.
+    """
+    return ChannelCensus(
+        tools_declared=any(s.input.get("tools") for s in scenarios),
+        assertions_declared=any(s.assertions is not None for s in scenarios),
+        judge_enabled=judge is not None,
+        judge_off_reason=(
+            "disabled on the offline `fake` provider"
+            if prov == "fake"
+            else "no `judge_model` configured"
+        ),
+    )
+
+
 def _resolve_match_mode(mode: str) -> str:
     if mode not in VALID_MATCH_MODES:
         _fail(f"--match must be one of {', '.join(VALID_MATCH_MODES)} (got {mode!r}).")
@@ -645,19 +693,20 @@ def check(
     # than `--runs` gives the candidate (`baseline --runs 5` then `check --runs 2` is 5v2),
     # and the permutation floor depends on BOTH sides.
     def _blind(sid: str) -> bool:
-        nb = len(base[sid])
-        if min_achievable_pvalue_mean(nb, n) > ALPHA:
-            return True  # no signal at all could have fired
-        # [M] And the narrower trap, which is a MORE confident false clearance than the one
-        # above: at 3v3 `strict` the demo's `refund_request` -- whose only change is the
-        # tool-call trajectory -- rendered `✅ no behavioral change` and "looks safe to adopt",
-        # while N=4 on identical fixtures reports a regression. The equivalence modes route
-        # the tool and argument signals through the two-sided test, whose floor is higher.
-        return mode in EQUIVALENCE_MODES and min_achievable_pvalue_distribution(nb, n) > ALPHA
+        return _cannot_reach_alpha(len(base[sid]), n, mode)
 
-    underpowered = [s.id for s in scenarios if base.get(s.id) and _blind(s.id)]
+    # The scenarios that actually produced `results` -- a scenario with no stored baseline is
+    # skipped above and never diffed. Both disclosures below must be read off THIS set, or
+    # they describe a run that did not happen.
+    compared = [s for s in scenarios if base.get(s.id)]
+    underpowered = [s.id for s in compared if _blind(s.id)]
 
-    console.print(render_cli(results, from_model, to, n, underpowered))
+    # MP-138. `underpowered` above prices RUN COUNT. This prices CHANNEL AVAILABILITY --
+    # the other way a run can be structurally unable to fail, and one `_resolve_runs`
+    # cannot see because it is not a function of N.
+    census = _channel_census(compared, judge, prov)
+
+    console.print(render_cli(results, from_model, to, n, underpowered, census))
 
     # Decide the CI exit code BEFORE any side effect, so a report-write failure
     # can never silently mask a real regression.
@@ -668,7 +717,7 @@ def check(
     try:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(
-            render_pr_comment(results, from_model, to, n, prov, underpowered),
+            render_pr_comment(results, from_model, to, n, prov, underpowered, census),
             encoding="utf-8",
         )
         console.print(f"\n[dim]PR-style Markdown report written to {report_path}[/]")
@@ -743,7 +792,12 @@ def report(
     mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
     scenarios = _load_scenarios_or_fail(suite_dir, source="suite", config_path=config_path)
-    n = _resolve_runs(runs, cfg)
+    # `mode=` is passed for the same reason `check` passes it, and MP-140 makes it
+    # load-bearing: the Report now publishes an `underpowered` list computed with the mode,
+    # so a pre-spend warning priced WITHOUT it would stay silent about the blindness the
+    # document it is about to write goes on to disclose. Both sides are replayed here at
+    # `n`, so `baseline_sizes` correctly defaults to it.
+    n = _resolve_runs(runs, cfg, mode=mode)
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
     # Both sides are replayed live here, so the REPLAYS are twice a `check` over the same
@@ -777,7 +831,20 @@ def report(
     if not results:
         _fail("no scenarios completed; nothing to report.")
 
-    console.print(render_cli(results, from_, to, n))
+    # MP-140 / MP-123. Both coverage axes, computed on the scenarios that actually produced
+    # a comparison -- a scenario the provider failed on is in `skipped` and was never
+    # diffed, so reading either disclosure off the LOADED suite would describe a run that
+    # did not happen. (MP-138 shipped that mistake on `check` and it was caught in review.)
+    #
+    # Unlike `check`, this command replays BOTH sides itself at `n`, so the permutation
+    # floor is identical for every scenario and blindness is all-or-nothing here. It is
+    # still materialised per scenario: the renderers name the blind ones, and a future
+    # per-scenario run count must not need this call site changed to stay honest.
+    compared = [s for s in scenarios if s.id not in set(skipped)]
+    underpowered = [s.id for s in compared] if _cannot_reach_alpha(n, n, mode) else []
+    census = _channel_census(compared, judge, prov)
+
+    console.print(render_cli(results, from_, to, n, underpowered, census))
 
     suite_id, suite_version = read_manifest(suite_dir)
     date_iso = datetime.now(timezone.utc).date().isoformat()
@@ -815,6 +882,11 @@ def report(
         reproduce_cmd=reproduce_cmd,
         scenario_ids=[s.id for s in scenarios],
         skipped=skipped,
+        # MP-140. Carried on the meta so the Markdown and the JSON audit trail get it from
+        # one place; passing it to the renderer alone is how `check` ended up honest and the
+        # published Report did not.
+        census=census,
+        underpowered=underpowered,
     )
 
     out = Path(output_dir)
