@@ -6,6 +6,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The PR comment no longer leads a partially blind run with a green "no behavioral
+  change".** The header branch tested `len(underpowered) >= len(results)`, so a run where only
+  *some* scenarios were compared at a run count that could not reach significance fell through
+  to the green tick — while the bucket label below it flagged those scenarios as unmeasurable
+  and the footer called the model "only partially cleared". `[M]` Reproduced end to end: a
+  baseline holding 4 recorded runs for two scenarios and 2 for the other two, checked at
+  `--runs 4`, wrote `✅ Modelpin: no behavioral change` as line 1 of `last-report.md` and
+  exited 0 — and `action.yml` posts that file verbatim after an invisible HTML comment, so it
+  is the first line a PR reviewer reads. Such a run now reads `❔ Modelpin: partially
+  measured`. A real regression, an abstention or a minor change still outranks it: this
+  downgrades a clearance and never a verdict. (The public Report renderer, `mp report`,
+  still carries no blindness qualifier at any run count — tracked separately as MP-123,
+  alongside MP-44.) (MP-116)
+- **The scenarios a run could not measure are now named, on both surfaces.** `[M]`
+  `underpowered` was a list of scenario ids and neither renderer printed them, so a reviewer
+  told "2 of 4 could not have reported a regression" had no way to learn *which* two short of
+  reading the sidecar JSON — and by construction every other bucket is empty whenever that
+  path is live. The CLI summary and the PR comment now name them. (MP-117)
+- **The persisted report carries the concrete remedy the CLI already gave.** The pre-spend
+  warning says `Use --runs 5`; `last-report.md` — the artifact the Action posts — said merely
+  "re-run with more runs per side" when every scenario was blind, and gave *no* remedy at all
+  when only some were. Both branches now name the run count, and name `modelpin baseline` as
+  well as `modelpin check`: the permutation floor depends on both sides, so a remedy naming
+  only `check` leaves a short baseline blind. A test pins the two surfaces to the same
+  constant so they cannot drift apart again. (MP-117)
+- **`mp check` discloses a baseline whose scenarios hold different numbers of recorded runs.**
+  Such a baseline is scored correctly per scenario, but it silently splits a run into a
+  measured half and a structurally blind half, and nothing said so — `save_baseline` and
+  `load_baseline` applied zero uniformity validation in either direction. `mp check` now
+  prints the per-scenario counts before it spends, for the scenarios it will actually replay
+  and no others: `[M]` an unscoped version of this warning fired over a baseline entry whose
+  scenario file had been deleted, and over an entry holding 0 recorded runs, in both cases
+  while every scenario in the run was measured at full power. Reported rather than refused:
+  the engine can use the file, so the gap was in what it *said*. (MP-116)
+- **`tool_call_match` is the tool-name signal again, so `Tool match 0.00` no longer renders
+  beside `unchanged`.** 0.2.0 redefined the published field as `1 - max(tool_tvd, arg_tvd)`,
+  folding the argument distance into a column named for tool calls. `[M]` On a scenario whose
+  tool names are identical on every run but whose free-text argument jitters, the Report
+  published `Tool match 0.00` next to `✅ unchanged` at confidence `1.00` — a document
+  contradicting itself. `[M]` Sharper still: a regression caused *entirely* by refusal, tool
+  names identical throughout, published `Tool match 0.00` too, which reads as the tool
+  trajectory having broken. It had not. The argument distance keeps its own published column
+  (`Arg match`, added in 0.2.0). **No verdict, no threshold, and no already-published number
+  changes:** the field is informational — `tool_regressed` reads `tool_p`/`tool_tvd` directly
+  and never this field. `[M]` All 60 drift-map records were re-scored by replay from
+  `docs/reports/data/drift_cache_drift-suite.json`: `args_compared` is false on every one, so
+  the old and the new formula reproduce the published `tool_call_match` exactly, 60/60 —
+  `max()` was a genuine no-op there. `[M]` The other 10 records
+  (`reports/modelpin-report-gpt-4.1-vs-gpt-4o-2026-06-24.json`) carry `modelpin_version:
+  0.1.1` and the six-field `DiffSignals` schema that predates `tool_arg_match`, so their
+  values were already computed as `1 - tool_tvd`; no trace cache for that pair is tracked, so
+  they cannot be re-scored. Going forward the field *can* differ, and only ever in one
+  direction: the argument gate runs at all only when the tool-name trajectory is unimodal on
+  each side *and* identical across them (`structural.py::name_trajectory_is_stable`), so
+  `tool_tvd` is exactly `0.0` wherever `Arg match` is populated and the new value is exactly
+  `1.00` wherever the old one was `1 - arg_tvd`. `[M]` fp-guardian priced how often that
+  differs by resampling the committed argument repertoires over 120,000 args-compared
+  comparisons at N=2–6 × 4 match modes: 36,581 move (30.5%), every one toward `1.00` and none
+  away. That is why this lands before the next Report publication rather than after it, and
+  it is also why `Tool match` is a constant `1.00` in that regime — the two columns are
+  complementary, not redundant. (MP-74)
+
 ## [0.2.0] - 2026-08-27
 
 ### Changed (breaking)
@@ -671,7 +734,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/samarthputhraya/modelpin/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/samarthputhraya/modelpin/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/samarthputhraya/modelpin/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/samarthputhraya/modelpin/releases/tag/v0.1.0

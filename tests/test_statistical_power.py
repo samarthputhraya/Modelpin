@@ -27,21 +27,24 @@ its own fp-guardian review. This governs only what the tool CLAIMS.
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from math import comb
 from pathlib import Path
 
 from typer.testing import CliRunner
 
-from modelpin.cli import app
+from modelpin.cli import RECOMMENDED_RUNS, app
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
 from modelpin.diff import ALPHA
 from modelpin.diff.stats import (
     min_achievable_pvalue_distribution,
     min_achievable_pvalue_mean,
 )
-from modelpin.models import DiffResult, DiffVerdict
+from modelpin.models import DiffResult, DiffVerdict, Trace
+from modelpin.report import _RECOMMENDED_RUNS as _REPORT_RECOMMENDED_RUNS
 from modelpin.report import render_cli, render_pr_comment
+from modelpin.storage import load_baseline, nonuniform_run_counts, save_baseline
 
 _DEMO_ROOT = Path(tempfile.mkdtemp(prefix="modelpin-power-demo-"))
 write_demo(_DEMO_ROOT)
@@ -353,3 +356,332 @@ def test_the_directional_modes_are_not_declared_blind_at_three_runs(tmp_path):
     for mode in ("subset", "superset"):
         _, report = _check(tmp_path, scen, 3, mode=mode, tag="d")
         assert "could not have reported a regression" not in report, (mode, report)
+
+
+# --- MP-116 / MP-117: what a PARTIALLY blind run is allowed to say ------------------------
+#
+# `[M] 2026-08-27`, reproduced before either fix. MP-55 taught the renderer to stop clearing
+# a run that could not have gone red, but only when EVERY scenario was blind: the header
+# branch read `len(underpowered) >= len(results)`, so partial coverage fell through to the
+# green tick while the bucket label and the footer four lines below both called the model
+# "only partially cleared" -- the document contradicting its own first line, which is the
+# line `action.yml` posts at the top of the PR comment.
+#
+# The SHAPE matters and cost one dead hypothesis: "3 results, 2 unchanged, 1 blind" does NOT
+# reproduce it. Any non-`unchanged` verdict pre-empts the header before the blindness branch
+# is reached, so the minimal case is ALL results unchanged with `underpowered` a proper
+# non-empty subset. That pre-emption is pinned below, because a fix that broke it would
+# trade a false green for a false grey.
+
+
+def _trace(sid: str, i: int) -> Trace:
+    return Trace(scenario_id=sid, model_id="m", run_idx=i, final_output="ok")
+
+
+def _heterogeneous_check(tmp_path):
+    """The state MP-116 needs, built the only way it can be: by editing the file on disk.
+    `[M]` No Modelpin command produces one -- `save_baseline` replaces the whole `scenarios`
+    dict and `replay()` always returns exactly `runs` traces -- so this hand-edits a recorded
+    baseline the way a merge or an externally generated file would.
+
+    Same model on both sides, so every verdict is `unchanged` and nothing pre-empts the
+    header. 2 of 4 scenarios are truncated to 2 recorded runs and the check runs at 4.
+    """
+    store = str(tmp_path / "hetero")
+    common = [
+        "--provider",
+        "fake",
+        "--fixtures",
+        FIXTURES,
+        "--scenarios-dir",
+        SCEN,
+        "--config",
+        CONFIG,
+        "--store-dir",
+        store,
+    ]
+    base = runner.invoke(app, ["baseline", "--model", DEMO_FROM, *common, "--runs", "4"])
+    assert base.exit_code == 0, base.output
+    recorded = load_baseline(DEMO_FROM, store)
+    for sid in ("angry_customer", "invoice_parse"):
+        recorded[sid] = recorded[sid][:2]
+    save_baseline(recorded, DEMO_FROM, store)
+    chk = runner.invoke(
+        app, ["check", "--to", DEMO_FROM, "--from", DEMO_FROM, *common, "--runs", "4"]
+    )
+    report = (Path(store) / "last-report.md").read_text(encoding="utf-8")
+    return chk, report
+
+
+def test_a_partially_blind_run_does_not_lead_with_the_green_header():
+    """MP-116, the reproduction: line 1 cleared the model while the footer said it was only
+    partially cleared."""
+    results = [_unchanged("s1"), _unchanged("s2"), _unchanged("s3")]
+    md = render_pr_comment(results, "a", "b", 3, None, ["s3"])
+    first = md.splitlines()[0]
+    assert "no behavioral change" not in first.lower(), first
+    assert "partially measured" in first.lower(), first
+    # ... and the honest lines it used to contradict are still there.
+    assert "partially cleared" in md, md
+    assert "safe to adopt" not in md, md
+
+
+def test_a_real_verdict_still_outranks_the_partial_header():
+    """The pre-emption the fix must not break: a regression, an abstention or a minor each
+    says more than "partially measured", so each keeps the header even with blind scenarios
+    in the same run."""
+    for verdict, expected in (
+        (DiffVerdict.regression, "behavioral regression"),
+        (DiffVerdict.insufficient_evidence, "could not measure"),
+        (DiffVerdict.changed_minor, "minor changes"),
+    ):
+        results = [
+            DiffResult(
+                scenario_id="s1",
+                from_model="a",
+                to_model="b",
+                verdict=verdict,
+                explanation="x",
+                confidence=0.9,
+            ),
+            _unchanged("s2"),
+        ]
+        first = render_pr_comment(results, "a", "b", 3, None, ["s2"]).splitlines()[0]
+        assert expected in first.lower(), (verdict, first)
+
+
+def test_the_blind_scenarios_are_named_by_both_renderers():
+    """MP-117. Both surfaces printed a COUNT and nothing else, so a reviewer told "1 of 3
+    could not have reported a regression" had no way to learn WHICH -- and the ids appear in
+    no other bucket, because every other bucket is empty whenever this path is live."""
+    results = [
+        _unchanged("greeting"),
+        _unchanged("refund_request"),
+        _unchanged("invoice_parse"),
+    ]
+    md = render_pr_comment(results, "a", "b", 3, None, ["invoice_parse"])
+    cli = render_cli(results, "a", "b", 3, ["invoice_parse"])
+    assert "invoice_parse" in md, md
+    assert "invoice_parse" in cli, cli
+    # Naming the blind one must not smear the clean ones with the same doubt.
+    assert "greeting" not in md, md
+    assert "greeting" not in cli, cli
+
+
+def test_the_persisted_clearance_carries_the_concrete_run_count():
+    """MP-117's second half. The CLI's pre-spend warning says `Use --runs 5`; the persisted
+    report -- the artifact the Action posts, and the only thing a PR reviewer sees -- said
+    merely "re-run with more runs per side" in the all-blind branch and gave NO remedy at all
+    in the partial branch. Both now name the number, and both name `baseline` as well as
+    `check`: the floor depends on BOTH sides, so a remedy naming only `check` leaves a short
+    baseline blind."""
+    every = render_pr_comment([_unchanged("s1")], "a", "b", 2, None, ["s1"])
+    part = render_pr_comment([_unchanged("s1"), _unchanged("s2")], "a", "b", 2, None, ["s1"])
+    for md in (every, part):
+        assert f"--runs {RECOMMENDED_RUNS}" in md, md
+        assert "modelpin baseline" in md and "modelpin check" in md, md
+
+
+def test_the_report_and_the_cli_advertise_the_same_run_count():
+    """The two surfaces bind the number independently (`cli.RECOMMENDED_RUNS`,
+    `report._RECOMMENDED_RUNS`). Pin them equal, or MP-117's fix decays back into the very
+    mismatch it removed the moment either constant moves."""
+    assert RECOMMENDED_RUNS == _REPORT_RECOMMENDED_RUNS
+
+
+# --- MP-116's input state: the heterogeneous baseline nothing validated -------------------
+
+
+def test_nonuniform_run_counts_is_silent_on_a_uniform_baseline():
+    uniform = {
+        "s1": [_trace("s1", i) for i in range(3)],
+        "s2": [_trace("s2", i) for i in range(3)],
+    }
+    assert nonuniform_run_counts(uniform) == {}
+    assert nonuniform_run_counts({}) == {}
+    assert nonuniform_run_counts({"only": [_trace("only", 0)]}) == {}
+
+
+def test_nonuniform_run_counts_reports_every_scenario_when_they_disagree():
+    mixed = {"s1": [_trace("s1", i) for i in range(3)], "s2": [_trace("s2", 0)]}
+    assert nonuniform_run_counts(mixed) == {"s1": 3, "s2": 1}
+
+
+def test_storage_round_trips_a_heterogeneous_baseline_without_complaint(tmp_path):
+    """`[M]` The state MP-116 needs is reachable because NOTHING rejects it: `save_baseline`
+    and `load_baseline` apply zero run-count uniformity validation in either direction. This
+    pins that as a fact rather than a bug -- an uneven baseline is scored correctly per
+    scenario (MP-72), so the fix is to SAY so, not to refuse a file the engine can use.
+    """
+    store = tmp_path / "store"
+    uneven = {
+        "s1": [_trace("s1", i) for i in range(4)],
+        "s2": [_trace("s2", i) for i in range(2)],
+    }
+    save_baseline(uneven, "m", store)
+    back = load_baseline("m", store)
+    assert {k: len(v) for k, v in back.items()} == {"s1": 4, "s2": 2}
+    assert nonuniform_run_counts(back) == {"s1": 4, "s2": 2}
+
+
+def test_a_heterogeneous_baseline_is_disclosed_before_the_run_spends(tmp_path):
+    """The user is about to pay for a run whose coverage is not what its run count suggests.
+    Printed before the ADR-0019 pre-spend line, which prices the whole run off
+    `min(baseline_sizes)` and so describes only the weakest scenario."""
+    chk, _ = _heterogeneous_check(tmp_path)
+    out = " ".join(chk.output.split())
+    assert "different numbers of recorded runs per scenario" in out, chk.output
+    assert "angry_customer=2" in out and "greeting=4" in out, chk.output
+
+
+def test_a_heterogeneous_baseline_reaches_the_partial_header_end_to_end(tmp_path):
+    """MP-116 through the real CLI, on the real renderer, with the blind list produced by
+    `cli._blind` rather than hand-passed. `[M]` At 2 vs 4 runs the floor is 0.0667 > ALPHA
+    (blind); at 4 vs 4 it is 0.0143 (measured), so the split is genuine, not constructed.
+    """
+    assert min_achievable_pvalue_mean(2, 4) > ALPHA
+    assert min_achievable_pvalue_mean(4, 4) < ALPHA
+    chk, report = _heterogeneous_check(tmp_path)
+    assert chk.exit_code == 0, chk.output
+    first = report.splitlines()[0]
+    assert "no behavioral change" not in first.lower(), report
+    assert "partially measured" in first.lower(), report
+    # MP-117 on the artifact that is actually posted: the blind ones are named there.
+    assert "angry_customer" in report and "invoice_parse" in report, report
+    assert f"--runs {RECOMMENDED_RUNS}" in report, report
+
+
+def test_the_uniformity_warning_ignores_scenarios_the_run_will_not_replay():
+    """`[M]` claims-auditor, on the first draft of this fix: unscoped, the warning fired on a
+    baseline entry whose scenario file had been DELETED, and on an entry holding 0 recorded
+    runs -- which `check` skips -- in both cases while every scenario in the run was measured
+    at full power. A pre-spend power warning that fires when nothing in the run is affected
+    is the crying-wolf shape the north-star metric exists to prevent."""
+    base = {
+        "greeting": [_trace("greeting", i) for i in range(4)],
+        "refund_request": [_trace("refund_request", i) for i in range(4)],
+        "deleted_from_disk": [_trace("deleted_from_disk", i) for i in range(2)],
+    }
+    assert nonuniform_run_counts(base, ["greeting", "refund_request"]) == {}
+    # ... and it still fires when a scenario the run WILL replay is short.
+    assert nonuniform_run_counts(base, ["greeting", "deleted_from_disk"]) == {
+        "greeting": 4,
+        "deleted_from_disk": 2,
+    }
+
+
+def test_the_uniformity_warning_ignores_zero_run_entries():
+    """`check` skips a scenario with no recorded baseline and says so separately, so counting
+    its 0 as a disagreeing run count would report a second time on the same fact."""
+    base = {
+        "greeting": [_trace("greeting", i) for i in range(4)],
+        "never_recorded": [],
+    }
+    assert nonuniform_run_counts(base) == {}
+    assert nonuniform_run_counts(base, ["greeting", "never_recorded"]) == {}
+
+
+def test_the_partial_clearance_prose_is_still_free_of_comparative_language():
+    """ADR-0009 / spec section 9. `[M]` claims-auditor: the `_BANNED` regex was applied at
+    three sites, none of which passed a non-empty `underpowered`, so every string this branch
+    adds to the report was unguarded prose. A Report is posted on someone else's repository;
+    "worse", "downgrade" and their kin must be unreachable on EVERY branch, not most."""
+    banned = re.compile(
+        r"(?i)\b(better|worse|best|beats|wins|loses|superior|inferior|upgrade|downgrade)\b"
+    )
+    results = [_unchanged("s1"), _unchanged("s2")]
+    for blind in (["s1"], ["s1", "s2"]):
+        md = render_pr_comment(results, "a", "b", 2, None, blind)
+        assert not banned.search(md), md
+        assert not banned.search(render_cli(results, "a", "b", 2, blind))
+
+
+# --- what the new prose does under adversarial input --------------------------------------
+#
+# `[M] 2026-08-27` first-run-auditor, on the first draft of this branch. Both findings are
+# in code this branch ADDED, not pre-existing, and neither had any test.
+
+
+_HOSTILE_ID = "evil[/][bold red]pwned|pipe"
+
+
+def test_a_scenario_id_that_looks_like_rich_markup_does_not_crash_mp_check(tmp_path):
+    """`[M]` The new uneven-baseline warning interpolated raw scenario ids into a rich-markup
+    string, so an id carrying a lone `[/]` crashed `mp check` with an unhandled MarkupError,
+    a full traceback and exit 1 -- instead of printing the warning it exists to print.
+    Scenario ids are author-controlled text and reach every console string through this path.
+    """
+    root = tmp_path / "hostile"
+    write_demo(root)
+    d = root / DEMO_DIRNAME
+    (d / "scenarios" / "hostile.json").write_text(
+        json.dumps(
+            {
+                "id": _HOSTILE_ID,
+                "name": "Hostile id",
+                "kind": "single",
+                "input": {"messages": [{"role": "user", "content": "hi"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    fixtures = d / DEMO_FIXTURES
+    canned = json.loads(fixtures.read_text(encoding="utf-8"))
+    canned.append(
+        {
+            "scenario_id": _HOSTILE_ID,
+            "model_id": DEMO_FROM,
+            "final_output": "hello",
+            "tokens_out": 3,
+            "latency_ms": 100.0,
+        }
+    )
+    fixtures.write_text(json.dumps(canned), encoding="utf-8")
+
+    store = str(d / ".modelpin")
+    common = [
+        "--provider",
+        "fake",
+        "--fixtures",
+        str(fixtures),
+        "--scenarios-dir",
+        str(d / "scenarios"),
+        "--config",
+        str(d / "modelpin.yaml"),
+        "--store-dir",
+        store,
+    ]
+    base = runner.invoke(app, ["baseline", "--model", DEMO_FROM, *common, "--runs", "4"])
+    assert base.exit_code == 0, base.output
+    recorded = load_baseline(DEMO_FROM, store)
+    recorded[_HOSTILE_ID] = recorded[_HOSTILE_ID][:2]
+    save_baseline(recorded, DEMO_FROM, store)
+
+    chk = runner.invoke(
+        app, ["check", "--to", DEMO_FROM, "--from", DEMO_FROM, *common, "--runs", "4"]
+    )
+    assert chk.exit_code == 0, chk.output
+    assert "MarkupError" not in chk.output and "Traceback" not in chk.output, chk.output
+    out = " ".join(chk.output.split())
+    assert "different numbers of recorded runs per scenario" in out, chk.output
+    # Printed literally, with no styling applied and nothing swallowed.
+    assert f"{_HOSTILE_ID}=2" in out, chk.output
+
+
+def test_the_blind_scenario_list_truncates_instead_of_walling_the_line(tmp_path):
+    """`[M]` At 30 blind scenarios both surfaces rendered a ~1,200-character comma wall.
+    Naming them is the point of MP-117; naming all of them at any suite size is not, and the
+    full list is in the sidecar JSON either way."""
+    ids = [f"scenario_{i:02d}" for i in range(30)]
+    results = [_unchanged(sid) for sid in ids]
+    md = render_pr_comment(results, "a", "b", 2, None, ids)
+    cli = render_cli(results, "a", "b", 2, ids)
+    for text in (md, cli):
+        assert "scenario_00" in text and "scenario_07" in text, text
+        assert "scenario_08" not in text, text
+        assert "and 22 more" in text, text
+    # A suite at the cap names every one and says nothing about a remainder. Matched as a
+    # pattern, not the bare word "more" -- the remedy line legitimately says "or more".
+    exact = render_pr_comment(results[:8], "a", "b", 2, None, ids[:8])
+    assert "scenario_07" in exact, exact
+    assert not re.search(r"and \d+ more", exact), exact

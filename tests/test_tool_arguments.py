@@ -59,13 +59,68 @@ def test_a_hundredfold_argument_change_is_not_unchanged():
     )
 
 
-def test_the_tool_signal_does_not_score_a_changed_argument_as_a_perfect_match():
-    """`tool_call_match: 1.0` means "identical distributions" -- it is a positive claim of
-    sameness, and here it is false."""
+def test_the_argument_signal_does_not_score_a_changed_argument_as_a_perfect_match():
+    """A published `1.0` means "identical distributions" -- a positive claim of sameness, and
+    here it is false. MP-74 moved WHICH field carries that claim, not whether it is made:
+    the argument distance is published as `tool_arg_match` (the report's `Arg match` column)
+    and no longer folded into `tool_call_match`, which is now the tool-NAME signal alone. The
+    intent of this test is unchanged; only the field it reads moved."""
     r = diff_scenario(
         "refund", "old", "new", _runs("old", {"amount": 49.99}), _runs("new", {"amount": 4999.00})
     )
-    assert r.signals.tool_call_match is not None and r.signals.tool_call_match < 1.0
+    assert r.signals.tool_arg_match is not None and r.signals.tool_arg_match < 1.0
+
+
+# --- MP-74: each column measures the thing its name says ---------------------------------
+
+
+def _freetext(model: str, salt: str, n: int = RUNS) -> list[Trace]:
+    """The `arg_freetext_note` shape: one tool, same name every run, a free-text payload that
+    is distinct on every single run -- so the argument key pools are maximally high-entropy
+    and disjoint between the two sides, while the NAME trajectory is a perfect match."""
+    return [
+        Trace(
+            scenario_id="arg_freetext_note",
+            model_id=model,
+            run_idx=i,
+            tool_calls=[ToolCall(name="add_call_note", arguments={"note": f"{salt}-note-{i}"})],
+            final_output="Noted.",
+        )
+        for i in range(n)
+    ]
+
+
+def test_an_unchanged_verdict_does_not_publish_a_zero_tool_match():
+    """`[M]` MP-74, reproduced: `unchanged @ 1.00` published `Tool match 0.00` -- a
+    contradiction on the face of the public Report -- because free-text argument jitter was
+    folded into the tool-NAME column via `max()`. The names are identical on all 10 runs."""
+    r = diff_scenario(
+        "arg_freetext_note", "m", "m", _freetext("m", "baseline"), _freetext("m", "candidate")
+    )
+    assert r.verdict is DiffVerdict.unchanged
+    assert r.confidence == 1.0
+    assert r.signals.tool_call_match == 1.0, (
+        f"published Tool match {r.signals.tool_call_match} beside "
+        f"'{r.verdict.value} @ {r.confidence:.2f}' -- the tool NAMES are identical on every "
+        f"run, so the name signal is a perfect match"
+    )
+    # The argument divergence is NOT lost -- it moved to the column that names it.
+    assert r.signals.tool_arg_match == 0.0
+
+
+def test_a_refusal_regression_does_not_blame_the_tool_trajectory():
+    """Sharper than MP-74's own row, and the case this must never regress on: a `regression`
+    caused ENTIRELY by refusal, with identical tool names throughout, published
+    `Tool match 0.00`. A reader concludes the tool trajectory broke. It did not."""
+    base = _freetext("old", "baseline")
+    cand = [t.model_copy(update={"refused": True}) for t in _freetext("new", "candidate")]
+    r = diff_scenario("arg_freetext_note", "old", "new", base, cand)
+    assert r.verdict is DiffVerdict.regression
+    assert "refusal" in r.explanation and "tool-call" not in r.explanation
+    assert r.signals.tool_call_match == 1.0, (
+        f"published Tool match {r.signals.tool_call_match} on a regression the tool-name "
+        f"signal took no part in: {r.explanation!r}"
+    )
 
 
 def test_a_changed_argument_is_caught_in_every_match_mode():

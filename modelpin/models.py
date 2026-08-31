@@ -165,7 +165,11 @@ class DiffVerdict(str, Enum):
 
 
 class DiffSignals(BaseModel):
-    #: The worse of the two tool sub-signals (name trajectory, argument payload).
+    #: The tool-NAME trajectory distance, and only that: ``1 - tool_tvd``. It was briefly
+    #: the worse of the two tool sub-signals (``1 - max(tool_tvd, arg_tvd)``) in 0.2.0, which
+    #: published `Tool match 0.00` beside an `unchanged` verdict whenever a free-text argument
+    #: jittered under identical tool names. The argument payload is `tool_arg_match` below.
+    #: MP-74.
     tool_call_match: Optional[float] = None
     #: The argument sub-signal alone. ``None`` means the argument gate did not RUN -- either
     #: no run on either side carried arguments, or the name trajectory was not stable enough

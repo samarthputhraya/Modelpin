@@ -8,12 +8,21 @@ Matches the target UX in spec section 7. Framing stays measurement/opinion
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Optional
 
 from rich.markup import escape
 
+from modelpin.config import DEFAULT_RUNS
 from modelpin.models import DiffResult, DiffVerdict
+
+#: The run count the persisted artifact tells a reader to re-run at. [M] MP-117: the CLI's
+#: pre-spend warning said `Use --runs 5` while `last-report.md` -- the file `action.yml` posts,
+#: and the only thing a PR reviewer sees -- said merely "re-run with more runs per side", with
+#: no number; and the PARTIALLY-blind branch carried no remedy at all. Bound to the same
+#: constant `cli.RECOMMENDED_RUNS` is bound to, and pinned equal to it by a test, so the two
+#: surfaces cannot drift into advertising different numbers.
+_RECOMMENDED_RUNS = DEFAULT_RUNS
 
 # CLI uses ASCII tokens (+ rich color) so it never hits a UnicodeEncodeError on a
 # legacy Windows console (cp1252). Emoji live only in the Markdown report below.
@@ -83,20 +92,44 @@ _UNDERPOWERED_NOTE = (
 )
 
 
+#: How many blind scenario ids to name inline before summarising the rest. `[M]`
+#: first-run-auditor, on the first draft of MP-117: a 30-scenario suite rendered every id
+#: into a single ~1,200-character comma-separated wall on BOTH surfaces. Naming them is the
+#: point of MP-117 -- naming all of them at any suite size is not, and the full list is in
+#: the sidecar JSON either way. Eight fits a terminal line and a PR comment line.
+_MAX_NAMED_BLIND = 8
+
+
+def _named_blind(ids: Sequence[str], fmt: Callable[[str], str] = str) -> str:
+    """`a, b, c` -- truncated with `and N more` past ``_MAX_NAMED_BLIND``."""
+    shown = [fmt(sid) for sid in ids[:_MAX_NAMED_BLIND]]
+    rest = len(ids) - len(shown)
+    return ", ".join(shown) + (f", and {rest} more" if rest > 0 else "")
+
+
 def _underpowered_clearance(underpowered: Sequence[str], total: int, to_model: str) -> str | None:
     """The line that must REPLACE an affirmative clearance, or ``None`` if none is needed."""
     if not underpowered:
         return None
+    # The floor depends on BOTH sides (`diff/__init__.py`: a 20-run baseline checked at
+    # `--runs 5` scores 20 reference runs, not 5), so a remedy that names only `check` can
+    # leave a short BASELINE blind. Both commands are named for that reason.
+    remedy = (
+        f"re-run with `--runs {_RECOMMENDED_RUNS}` or more on both sides "
+        f"(`modelpin baseline --runs {_RECOMMENDED_RUNS}`, then "
+        f"`modelpin check --runs {_RECOMMENDED_RUNS}`)"
+    )
     if len(underpowered) >= total:
         return (
             f"→ This run could not have reported a regression at all: no signal could reach "
             f"statistical significance at this run count. `{to_model}` is NOT cleared — "
-            f"re-run with more runs per side."
+            f"{remedy}."
         )
     return (
         f"→ No behavioral regressions found in the {total - len(underpowered)} scenario(s) "
         f"this run could measure; {len(underpowered)} could not have reported one at this "
-        f"run count, so `{to_model}` is only partially cleared."
+        f"run count, so `{to_model}` is only partially cleared — for the scenario(s) named "
+        f"above, {remedy}."
     )
 
 
@@ -127,6 +160,15 @@ def render_pr_comment(
     elif underpowered and len(underpowered) >= len(results):
         # A green check over a run that could not have gone red is the worst header we ship.
         header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
+    elif underpowered:
+        # [M] MP-116: this branch did not exist, so PARTIAL blindness fell through to the
+        # green tick while the bucket label below it flagged those scenarios as unmeasurable
+        # and the footer called the model "only partially cleared" -- the document
+        # contradicting its own first line, which is the line `action.yml` posts as the top
+        # of the PR comment.
+        # Reproduced end to end over a heterogeneous baseline (2 of 4 scenarios at 2 recorded
+        # runs, checked at 4): line 1 read "no behavioral change" and the run exited 0.
+        header = f"❔ **Modelpin: partially measured — `{from_model}` → `{to_model}`**"
     else:
         header = f"✅ **Modelpin: no behavioral change — `{from_model}` → `{to_model}`**"
     lines = [
@@ -156,13 +198,19 @@ def render_pr_comment(
                 f"{_MD_MARK[r.verdict]} {_md_inline(r.scenario_id)} — {_md_inline(r.explanation)}"
             )
         lines.append("")
-    blind = sum(1 for r in unchanged if r.scenario_id in set(underpowered))
-    if blind:
+    _blind_set = set(underpowered)
+    blind_ids = [r.scenario_id for r in unchanged if r.scenario_id in _blind_set]
+    if blind_ids:
         # A green tick over a scenario that could not have gone red contradicts the very
         # line below it. Name the blind ones inside the bucket, not only in the footer.
+        # [M] MP-117: this printed a COUNT and nothing else, so a reviewer told "2 of 4
+        # could not have reported a regression" had no way to learn WHICH two short of
+        # reading the sidecar JSON -- and the ids appear in no other bucket, because by
+        # construction every other bucket is empty whenever this path is live.
         lines.append(
-            f"**UNCHANGED ({len(unchanged)})** — ❔ {blind} of these could not have reported "
-            f"a regression at this run count"
+            f"**UNCHANGED ({len(unchanged)})** — ❔ {len(blind_ids)} of these could not have "
+            f"reported a regression at this run count: "
+            + _named_blind(blind_ids, lambda sid: f"`{_md_inline(sid)}`")
         )
     else:
         lines.append(f"**UNCHANGED ({len(unchanged)})** ✅")
@@ -216,9 +264,12 @@ def render_cli(
         if n_blind:
             # Never "OK" over a scenario that could not have gone red. `unchanged` here is
             # the absence of a measurement, not a measurement of sameness.
+            named = _named_blind(
+                [escape(r.scenario_id) for r in unchanged if r.scenario_id in blind]
+            )
             lines.append(
                 f"[yellow]??[/] [dim]{n_blind} scenario(s) reported `unchanged` at a run "
-                f"count that could not reach significance -- NOT a clean result[/]"
+                f"count that could not reach significance -- NOT a clean result: {named}[/]"
             )
             rest = len(unchanged) - n_blind
             if rest:

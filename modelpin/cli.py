@@ -61,7 +61,13 @@ from modelpin.report import (
 from modelpin.report.suite import compute_suite_hash, read_manifest, slug
 from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
 from modelpin.scenarios import ScenarioError, load_scenarios
-from modelpin.storage import STORE_DIRNAME, BaselineError, load_baseline, save_baseline
+from modelpin.storage import (
+    STORE_DIRNAME,
+    BaselineError,
+    load_baseline,
+    nonuniform_run_counts,
+    save_baseline,
+)
 
 #: A behavioral diff compares run *distributions*; fewer than this can't form one.
 MIN_RUNS = 2
@@ -578,6 +584,25 @@ def check(
         _fail(str(e))
     except BaselineError as e:
         _fail(str(e))
+    # [M] MP-116: an uneven baseline is scored correctly per scenario (MP-72), but it splits
+    # the run into a measured half and a structurally blind half, and NOTHING said so -- the
+    # posted report then led with a green clearance. Reported, not raised: `load_baseline` is
+    # right not to fail over a file it can use, and the user can act on this before spending.
+    # Printed BEFORE the pre-spend disclosure below, which prices the whole run off
+    # `min(baseline_sizes)` and so describes the weakest scenario, not every one.
+    uneven = nonuniform_run_counts(base, [s.id for s in scenarios])
+    if uneven:
+        # `escape`, not raw: `[M]` first-run-auditor crashed `mp check` with an unhandled
+        # rich MarkupError and a full traceback (exit 1, no warning printed) on a scenario
+        # id containing a lone `[/]`. Scenario ids are author-controlled text and reach
+        # every console string through this path; `report/render_cli` already escapes them.
+        detail = ", ".join(f"{_rich_escape(sid)}={k}" for sid, k in sorted(uneven.items()))
+        console.print(
+            f"[yellow]warning:[/] the baseline for '{from_model}' holds different numbers of "
+            f"recorded runs per scenario ({detail}), so statistical power differs between "
+            f"them and some may be unable to report a regression at all. Re-record with "
+            f"`modelpin baseline --runs {RECOMMENDED_RUNS}` for uniform coverage."
+        )
     n = _resolve_runs(runs, cfg, mode=mode, baseline_sizes=[len(v) for v in base.values() if v])
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)

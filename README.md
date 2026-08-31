@@ -192,8 +192,11 @@ cannot reach `p ≤ 0.05` at any effect size, and at N=2 none of them can:
 depend on **both** sides, so a baseline recorded at 5 runs checked at 2 is priced at 5v2
 (0.048 — below the line), not at 2v2.
 
-Modelpin says so **before it spends**, and a scenario that could not have reported a regression
-is never described as clean: the report reads *"NOT cleared"*, not *"looks safe to adopt"*.
+Modelpin says so **before it spends**, and `mp check` never describes such a scenario as
+clean: the PR comment names the blind scenarios, drops its green tick, and reads *"NOT
+cleared"* — or *"only partially cleared"* when some scenarios were measured and some were
+not — never *"looks safe to adopt"*. `[A]` The public Report (`mp report`) does not yet carry
+this qualifier; until it does, do not publish a Report from a run below `--runs 4`.
 
 **2. Structural signals** (per run, no network, deterministic):
 - **Tool-call trajectory match** with four modes — `strict | unordered | subset | superset`
@@ -472,8 +475,8 @@ trials" claim is withdrawn — those 8 could not have fired, so the honest score
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **493 tests passing** (+3 `xfail` pinning the open
-MP-05 scenario-id collision, so 496 collected), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **510 tests passing** (+3 `xfail` pinning the open
+MP-05 scenario-id collision, so 513 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

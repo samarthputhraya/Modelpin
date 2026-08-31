@@ -347,16 +347,42 @@ def diff_scenario(
     )
 
     signals = DiffSignals(
-        # The WORSE of the two tool sub-signals. Spec 6A defines a tool call as name + args,
-        # so a run that matched on name and diverged on arguments has NOT matched -- and
-        # publishing 1.0 here would be a positive claim of sameness that is false. This is
-        # the field report/, scripts/drift_map.py and every persisted baseline read.
-        # [M] Corpus impact, measured by A/B replay rather than inferred from the census:
-        # with the argument gate correctly quantified (see has_tool_arguments) 0 of 2,240
-        # corpus comparisons change verdict, so no published number moves. An earlier draft
-        # asserted that from the census alone -- 5 arg-bearing calls, all identical -- and was
-        # WRONG, because the census cannot see the `{}`-vs-populated asymmetry.
-        tool_call_match=round(1.0 - max(tool_tvd, arg_tvd), 3),  # 1.0 == identical
+        # The tool-NAME trajectory distance, and ONLY that. It was briefly the worse of the
+        # two tool sub-signals -- `max(tool_tvd, arg_tvd)` -- on the Spec-6A reading that a
+        # tool call is name + args, so publishing 1.0 over a changed argument would be a
+        # false claim of sameness. That reading is right about the CLAIM and wrong about the
+        # COLUMN, and MP-112 is what made the difference: arguments now have their own
+        # published field (`tool_arg_match`, the report's `Arg match` column), so the
+        # composite no longer adds a claim -- it only removes one.
+        #
+        # [M] MP-74, re-reproduced 2026-08-27 on `arg_freetext_note` (5 runs/side, SAME model
+        # both sides): tool names identical on all 10 runs -> `tool_tvd` 0.0, free-text
+        # payloads disjoint -> `arg_tvd` 1.0, and the report published `Tool match 0.00`
+        # beside `unchanged @ 1.00`. <=0.1.2 read 1.00 there. Sharper still, and NOT in the
+        # row: a refusal-only `regression` ("refusal rate 0% -> 100%", tool names identical
+        # throughout) published `Tool match 0.00` too, which reads as the tool trajectory
+        # having broken. It had not.
+        #
+        # [M] `structural.py:162` records `tool_tvd` == 0.0 whenever `args_compared` holds --
+        # 0 counterexamples over 191,808 pool pairs x 4 match modes, re-verified 2026-08-27
+        # over 120,000. So under `max()` this column silently SWITCHED MEANING between rows:
+        # the name signal where no arguments were compared, the argument signal where they
+        # were, under one header. Each column now measures the thing its name says.
+        #
+        # Precisely stated, because the loose version oversells it: this column is now
+        # identically 1.0 wherever `tool_arg_match` is populated, so it carries no bits in
+        # that regime. What the split recovers is the PAIR -- under `max()`, `tool_tvd` was
+        # unrecoverable from the published fields whenever `arg_tvd >= tool_tvd`; it is
+        # recoverable now. And the contradiction is narrowed, not abolished: `unchanged @
+        # 1.00` beside `Arg match 0.00` is the same shape one column over. That one is
+        # deliberate (ADR-0029 decision 5 publishes the number an advisory rests on) and
+        # pre-dates this change -- see the `Arg match` legend row on the backlog.
+        #
+        # [M] Verdict-neutral by construction: `tool_regressed` above reads `tool_p`/`tool_tvd`
+        # directly and never this field. Nothing in `diff/` consumes it; it is rendered
+        # (`report/__init__.py`), persisted in the report sidecar, and carried wholesale into
+        # `scripts/drift_map.py` output via `model_dump()`.
+        tool_call_match=round(1.0 - tool_tvd, 3),  # 1.0 == identical tool-NAME trajectory
         tool_arg_match=round(1.0 - arg_tvd, 3) if args_compared else None,
         format_valid=not fmt_drift,
         refusal_delta=round(refusal_delta, 3),
