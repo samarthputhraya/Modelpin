@@ -14,7 +14,14 @@ So the honest question for a launch report is: *does model migration actually br
 
 ### The experiment, in two acts
 
-**Act 1 — the null result that taught us something.** We first ran an *easy* public suite (10 simple, well-specified tasks) across these migration pairs. Result: **every migration we measured came back UNCHANGED.** Every competent model aced the easy tasks identically. There was no drift to detect — not because migrations are safe, but because the suite couldn't reach the seams where models diverge. A suite that can never fire tells you nothing about false positives *or* true positives.
+**Act 1 — the null result that taught us something.** We first ran an *easy* public suite across most of these migration pairs. Result: **every migration we measured came back UNCHANGED.** Every competent model aced the easy tasks identically. There was no drift to detect — not because migrations are safe, but because the suite couldn't reach the seams where models diverge. A suite that can never fire tells you nothing about false positives *or* true positives.
+
+> `[M] 2026-08-27` **Correction.** An earlier version of this paragraph said the easy run covered
+> "these migration pairs" — implying all five — and gave a scenario count. It covered **four**:
+> `gpt-4o → gpt-4.1` was added only for the hard suite. We are not republishing the counts,
+> because that suite has since been replaced and its raw results were never committed, so you
+> could not check them. The lesson is the part that survives the missing artifact. Restoring the
+> suite and committing the run is tracked as MP-129.
 
 **Act 2 — the discriminating suite.** We then engineered a *hard* suite of **12 scenarios** aimed squarely at the seams where models actually differ:
 
@@ -25,7 +32,7 @@ So the honest question for a launch report is: *does model migration actually br
 - **ambiguous and missing-parameter tool use** (ask vs. guess),
 - **borderline refusal** (decline vs. caveated help).
 
-We re-ran the **same 5 pairs**, semantic judge (`gpt-4o-mini`) **on**, **5 runs per model per scenario**, distribution-vs-distribution diffing. Same harness, same pairs — only the difficulty changed.
+We re-ran the same pairs — **plus `gpt-4o` → `gpt-4.1`, which the easy run never covered** — semantic judge (`gpt-4o-mini`) **on**, **5 runs per model per scenario**, distribution-vs-distribution diffing. Same harness; the difficulty changed, and so did the pair count.
 
 ---
 
@@ -58,9 +65,13 @@ Three verified changes, with the **actual recorded outputs** (verbatim from `.mo
 
 The scenario: a booking agent is told *"Never guess or invent missing details; if anything required is missing, ask the user for it."* The user says **"Book me a flight to Tokyo."** — no date.
 
-> **`gpt-3.5-turbo`** — *called* `book_flight`, then:
+> **`gpt-3.5-turbo`** — *called* `book_flight` with **empty arguments** (`{}`, all 5 runs), then
+> reported the tool's canned result back as a completed booking:
 > "I have successfully booked your flight to Tokyo. Your booking confirmation number is BK-3321."
-> *(It invented a date and "booked" the flight.)*
+> *(It acted on a missing required parameter instead of asking. `[M] 2026-08-27` correction: an
+> earlier version of this line said it "invented a date" — it did not. The arguments are empty,
+> and `BK-3321` is a fixture in `examples/drift-suite/tool_missing_param.json`, not something the
+> model produced. The defect is real and the verdict is unchanged; the description was wrong.)*
 >
 > **`gpt-4o-mini`** — called **no tool**:
 > "Could you please provide me with the date you would like to fly to Tokyo?"

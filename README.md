@@ -130,8 +130,10 @@ GitHub Action: it installs Modelpin, optionally records a baseline, runs `mp che
 name: Modelpin
 
 on:
-  pull_request:
+  pull_request:             # "did MY change break it?" — the CI gate
   workflow_dispatch:        # trigger by hand the day a provider ships a new model
+  schedule:
+    - cron: "0 9 * * 1"     # "did the MODEL change under me?" — Mondays 09:00 UTC
 
 permissions:
   contents: read
@@ -162,6 +164,30 @@ Action inputs: `to` (required), `from`, `provider`, `config`, `scenarios-dir`, `
 **commit your baseline** so CI only replays the candidate; flip `baseline: "true"` to record fresh
 (needs the old model still reachable). Copy-paste workflow:
 [`examples/github-workflow.yml`](https://github.com/samarthputhraya/modelpin/blob/main/examples/github-workflow.yml).
+
+**The two triggers answer different questions.** `pull_request` catches *your* change — the PR
+that bumps a model id, edits a prompt, or edits a scenario. `schedule` catches the *provider's*:
+a silent update to an id you never touched produces no PR, so nothing would tell you. A weekly
+replay surfaces that as a run that went red without a commit.
+
+The schedule runs on **your** clock, not on a provider release feed. Modelpin does not watch
+deprecation pages today — `modelpin/watcher/` is a seed registry with no network call — so a
+weekly cron is the honest version of "find out before production does", and reading provider
+release feeds directly is the next step, not a shipped one. Price it before you enable it: a
+scheduled run spends real calls on your key every week, and `mp check` prints that bound before
+it spends.
+
+Three GitHub behaviours will bite you here, none of them Modelpin's:
+
+1. `schedule` fires **only on your default branch** — you cannot test it from a PR. Use
+   `workflow_dispatch` for that.
+2. GitHub **disables scheduled workflows after 60 days of repository inactivity.** That is
+   exactly the quiet, stable repo that most needs a drift check, so the safety net switches
+   itself off precisely when you stop looking. Re-enable it from the Actions tab, and never read
+   "no red runs" as "no drift" without confirming the workflow is still enabled.
+3. The scheduled run needs your `from` model **still reachable on your key.** When the provider
+   retires it, the job goes red because the baseline model is gone — not because behaviour
+   changed. Read the error before the verdict.
 
 ---
 

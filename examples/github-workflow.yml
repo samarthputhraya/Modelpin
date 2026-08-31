@@ -3,12 +3,48 @@
 # It runs Modelpin on every pull request, comparing a candidate model against your committed
 # baseline, posts the behavioral diff as a sticky PR comment, and fails the check on a
 # regression. Replace the tag below with a real release tag, and set your model ids.
+#
+# THE TWO TRIGGERS THAT MATTER, and they answer different questions:
+#
+#   pull_request  — "did MY change break the model behaviour?" Fires on the PR that bumps the
+#                   model id, or edits a prompt, or edits a scenario. This is the CI gate.
+#   schedule      — "did the MODEL change under me?" A provider can ship a silent update to an
+#                   id you never touched, and no PR will ever tell you. The weekly run replays
+#                   your own scenarios against the same pair on a cadence, so drift on the
+#                   provider's side surfaces as a run that went red without a commit.
+#
+# The schedule is on YOUR clock, not the provider's release feed. Modelpin does not yet watch
+# provider deprecation pages — `modelpin/watcher/` is a seed registry with no network call —
+# so a weekly replay is the honest version of "find out before production does". Budget for it:
+# a scheduled run spends real API calls on your key every week. See COST below.
+#
+# Cost, before you enable the schedule:
+#   calls ~= scenarios x runs x 2 models x (1 + avg_tool_turns), plus up to one judge call per
+#   scenario per side. An 8-scenario suite at runs: 5 is ~80 completions per run before tool
+#   turns. `mp check` prints the bound before it spends. Weekly x 52 is the number to price.
+#
+# THREE GITHUB BEHAVIOURS THAT WILL BITE YOU, none of them ours:
+#   1. `schedule` fires ONLY on your default branch. It does nothing on a feature branch, so
+#      you cannot test it by opening a PR — use `workflow_dispatch` for that.
+#   2. GitHub DISABLES scheduled workflows automatically after 60 days with no repository
+#      activity. That is exactly the quiet, stable repo that most needs a drift check: the
+#      safety net switches itself off precisely when you have stopped looking. Re-enable it
+#      from the Actions tab, and do not treat "no red runs" as "no drift" without checking
+#      the workflow is still enabled.
+#   3. The scheduled run needs your `from` model still reachable on your key. When the provider
+#      RETIRES it, the job goes red because the baseline model is gone, not because behaviour
+#      changed. Read the error before you read the verdict.
 
 name: Modelpin
 
 on:
   pull_request:
   workflow_dispatch:        # let you trigger it by hand when a provider ships a new model
+  schedule:
+    # Mondays 09:00 UTC. Catches a provider changing a model id you did not touch.
+    # Remove this block if you only want the PR gate — it is the half that costs money on a
+    # cadence rather than on a commit.
+    - cron: "0 9 * * 1"
 
 permissions:
   contents: read
