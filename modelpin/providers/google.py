@@ -145,13 +145,22 @@ def build_google_client(api_key_envs: tuple[str, ...] = _API_KEY_ENVS) -> Any:
     return genai.Client(api_key=api_key, vertexai=False)
 
 
-def _explain_api_error(exc: Exception, model_id: str) -> str:
-    """Key-safe message for a Gemini SDK/network error (mirrors the OpenAI explainer)."""
+def _explain_api_error(
+    exc: Exception, model_id: str, api_key_envs: tuple[str, ...] = _API_KEY_ENVS
+) -> str:
+    """Key-safe message for a Gemini SDK/network error (mirrors the OpenAI explainer).
+
+    MP-136 applies here too, and the row did not mention it: the 401/403 branch named no
+    variable either, so a Gemini user with a stale key got the same guess-the-variable
+    message. The NAME is safe to print; the exception text (which may embed a key fragment)
+    is still dropped on this branch.
+    """
     name = type(exc).__name__
     code = getattr(exc, "code", None)
     base = f"Gemini call for model {scrub_secrets(model_id)!r} failed"
     if code in (401, 403):
-        return f"{base}: API key rejected or lacks access [{name} {code}]."
+        where = f" Modelpin read your key from {api_key_envs[0]} — check it holds a current key."
+        return f"{base}: API key rejected or lacks access [{name} {code}].{where}"
     if code == 404:
         return f"{base}: model not found — check the id [{name} 404]."
     if code == 429:

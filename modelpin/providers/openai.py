@@ -45,13 +45,50 @@ MAX_TOOL_TURNS = 6
 #: agent replays deterministic and offline without real tool execution.
 _DEFAULT_TOOL_RESULT: dict[str, Any] = {"status": "ok"}
 
+#: Transient-failure budget per API call, replacing the SDK's default of 2 (MP-139).
+#:
+#: `[M] 2026-08-30`, dogfood on the Groq free tier: `modelpin check` died on
+#: `RateLimitError 429 ... tokens per minute (TPM): Limit 8000, Used 6480, Requested 1527.
+#: Please try again in 52.5ms`. Twelve scenarios, 60 replays, ZERO reported -- a whole run
+#: lost to a wait shorter than one HTTP round trip.
+#:
+#: `[M] 2026-08-31` THE ROW'S PREMISE IS WRONG AND THE CORRECTION IS WHY THIS IS A CONSTANT
+#: RATHER THAN A RETRY LOOP. MP-139 says "No backoff/retry exists on the provider path."
+#: Retry does exist -- the SDK's -- it is on by default, and it honours the server's own
+#: delay. Verified at the httpx transport layer, which is the ONLY layer that exercises it:
+#: a handler returning 429 with `retry-after-ms: 50` twice, then 200, produced **3 HTTP
+#: attempts and a successful completion in 1.01s**; at `max_retries=0` the same handler
+#: raised `RateLimitError` after 1 attempt. So the free-tier run did not die for want of a
+#: retry -- it died because a budget of 2, spread over ~1.5s of backoff, is tuned for a paid
+#: tier whose token window is not already exhausted.
+#:
+#: Writing our own loop around `_complete` would be the wrong shape twice over: it would
+#: MULTIPLY with the SDK's (2 x ours), and `_complete` is called inside the
+#: `range(MAX_TOOL_TURNS)` loop, so an agent scenario would multiply it again by 6.
+#: Raising the SDK's own budget composes with nothing and inherits its `retry-after`
+#: handling for free.
+#:
+#: A retry here cannot bias the measured distribution, which is the objection that would
+#: otherwise block this under the north-star: the SDK retries an HTTP request that produced
+#: NO response, so no sample is discarded and none is re-rolled. Re-running a call whose
+#: response we had already seen would bias it; nothing here does that.
+#:
+#: `[M]` Worst case this adds ~15.5s per call (SDK backoff 0.5s doubling to an 8s cap), and
+#: only when every attempt fails; when the server sends `retry-after` -- as Groq does -- the
+#: real wait is that value, 52.5ms in the incident above.
+REPLAY_MAX_RETRIES = 5
+
 #: Friendly, actionable hints per OpenAI SDK error class. Keyed by class name so we
 #: don't need to import the SDK's exception types at module scope.
 _API_ERROR_HINTS: dict[str, str] = {
     "AuthenticationError": "your API key was rejected (invalid or revoked)",
     "PermissionDeniedError": "your key lacks access to this model or resource",
     "NotFoundError": "the model id was not found — check it exists and you have access",
-    "RateLimitError": "rate limit or quota exceeded — slow down or check billing",
+    "RateLimitError": (
+        f"rate limit or quota exceeded, and it did not clear after {REPLAY_MAX_RETRIES} "
+        "automatic retries honouring the delay the server asked for — wait for your quota "
+        "window to reset, lower --runs, or check billing"
+    ),
     "BadRequestError": "the request was rejected (often an unsupported param for this model)",
     "APITimeoutError": "the request timed out",
     "APIConnectionError": "could not reach the API endpoint (network/connection error)",
@@ -62,7 +99,12 @@ _API_ERROR_HINTS: dict[str, str] = {
 _KEY_BEARING_ERRORS: frozenset[str] = frozenset({"AuthenticationError", "PermissionDeniedError"})
 
 
-def _explain_api_error(exc: Exception, model_id: str, label: str = "OpenAI") -> str:
+def _explain_api_error(
+    exc: Exception,
+    model_id: str,
+    label: str = "OpenAI",
+    api_key_env: str | None = None,
+) -> str:
     """Turn a raw SDK/network exception into a concise, key-safe message.
 
     ``label`` names the provider (OpenAI, or an OpenAI-compatible host like Groq) so the
@@ -71,12 +113,28 @@ def _explain_api_error(exc: Exception, model_id: str, label: str = "OpenAI") -> 
     Default-deny on the secret surface: auth/permission errors drop their text
     entirely, and every other error's text is scrubbed of key-shaped tokens before
     it is interpolated — so a renamed/unlisted error class can't leak a key either.
+
+    ``api_key_env`` names the variable to fix (MP-136). `[M] 2026-08-29`, dogfood from a
+    PyPI install with a revoked Groq key: the REJECTED-key path said only *"your API key
+    was rejected (invalid or revoked) [AuthenticationError]"* while the sibling UNSET-key
+    path said *"GROQ_API_KEY is not set ... export it and retry"* -- so a stranger whose key
+    is stale got the less actionable of the two messages and had to guess the variable.
+
+    It is the variable NAME, never the value, and that distinction is why this does not
+    weaken the guard above it: the text that is dropped is ``str(exc)``, which may embed a
+    redacted key fragment. A variable name is not a secret -- the user set it themselves.
     """
     name = type(exc).__name__
     hint = _API_ERROR_HINTS.get(name, "the API call failed")
     base = f"{label} call for model {scrub_secrets(model_id)!r} failed: {hint}"
     if name in _KEY_BEARING_ERRORS:
-        return f"{base} [{name}]."
+        where = (
+            f" Modelpin read your key from {api_key_env} — check that variable holds a "
+            f"current {label} key."
+            if api_key_env
+            else ""
+        )
+        return f"{base} [{name}].{where}"
     detail = scrub_secrets(str(exc))[:300]
     return f"{base} [{name}: {detail}]."
 
@@ -215,7 +273,11 @@ def _detect_refusal(message: Any, finish_reason: str | None, text: str) -> bool:
     return looks_like_refusal(text)
 
 
-def build_openai_client(api_key_env: str = "OPENAI_API_KEY", base_url: str | None = None) -> Any:
+def build_openai_client(
+    api_key_env: str = "OPENAI_API_KEY",
+    base_url: str | None = None,
+    max_retries: int = REPLAY_MAX_RETRIES,
+) -> Any:
     """Construct a real OpenAI(-compatible) client: validate the BYO-key, lazily import the SDK.
 
     Shared by the adapter and the semantic judge so key/SDK handling lives in one place.
@@ -235,7 +297,10 @@ def build_openai_client(api_key_env: str = "OPENAI_API_KEY", base_url: str | Non
         raise ProviderError(
             "The OpenAI SDK is not installed. Install it with: pip install 'modelpin[providers]'"
         ) from exc
-    return OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+    kwargs: dict[str, Any] = {"api_key": api_key, "max_retries": max_retries}
+    if base_url:
+        kwargs["base_url"] = base_url
+    return OpenAI(**kwargs)
 
 
 class OpenAIAdapter(ProviderAdapter):
@@ -272,7 +337,9 @@ class OpenAIAdapter(ProviderAdapter):
         except ProviderError:
             raise
         except Exception as exc:  # SDK/network error → friendly, key-safe ProviderError
-            raise ProviderError(_explain_api_error(exc, model_id, self._label)) from exc
+            raise ProviderError(
+                _explain_api_error(exc, model_id, self._label, self._api_key_env)
+            ) from exc
         if not (getattr(response, "choices", None) or []):
             raise ProviderError(
                 f"{self._label} returned no choices for scenario {scenario_id!r} on {model_id!r}."

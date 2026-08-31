@@ -45,9 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exited 0 — and `action.yml` posts that file verbatim after an invisible HTML comment, so it
   is the first line a PR reviewer reads. Such a run now reads `❔ Modelpin: partially
   measured`. A real regression, an abstention or a minor change still outranks it: this
-  downgrades a clearance and never a verdict. (The public Report renderer, `mp report`,
-  still carries no blindness qualifier at any run count — tracked separately as MP-123,
-  alongside MP-44.) (MP-116)
+  downgrades a clearance and never a verdict. (The public Report renderer, `mp report`, was
+  tracked separately as MP-123 and is fixed in this same unreleased cycle — see the coverage
+  entry above. MP-44, the skipped-scenario version of the same headline defect, is still
+  open.) (MP-116)
 - **The scenarios a run could not measure are now named, on both surfaces.** `[M]`
   `underpowered` was a list of scenario ids and neither renderer printed them, so a reviewer
   told "2 of 4 could not have reported a regression" had no way to learn *which* two short of

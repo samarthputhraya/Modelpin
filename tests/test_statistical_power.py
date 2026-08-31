@@ -249,7 +249,18 @@ def test_an_unequal_baseline_and_candidate_are_judged_on_the_pooled_floor(tmp_pa
     # the `if regs or minors:` branch and `_underpowered_clearance` is never called at all.
     # Assert the affirmative property on a scenario that really is measurable instead.
     assert "**UNCHANGED (1)** ✅" in report, report
-    assert "OK 1 scenario(s) unchanged" in " ".join(chk.output.split()), chk.output
+    out = " ".join(chk.output.split())
+    # This test is about the RUN-COUNT axis, so assert that axis and nothing else: the
+    # `??` marker is the one that means "reported unchanged at a run count that could not
+    # reach significance", and 5v2 clears the pooled floor, so it must not appear.
+    assert "??" not in out, out
+    assert "1 scenario(s) unchanged" in out, chk.output
+    # `[M] 2026-08-31` MP-141: the marker is `OK?`, not `OK`, and that is CORRECT and not a
+    # run-count statement. The surviving unchanged scenario is `greeting`, which declares no
+    # `tools` and runs with the judge off, so its only CI-failing channel is refusal -- a
+    # green tick over it is the false comfort the per-scenario census exists to remove.
+    # Asserting `OK ` here again would re-pin the defect this row fixed.
+    assert "OK? 1 scenario(s) unchanged" in out, chk.output
 
 
 def test_the_written_report_is_valid_json_free_markdown_at_every_run_count(tmp_path):

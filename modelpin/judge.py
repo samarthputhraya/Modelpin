@@ -84,7 +84,11 @@ class OpenAIJudge:
         except ProviderError:
             raise
         except Exception as exc:  # SDK/network error -> friendly, key-safe ProviderError
-            raise ProviderError(_explain_api_error(exc, self._model)) from exc
+            raise ProviderError(
+                # MP-136: the judge spends the user's key too, so a rejected key here
+                # must name the variable to fix exactly as the replay path does.
+                _explain_api_error(exc, self._model, api_key_env=self._api_key_env)
+            ) from exc
         choices = getattr(response, "choices", None) or []
         content = (choices[0].message.content or "") if choices else ""
         return _parse_equivalent(content)

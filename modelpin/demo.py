@@ -64,10 +64,9 @@ def _scenarios() -> list[Scenario]:
                 "messages": [{"role": "user", "content": "I want a refund for order 123."}],
                 "tools": ["lookup_order", "issue_refund"],
             },
-            assertions=Assertion(
-                expected_tool_calls=["lookup_order", "issue_refund"],
-                must_contain=["refund"],
-            ),
+            # MP-142: `expected_tool_calls` is recorded by nothing and checked by nothing,
+            # so the demo no longer advertises it. `must_contain` IS compared, every run.
+            assertions=Assertion(must_contain=["refund"]),
         ),
         Scenario(
             id="angry_customer",
@@ -79,7 +78,12 @@ def _scenarios() -> list[Scenario]:
                 ],
                 "tools": ["cancel_subscription"],
             },
-            assertions=Assertion(expected_tool_calls=["cancel_subscription"]),
+            # MP-142: this was an `Assertion` object whose ONLY field was
+            # `expected_tool_calls` -- so the scenario a brand-new user runs first declared
+            # an assertion that asserted nothing, and MP-141's census counted it as armed
+            # coverage. `angry_customer` is carried by its tool-trajectory and refusal
+            # signals; it needs no text assertion, so it now honestly declares none.
+            assertions=None,
         ),
         Scenario(
             id="invoice_parse",

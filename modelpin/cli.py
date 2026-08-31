@@ -335,7 +335,59 @@ def _load_scenarios_or_fail(
         _fail(str(exc))
     if not scenarios:
         _fail_no_scenarios(scenarios_dir, source, config_path)
+    _warn_unimplemented_assertions(scenarios)
     return scenarios
+
+
+#: Assertion fields this version records but never checks (MP-142). `[M] 2026-08-31`,
+#: differential proof: for five trace configurations -- including baseline SATISFIES the
+#: expectation while the candidate VIOLATES it, and the candidate calling a tool the
+#: expectation never named -- `diff_scenario` returns a byte-identical verdict, confidence
+#: and explanation whether the field is set or `None`. `[M]` References that READ either
+#: field anywhere under `modelpin/`: zero. They are write-only.
+_UNIMPLEMENTED_ASSERTION_FIELDS = ("expected_tool_calls", "output_schema")
+
+
+def _warn_unimplemented_assertions(scenarios: Sequence[Scenario]) -> None:
+    """Say once, per run, that a declared assertion field is not one this version checks.
+
+    The defect MP-142 names is the word SILENTLY -- "a model field that silently does
+    nothing is the same class of defect as a green tick over an unmeasured run". This
+    removes the silence, which is the half that misleads.
+
+    Deliberately NOT deleting the fields, and that is a scope decision with evidence behind
+    it, not an omission. `[M] 2026-08-31` `compute_suite_hash` hashes the VALIDATED pydantic
+    model (`report/suite.py:38-41`), so removing them from `Assertion` changes the content
+    hash of both shipped suites: `examples/report-suite` (role `public`, ADR-0009)
+    `sha256:ffd99774f681` -> `sha256:eed334061b5e`, and `examples/suite` (role `score`, the
+    held-out false-positive set ADR-0025 forbids tuning on) `sha256:44cbde8e3b74` ->
+    `sha256:5482ccd734fd`. The first is cited in a PUBLISHED report's own reproduce block,
+    in `GOLDEN_SUITE_HASH`, and by the frozen `drift-suite` fixture behind the Drift Map.
+    Deleting is therefore a public suite-version bump, not the one-hour edit the row
+    assumed -- so it is filed as its own decision rather than taken as a side effect here.
+
+    A warning, not an error: our own shipped suites declare these fields, and failing on
+    them would refuse to run the suite the published Report is built from.
+    """
+    flagged = {
+        f: [
+            s.id
+            for s in scenarios
+            if s.assertions is not None and getattr(s.assertions, f, None) is not None
+        ]
+        for f in _UNIMPLEMENTED_ASSERTION_FIELDS
+    }
+    named = {f: ids for f, ids in flagged.items() if ids}
+    if not named:
+        return
+    fields = ", ".join(f"`{f}`" for f in named)
+    ids = sorted({sid for ids in named.values() for sid in ids})
+    console.print(
+        f"[yellow]note:[/] {len(ids)} scenario(s) declare {fields}, which this version "
+        f"records but never checks -- no verdict, no exit code, and no coverage is derived "
+        f"from them ({', '.join(ids)}). Use `must_contain` / `must_not_contain` for an "
+        f"assertion that is actually compared."
+    )
 
 
 def _scenarios_source(scenarios_dir: Optional[str], config_path: str) -> str:
@@ -438,15 +490,33 @@ def _channel_census(
     of config (``_build_judge``), so inferring "no judge_model configured" would put a false
     statement inside the disclosure that exists to be honest.
     """
+    judge_enabled = judge is not None
+    # MP-141. A scenario's OWN content coverage: the judge is suite-wide (one config key),
+    # but `tools` is declared per scenario, so with the judge off a scenario that declares
+    # none has no CI-failing channel that reads content -- whatever its neighbours declare.
+    blind = () if judge_enabled else tuple(s.id for s in scenarios if not s.input.get("tools"))
     return ChannelCensus(
         tools_declared=any(s.input.get("tools") for s in scenarios),
-        assertions_declared=any(s.assertions is not None for s in scenarios),
-        judge_enabled=judge is not None,
+        # MP-141. Read the fields the ENGINE reads, not the presence of an `Assertion`
+        # object. `[M]` `diff/__init__.py` consults only `must_contain` / `must_not_contain`
+        # (`structural.py::violates_text_assertions`); `expected_tool_calls` and
+        # `output_schema` are consulted by nothing (MP-142). `[M]` The shipped demo relies on
+        # the difference: `demo.py` gives `angry_customer` an `Assertion` whose ONLY field is
+        # `expected_tool_calls`, so the old test counted a dead channel as armed in the suite
+        # a brand-new user runs first.
+        assertions_declared=any(
+            s.assertions is not None
+            and (s.assertions.must_contain or s.assertions.must_not_contain)
+            for s in scenarios
+        ),
+        judge_enabled=judge_enabled,
         judge_off_reason=(
             "disabled on the offline `fake` provider"
             if prov == "fake"
             else "no `judge_model` configured"
         ),
+        blind_scenarios=blind,
+        compared=len(scenarios),
     )
 
 
