@@ -66,7 +66,7 @@ ALPHA = 0.05
 #: [A] not [M]: no run in this repo contains a degenerate trace ([M] 0 of 360 real traces in
 #: docs/reports/data/), so the boundary cannot be falsified here. MP-54's live calls produce
 #: the first d/n distribution via the counters on DiffSignals. ADR-0018 holds the revisit
-#: trigger. fp-guardian protected.
+#: trigger. FP review protected.
 DEGENERATE_SIDE_NUMERATOR = 2
 #: A tool-call distribution must shift by at least this total-variation distance to
 #: count — guards against trivially-significant jitter once N grows large.

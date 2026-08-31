@@ -30,8 +30,6 @@ nul
 # Internal / GTM docs — kept LOCAL to the maintainer, never published (open-core split:
 # the free CLI/engine/Action is open; roadmap, internal process notes, and the launch/sales
 # playbook stay private). These files remain on disk for local use, just untracked.
-/CLAUDE.md
-/.claude/
 /ops/
 
 # A contributor's OWN Modelpin setup, made by following the README in a clone

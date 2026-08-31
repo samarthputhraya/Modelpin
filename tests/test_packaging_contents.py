@@ -33,10 +33,10 @@ from pathlib import Path
 
 import pytest
 
-# `ops` and `.claude` are DELIBERATELY ABSENT from this list and must stay absent. They are
+# `ops` and the dot-directories are DELIBERATELY ABSENT from this list and must stay
 # the private half of the open-core split, and the pristine copy carries them ON PURPOSE so
 # that `test_sdist_excludes_private_directories` is actually exercising `MANIFEST.in`'s
-# `prune` lines. `[M]` packaging-verifier 2026-08-25 confirmed both reach the scratch build
+# `prune` lines. `[M]` packaging review 2026-08-25 confirmed both reach the scratch build
 # directory and neither reaches the archive. Adding them here would speed the copy up and
 # make the leak test vacuous — it could never fail, including on the day someone deletes a
 # `prune` line. This looks like an omission; it is the guard.
@@ -261,9 +261,18 @@ def test_sdist_is_complete(sdist_entries: list[str], required: str) -> None:
 
 
 def test_sdist_excludes_private_directories(sdist_entries: list[str]) -> None:
-    """`ops/` and `.claude/` are the private half of the open-core split; they must never
-    reach a source distribution, which unlike the repo IS published to PyPI."""
-    leaked = sorted(n for n in sdist_entries if n.startswith(("ops/", ".claude/")))
+    """`ops/` and every dot-directory are the private half of the open-core split; they must
+    never reach a source distribution, which unlike the repo IS published to PyPI.
+
+    Deliberately broader than the two directories that motivated it: any hidden path is a
+    leak, so a private directory added later is covered without anyone remembering to name
+    it here. That is the same clause the release workflow enforces.
+    """
+    leaked = sorted(
+        n
+        for n in sdist_entries
+        if n.startswith("ops/") or any(p.startswith(".") for p in n.split("/") if p)
+    )
     assert not leaked, f"private files leaked into the sdist: {leaked}"
 
 
@@ -328,7 +337,7 @@ def test_every_python_file_in_a_grafted_directory_reaches_the_sdist(
     *script* CI invokes, not a module the suite imports, so neither the collect-only backstop
     nor the import check can see it disappear.
 
-    `scripts` — `[M]` packaging-verifier 2026-08-25, the gate's fourth mutant: deleting
+    `scripts` — `[M]` packaging review 2026-08-25, the gate's fourth mutant: deleting
     `scripts/drift_map.py` and `scripts/calibrate_thresholds.py` while keeping
     `fp_measurement.py` left all three of the other new guards GREEN — the import check only
     asks whether the *directory* is present, and collection only imports what a shipped test

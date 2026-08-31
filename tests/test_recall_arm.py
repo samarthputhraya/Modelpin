@@ -1,7 +1,7 @@
 """MP-79 - the detection arm must not be able to report a number it did not measure.
 
 MP-75 spent four rounds hardening the FALSE-POSITIVE arm and left the DETECTION arm inline in
-`main()`, where no test reaches. `[M]` bug-reproducer 2026-08-23 ran the same mutant battery
+`main()`, where no test reaches. `[M]` bug repro 2026-08-23 ran the same mutant battery
 against it. **Eight of nine mutants survived a full green suite:**
 
     detected += int(caught)  ->  detected += 1                  302 passed
@@ -91,7 +91,7 @@ class TestRecallOutcome:
         identically regardless. Excluding it lets a dead engine post `0/0` recall, which
         reads as "nothing to report" rather than "the engine caught nothing".
 
-        [M] fp-guardian, the MP-75 review recorded in ADR-0022: inserting
+        [M] FP review, the MP-75 review recorded in ADR-0022: inserting
         `if not measurable(r): continue` into the recall arm left all 281 tests green.
         """
         r = _Res(DiffVerdict.unchanged, 1.0)
@@ -248,7 +248,7 @@ class TestRecallSummary:
     def test_the_detection_fraction_reaches_the_operator(self):
         out = "\n".join(recall_summary(self._t(detected=1, checked=3)))
         assert "Detection: 1/3 injected perturbations caught" in out, out
-        # SINGULAR, deliberately: it subsumes the plural. [M] fp-guardian 2026-08-23 -
+        # SINGULAR, deliberately: it subsumes the plural. [M] FP review 2026-08-23 -
         # the first version of this pin read "injected regressions" and the CHECKED-NOTHING
         # banner ("no injected regression reached a verdict") walked straight past it. A
         # guard that reads as a vocabulary pin and is really a plural-string pin.
@@ -256,7 +256,7 @@ class TestRecallSummary:
             body = " ".join(recall_summary(tally))
             assert "injected regression" not in body, (
                 f"the arm calls the injected instructions `regressions`, asserting the very "
-                f"premise it exists to test: {body!r}. That is the overclaim fp-guardian "
+                f"premise it exists to test: {body!r}. That is the overclaim FP review "
                 "blocked in the MISSED note."
             )
 
@@ -288,7 +288,7 @@ class TestRecallSummary:
         """Operator-facing wording carries ADR-0022's distinction, because the number alone
         does not: `2/3` looks like a rounding problem unless the miss is named.
 
-        [M] fp-guardian 2026-08-23 BLOCKED the first version of this note, which read "the
+        [M] FP review 2026-08-23 BLOCKED the first version of this note, which read "the
         perturbation did change the behaviour, whatever the candidate did about it". The
         perturbation changes the INSTRUCTION; whether behaviour changed is the thing being
         measured. `decline_pii` is 1 of the 3 entries in PERTURBATIONS and on the run of
@@ -326,7 +326,7 @@ class TestRecallSummary:
         a property of the engine. `3/3 = 100%` is the same error mirrored. Print the fraction
         and its lower bound; never the point estimate.
 
-        [M] fp-guardian computed what the withheld interval would say, which is why MP-82
+        [M] FP review computed what the withheld interval would say, which is why MP-82
         exists rather than nothing: `3/3` bounds the true detection rate at only 36.8%, and
         `2/3` - the actual run of record - at 13.5%. The bare fraction is weak evidence too;
         it is just not weak in a way that reads as a claim. MP-82 took the first branch this
@@ -378,7 +378,7 @@ class TestRecallSummary:
             f"the closed form is back: {out!r}. 36.8% is `0.05**(1/3)`, the floor for a run "
             "that missed NOTHING - published here over a run that missed one of three."
         )
-        # The WHOLE line, verbatim. [M] mutation-sentinel: the label, the confidence level and
+        # The WHOLE line, verbatim. [M] mutation testing: the label, the confidence level and
         # the `n=` were pinned by nothing but the hand-copied block in docs/fp-measurement.md,
         # and that guard's own failure message tells a maintainer to re-copy the doc when the
         # wording changes - so dropping `95%` from a published statistic, or publishing a wrong
@@ -386,7 +386,7 @@ class TestRecallSummary:
         assert "  95% lower bound on the true rate: 13.5% (one-sided Clopper-Pearson, n=3)" in out
 
     def test_the_published_n_is_the_denominator_the_bound_was_computed_at(self):
-        """[M] mutation-sentinel: three single-token mutants of the published `n=` survived a
+        """[M] mutation testing: three single-token mutants of the published `n=` survived a
         green suite - `n={len(PERTURBATIONS)}`, `n={checked + unmeasured}`, and
         `n={checked + errors}`. Every asserting tally in this class used checked==3, which is
         ALSO len(PERTURBATIONS), so all three candidates coincided and nothing separated them.
@@ -446,7 +446,7 @@ class TestRecallSummary:
                 f"{detected}/{checked} published a bound with no exchangeability caveat: "
                 f"{out!r}. `docs/fp-measurement.md` and `README.md` both carry it."
             )
-            # BOTH SIDES. [M] mutation-sentinel: a mutant inverting the caveat to "which by
+            # BOTH SIDES. [M] mutation testing: a mutant inverting the caveat to "which by
             # construction they ARE" was killed only by the doc's hand-copied block, so a
             # re-copy laundered it - turning the hedge into an assertion that three
             # hand-picked injections ARE exchangeable trials, in the tool and the doc at once.
@@ -463,7 +463,7 @@ class TestRecallSummary:
             )
             # ORDER, not just presence. "That rate" needs an antecedent immediately above it,
             # and a caveat printed before the number it qualifies reads as a caveat on the
-            # fraction instead. [M] mutation-sentinel: reordering was killed ONLY by the doc's
+            # fraction instead. [M] mutation testing: reordering was killed ONLY by the doc's
             # hand-copied block, which a re-copy launders.
             lines = recall_summary(self._t(detected=detected, checked=checked))
             bound_at = next(i for i, x in enumerate(lines) if "lower bound" in x)
@@ -495,7 +495,7 @@ class TestRecallSummary:
 class TestBuildRow:
     """The one path feeding BOTH denominators.
 
-    [M] fp-guardian 2026-08-23: as a closure inside `main()` this was unreachable by any test,
+    [M] FP review 2026-08-23: as a closure inside `main()` this was unreachable by any test,
     and a poisoned version blanks the false-positive rate and the detection fraction at once
     while leaving the suite green. `verdict_fn` is injected so it can be exercised without a
     provider (ADR-0006).
@@ -579,7 +579,7 @@ def test_the_recall_arm_publishes_only_through_the_pinned_helpers():
     arm = _recall_arm_source()
     assert "recall_report(" in arm, "the recall arm stopped going through recall_report()"
     assert "recall_summary(" in arm, "the recall arm stopped publishing through recall_summary()"
-    # BOTH loops, by name and by count. [M] mutation-sentinel 2026-08-23: a bare
+    # BOTH loops, by name and by count. [M] mutation testing 2026-08-23: a bare
     # `assert "print(line)" in arm` is satisfied by the SUMMARY loop alone, so deleting the
     # per-scenario loop left all 332 green - and the MISSED note tells the operator to "read
     # the per-scenario explanation above", which under that mutant does not exist. The
@@ -596,7 +596,7 @@ def test_the_recall_arm_publishes_only_through_the_pinned_helpers():
         f"the recall arm has {arm.count('print(line)')} print loops, expected 2 (per-scenario "
         "evidence, then summary). One of them has been dropped."
     )
-    # [M] mutation-sentinel: the banner is operator-facing stdout that no test read, so the
+    # [M] mutation testing: the banner is operator-facing stdout that no test read, so the
     # vocabulary X2/X3 forbid stayed freely reachable here - including `expect regression/
     # changed_minor`, which announces the arm's conclusion before the arm runs. That is a
     # worse overclaim than either string already pinned, and ADR-0023 exists to refuse it.
@@ -611,13 +611,13 @@ def test_the_recall_arm_publishes_only_through_the_pinned_helpers():
     for inline in ("detected +=", "checked +="):
         assert inline not in arm, (
             f"`{inline}` is back inline in main()'s recall arm. That is the shape [M] "
-            "bug-reproducer found eight surviving mutants in; nothing below main() can pin it."
+            "bug repro found eight surviving mutants in; nothing below main() can pin it."
         )
-    # The SELECTION expression, over the whole of main(): [M] fp-guardian 2026-08-23 -
+    # The SELECTION expression, over the whole of main(): [M] FP review 2026-08-23 -
     # asserting bare "PERTURBATIONS" inside the sliced window does NOT close this, because
     # the selection sits above the marker and the assertion is satisfied by the unrelated
     # `PERTURBATIONS[s.id]` lookup inside the comprehension. `perturbed = []` survived all
-    # 72 tests in fp-guardian's mirror.
+    # 72 tests in FP review's mirror.
     assert "for s in scenarios if s.id in PERTURBATIONS" in inspect.getsource(main), (
         "main() no longer selects the perturbed scenarios from PERTURBATIONS. An empty "
         "selection is the one remaining way to make this arm report 0/0 - loud rather than "
@@ -661,7 +661,7 @@ def test_the_recall_arm_never_adopts_the_fp_arms_exclusion():
 _FP_DOC = Path(__file__).resolve().parent.parent / "docs" / "fp-measurement.md"
 
 #: Where the harness quote begins. Indexing the section's fenced blocks positionally would
-#: silently retarget the moment a block is added above it - claims-auditor 2026-08-24.
+#: silently retarget the moment a block is added above it - claims review 2026-08-24.
 _QUOTE_SENTINEL = "That is what the harness prints, verbatim and unadjusted:"
 
 
@@ -683,10 +683,10 @@ def _doc_live_prose(section: str) -> str:
 
     1. `split("> **Corrected")[0]` was positional, so re-asserting a withdrawn claim BELOW the
        note passed, and moving the note to the top of the section would have disabled the
-       guard entirely (`[M]` fp-guardian 2026-08-24).
+       guard entirely (`[M]` FP review 2026-08-24).
     2. Section-scoped, so the same sentence one line ABOVE the `**Detection:` headline passed
        all 37 tests (`[M]` found re-running the battery after fixing 1).
-    3. Stripping EVERY blockquote line, this version's predecessor: `[M]` fp-guardian
+    3. Stripping EVERY blockquote line, this version's predecessor: `[M]` FP review
        2026-08-24 inserted a `> **In brief.**` pull-quote directly under `## Results` carrying
        all three withdrawn claims, in the most-read position on the page, and got 37 green.
        Blockquotes are how this repo withdraws a claim, but nothing MAKES a blockquote a
@@ -696,7 +696,7 @@ def _doc_live_prose(section: str) -> str:
     in_withdrawal = False
     for ln in section.splitlines():
         if not ln.strip():
-            # `[M]` fp-guardian 2026-08-24, third pass: this used to `continue` BEFORE
+            # `[M]` FP review 2026-08-24, third pass: this used to `continue` BEFORE
             # resetting, so a pull-quote separated from a withdrawal note by a blank line
             # inherited its exemption - the same `> **In brief.**` bypass, green again one
             # paragraph lower. A blank line ends the note.
@@ -716,7 +716,7 @@ def _doc_live_prose(section: str) -> str:
 def _scannable(text: str) -> str:
     """Live prose with markdown emphasis and line wrapping normalised away.
 
-    `[M]` fp-guardian 2026-08-24, third pass: the banned-claim scan missed *"a miss is
+    `[M]` FP review 2026-08-24, third pass: the banned-claim scan missed *"a miss is
     a false *negative*, not a false alarm"* sitting 65 lines below its own correction, for
     TWO independent reasons - the emphasis markers (`*negative*`, not the `_negative_` the
     ban listed) and a hard wrap between "is" and "a false". A substring scan over raw
@@ -752,7 +752,7 @@ def test_the_doc_quotes_the_harness_verbatim_for_the_run_it_publishes():
     WHAT THIS DOES NOT PROVE, stated because it reads stronger than it is: both sides come
     from the document, so this pins the doc's INTERNAL consistency and its fidelity to
     `recall_summary`'s wording - not that the table matches a run that actually happened.
-    `[M]` fp-guardian 2026-08-24: a self-consistent two-edit forgery (flip the table row to
+    `[M]` FP review 2026-08-24: a self-consistent two-edit forgery (flip the table row to
     `detected`, edit the block to 3/3, drop the NOTE) survives this assertion alone. The
     scenario-id check below closes it against `PERTURBATIONS`; closing it against the run
     itself needs a committed artifact of the run, which the repo does not have (MP-83).
@@ -790,7 +790,7 @@ def test_the_docs_table_covers_exactly_the_perturbations_the_harness_injects():
 
 
 def test_the_prose_headline_matches_the_fraction_the_harness_printed():
-    """`[M]` claims-auditor 2026-08-24: the headline `2 of 3` could be edited to `3 of 3`
+    """`[M]` claims review 2026-08-24: the headline `2 of 3` could be edited to `3 of 3`
     while the fenced block still said `2/3`, and the suite stayed green. The headline is the
     sentence a skimmer reads; it may not disagree with the block beneath it.
     """
@@ -804,7 +804,7 @@ def test_the_prose_headline_matches_the_fraction_the_harness_printed():
 
 
 def test_the_published_lower_bound_is_the_one_the_repos_own_helper_computes():
-    """`[M]` claims-auditor 2026-08-24: `13.5%` could be edited to a flattering-and-wrong
+    """`[M]` claims review 2026-08-24: `13.5%` could be edited to a flattering-and-wrong
     `66.7%` with the suite green, because the doc was this bound's only surface.
 
     Since MP-82 the tool prints the bound too, and the verbatim-quote guard above compares
@@ -826,7 +826,7 @@ def test_the_published_lower_bound_is_the_one_the_repos_own_helper_computes():
 
 
 def test_the_correction_note_and_its_limits_cannot_be_quietly_deleted():
-    """`[M]` claims-auditor 2026-08-24: deleting the entire `> **Corrected (MP-81)**` note,
+    """`[M]` claims review 2026-08-24: deleting the entire `> **Corrected (MP-81)**` note,
     and separately deleting the interval sentence together with "not characterised", both
     left the suite green. Silently dropping a disclosure is the failure mode this project
     rates worst - removing one must be a red build, not an edit nobody notices.
@@ -849,7 +849,7 @@ def test_the_doc_never_asserts_that_a_perturbation_changed_behaviour():
 
     The withdrawn sentences are quotable inside a `> **Corrected**` blockquote - that is how
     this repo withdraws a claim - so blockquote lines are excluded and everything else is
-    live prose. The flattering direction is NOT covered here: `[M]` fp-guardian 2026-08-24
+    live prose. The flattering direction is NOT covered here: `[M]` FP review 2026-08-24
     noted the original ban was one-directional, and R2 moved that check to
     `test_a_perfect_detection_score_is_a_tripwire_not_a_silent_publish`, which asserts over
     the tally rather than over the characters `3/3`. This test bans only WITHDRAWN claims.
@@ -867,9 +867,9 @@ def test_the_doc_never_asserts_that_a_perturbation_changed_behaviour():
         "real behavior changes were flagged",
         "Not a false negative",
         "2/2",
-        # `[M]` fp-guardian 2026-08-24: MP-81's own fix introduced this one. "A miss here IS a
+        # `[M]` FP review 2026-08-24: MP-81's own fix introduced this one. "A miss here IS a
         # false negative" entails "the behaviour changed and the engine missed it" - ADR-0023
-        # consequence 2, in the unflattering direction, and the same sentence fp-guardian
+        # consequence 2, in the unflattering direction, and the same sentence FP review
         # blocked from the operator string during MP-79.
     ):
         assert banned not in live, (
@@ -878,7 +878,7 @@ def test_the_doc_never_asserts_that_a_perturbation_changed_behaviour():
             "claim which perturbations changed behaviour. See ADR-0023."
         )
 
-    # Bound to the SUBJECT, not the phrase. `[M]` fp-guardian 2026-08-24 found this assertion
+    # Bound to the SUBJECT, not the phrase. `[M]` FP review 2026-08-24 found this assertion
     # live 65 lines below its own correction, and a bare `"is a false negative"` ban cannot be
     # used because the compliant sentence DISCLAIMS it in those very words ("whether any given
     # one is a false negative or a correct true negative is what this arm cannot tell").
@@ -912,7 +912,7 @@ def test_the_doc_never_asserts_that_a_perturbation_changed_behaviour():
 
 def test_a_perfect_detection_score_is_a_tripwire_not_a_silent_publish():
     """A TRIPWIRE, not a permanent prohibition, and the ONLY guard that catches a fully
-    self-consistent forgery (`[M]` fp-guardian, twice).
+    self-consistent forgery (`[M]` FP review, twice).
 
     An all-detected score is `0/8 = 0%` mirrored - `recall_summary`'s docstring refuses to
     print a percentage for exactly this reason. It is also the outcome ADR-0023 names as the
@@ -920,7 +920,7 @@ def test_a_perfect_detection_score_is_a_tripwire_not_a_silent_publish():
     precisely here, and `[M]` the semantic sweep is flat from 0.1 to 0.9, so the slack to do
     it exists.
 
-    Asserted over the doc's TALLY, never over the characters `"3/3"`. `[M]` fp-guardian
+    Asserted over the doc's TALLY, never over the characters `"3/3"`. `[M]` FP review
     2026-08-24 showed the substring form was (a) unsatisfiable in conjunction with the
     verbatim guard - a legitimate all-detected run makes the harness quote itself contain
     `3/3`, so no document could pass both, and the cheapest repair would have been to stop
@@ -967,7 +967,7 @@ _README = Path(__file__).resolve().parent.parent / "README.md"
 def test_the_readme_publishes_the_same_detection_fraction_as_the_harness():
     """`README.md` is the surface most readers meet, and nothing guarded it.
 
-    `[M]` claims-auditor 2026-08-24, second pass: seven separate edits to `README.md` each
+    `[M]` claims review 2026-08-24, second pass: seven separate edits to `README.md` each
     left the whole suite green - including `2 of 3` -> `3 of 3`, restoring the withdrawn
     `22.4% at 2/2` interval, deleting the withdrawal paragraph outright, and a `299 tests
     passing` line that was 40 short of the real count. Two of those were real staleness this
@@ -998,7 +998,7 @@ def test_the_readme_publishes_the_same_detection_fraction_as_the_harness():
 def test_the_doc_states_the_recall_arms_one_exclusion_correctly():
     """The recall arm excludes exactly one thing, and the doc must say which.
 
-    `[M]` fp-guardian 2026-08-24, third pass: `## Detection (control)` claimed *"anything
+    `[M]` FP review 2026-08-24, third pass: `## Detection (control)` claimed *"anything
     else, `unchanged` included, scores a miss and is never excluded"*. That is false in the
     LOOSENING direction - an abstention IS excluded (ADR-0018) - and this file's own header
     records that deleting the `unmeasured` block left 302 tests green. A reader reconciling

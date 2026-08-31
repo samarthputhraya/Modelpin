@@ -21,7 +21,7 @@ measured nothing, applied one level up to a run that measured but could not conc
 
 Deliberately NOT changed here: `MIN_RUNS`, the effect-size floors, and the exit code. Those
 are sensitivity surfaces (ADR-0016, ADR-0002) and moving one needs its own calibration and
-its own fp-guardian review. This governs only what the tool CLAIMS.
+its own FP review review. This governs only what the tool CLAIMS.
 """
 
 from __future__ import annotations

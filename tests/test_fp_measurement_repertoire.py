@@ -10,7 +10,7 @@ IDENTICAL, so such a scenario scores `unchanged` REGARDLESS of any change to the
 Crediting it to the north-star metric credits a trial that could not have failed.
 
 The exclusion predicate itself is the dangerous part, and `test_measurable` below is the
-reason this file exists. [M] fp-guardian blocked the first attempt: it decided from PER-SIDE
+reason this file exists. [M] FP review blocked the first attempt: it decided from PER-SIDE
 variance ("each side is unimodal, so nothing varied"), which is a different claim from
 "the sides are identical". Two internally-invariant sides that DIFFER are the engine's
 highest-confidence firing configuration, so that predicate deleted the most confident false
@@ -79,7 +79,7 @@ class TestRepertoire:
         assert repertoire([_t(tool="a"), _t(tool="b")])["tools"] == 2
 
     def test_text_is_compared_verbatim_because_a_gating_signal_is_byte_exact(self):
-        # [M] fp-guardian: `structural.py:123-126` `violates_text_assertions` does a
+        # [M] FP review: `structural.py:123-126` `violates_text_assertions` does a
         # byte-exact, case-SENSITIVE `s in out`, and flags "Order shipped" vs "order
         # shipped" at confidence 0.996. A canonicalising diagnostic would print `text: 1`
         # for that pair. A diagnostic may be finer than the engine, never coarser.
@@ -115,7 +115,7 @@ class TestMeasurable:
     def test_a_FLAGGED_verdict_is_never_excluded_however_confident(self):
         """The safety property. THIS is the test that must never be deleted.
 
-        [M] fp-guardian: the rejected per-side predicate excluded `regression` at conf 0.992
+        [M] FP review: the rejected per-side predicate excluded `regression` at conf 0.992
         and 0.996 on four separate channels - the engine's most confident false positives,
         removed from the rate that exists to count them. Any future predicate must keep
         every one of these scored.
@@ -148,7 +148,7 @@ class TestMeasurable:
         assert r.verdict is DiffVerdict.regression, r.verdict
         assert measurable(r) is True, (
             "a flagged, internally-invariant pair was excluded from the FP rate - this is "
-            "the defect fp-guardian blocked, reintroduced."
+            "the defect FP review blocked, reintroduced."
         )
 
     def test_argument_only_jitter_is_a_SCORED_TRIAL_once_the_engine_reads_arguments(self):
@@ -204,7 +204,7 @@ class TestMeasurable:
 
 
 class TestFpOutcome:
-    """The FP arm's actual decision. [M] fp-guardian: with this logic inline in `main()`,
+    """The FP arm's actual decision. [M] FP review: with this logic inline in `main()`,
     replacing it with `if False:` deleted the entire point of MP-75 and 271 tests stayed
     green. These are the tests that would have gone red."""
 
@@ -226,7 +226,7 @@ class TestFpOutcome:
         """THE safety property, at the decision level rather than the helper level.
 
         A flagged verdict must reach the numerator no matter how the exclusion is written.
-        [M] the predicate fp-guardian blocked excluded `regression` at conf 0.992/0.996 -
+        [M] the predicate FP review blocked excluded `regression` at conf 0.992/0.996 -
         the engine's most confident false positives - from both numerator and denominator.
         """
         for verdict in (DiffVerdict.regression, DiffVerdict.changed_minor):
@@ -304,7 +304,7 @@ _REP = {"tools": 1, "args": 1, "text": 1}
 
 
 class TestFpReport:
-    """The CALL SITE. [M] fp-guardian, second review: with this loop inline in `main()`,
+    """The CALL SITE. [M] FP review, second review: with this loop inline in `main()`,
     substituting `classify(r.verdict)` for `fp_outcome(r)` restored the exact pre-MP-75
     accounting - `0/8 = 0%` straight back - and all 281 tests stayed green, because
     `classify` returns three strings that are all valid FP_OUTCOMES keys. Pinning the
@@ -353,7 +353,7 @@ class TestFpReport:
 
 
 class TestUpperBound:
-    """[M] fp-guardian: `1 - alpha**(1/n)` is the Clopper-Pearson bound ONLY at k=0. At
+    """[M] FP review: `1 - alpha**(1/n)` is the Clopper-Pearson bound ONLY at k=0. At
     k/n above ~0.31 it returns a bound BELOW the observed rate - a self-contradicting
     number about the north-star metric, flattering it. This harness is aimed at the surface
     where k > 0 is the expected outcome."""
@@ -383,7 +383,7 @@ def test_main_does_not_exclude_inside_the_recall_arm():
     **This guard went vestigial when MP-79 extracted the arm, and its scope is now narrow.**
     It slices from the `[ARM:RECALL]` marker, which before MP-79 contained the whole
     recall arm and now contains ~700 characters of `main()`; `recall_outcome` is defined far
-    above the marker. [M] mutation-sentinel 2026-08-23 measured the consequence: putting
+    above the marker. [M] mutation testing 2026-08-23 measured the consequence: putting
     `measurable()` or `fp_outcome()` into `recall_outcome` - the two mutations this test was
     written for - leaves it GREEN. Across 28 mutants its assertions never fired once.
 
@@ -406,7 +406,7 @@ def test_main_does_not_exclude_inside_the_recall_arm():
 
 
 class TestFpSummary:
-    """What actually reaches the operator. [M] fp-guardian killed two mutants living here:
+    """What actually reaches the operator. [M] FP review killed two mutants living here:
     reverting the interval to the closed form, and deleting the interval line entirely.
     Both left the suite green while the helper itself was fully tested."""
 
@@ -463,7 +463,7 @@ def _fp_arm_source() -> str:
 def test_the_fp_arm_publishes_only_through_the_pinned_helpers():
     """ADR-0022's own lesson, applied one level further up.
 
-    [M] fp-guardian, third review: `main()` is the caller now, and it was not pinned.
+    [M] FP review, third review: `main()` is the caller now, and it was not pinned.
     Inlining `fp_tally([classify(r.verdict) ...])` there restored the pre-MP-75 accounting
     (`0/8 = 0%`) with 299 tests green; replacing the summary print-loop with `pass` made
     every published number vanish, also with 299 green. Extracting a pure function does not
@@ -472,7 +472,7 @@ def test_the_fp_arm_publishes_only_through_the_pinned_helpers():
     arm = _fp_arm_source()
     assert "fp_report(" in arm, "the FP arm stopped going through fp_report()"
     assert "fp_summary(" in arm, "the FP arm stopped publishing through fp_summary()"
-    # BOTH loops, by name and by count. [M] mutation-sentinel 2026-08-23, found while
+    # BOTH loops, by name and by count. [M] mutation testing 2026-08-23, found while
     # measuring MP-79's recall arm: this hole is SYMMETRIC and it was here first. Deleting
     # `for line in lines_out: print(line)` - every per-scenario false-positive line - left all
     # 332 tests green, because the surviving fp_summary loop satisfies a bare `"print(line)"
@@ -501,7 +501,7 @@ def test_classify_refuses_a_verdict_it_has_no_bucket_for():
 
 
 def test_the_exclusion_label_does_not_claim_no_effect_was_measured():
-    """[M] fp-guardian: `unchanged` at confidence 1.0 is BROADER than "nothing moved" —
+    """[M] FP review: `unchanged` at confidence 1.0 is BROADER than "nothing moved" —
     golden pairs 3 and 4 (tests/test_diff.py:117-119) have genuinely different tool
     distributions and still score p=1.00 everywhere. A label saying "no effect measured"
     would be false about them, in operator-facing output."""

@@ -498,7 +498,7 @@ def test_init_scaffolds_when_the_dir_holds_only_reserved_files(tmp_path):
 
 # --- ADR-0029: an advisory verdict must not fail the build -------------------------------
 #
-# `[M] 2026-08-26` mutation-sentinel: widening `cli.py`'s exit gate from `regression` to
+# `[M] 2026-08-26` mutation testing: widening `cli.py`'s exit gate from `regression` to
 # `regression or changed_minor` left the ENTIRE suite green. That gate is the boundary where a
 # build actually goes red, and it is the sole reason the argument-gate assertions in
 # `tests/test_tool_arguments.py` were allowed to weaken from `regression` to `changed_minor`.

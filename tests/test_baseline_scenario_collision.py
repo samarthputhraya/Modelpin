@@ -13,7 +13,7 @@ the exact key those traces are stored under. A user who writes their own
 `scenarios/refund_request.json` and runs `mp check` before any local `mp baseline` gets a
 confident REGRESSION and exit 1 off two scenarios that share nothing but a name.
 
-That is a false POSITIVE, which is the north-star metric (CLAUDE.md). These tests build the
+That is a false POSITIVE, which is the north-star metric. These tests build the
 collision from scratch in tmp_path, so they pin the MECHANISM rather than the shipped
 artifact: un-tracking or renaming the dogfood baseline removes today's instance but leaves
 this code path intact (a user who edits their own scenario after recording a baseline hits

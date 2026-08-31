@@ -181,7 +181,7 @@ def test_a_pre_existing_baseline_still_loads():
     assert Trace(**{"scenario_id": "s", "model_id": "m"}).incomplete_reason is None
 
 
-# --- the paths the "CI recall is unchanged" claim rests on (fp-guardian C3) --------------
+# --- the paths the "CI recall is unchanged" claim rests on (FP review C3) --------------
 
 
 def test_check_exits_three_when_a_scenario_could_not_be_measured(tmp_path):

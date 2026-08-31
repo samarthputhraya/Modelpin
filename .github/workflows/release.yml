@@ -219,7 +219,7 @@ jobs:
       # NOT gated, on purpose: README's Status section and CHANGELOG's `[x.y.z]:` link-reference
       # block are both stale at 2363004 (they still say v0.1.1), so gating on them would make
       # this workflow unable to ship the release it was written for. They are prose claims --
-      # claims-auditor territory per CLAUDE.md's routing table -- not machine-checkable version
+      # claims-review territory per the contributor guide -- not machine-checkable version
       # identity. Revisit once 0.1.2 is out and both surfaces are clean.
 
       # ci.yml runs on `push: branches: [main]` and `pull_request`. It does NOT run on tags or
@@ -482,7 +482,7 @@ jobs:
           unexpected = sorted(top - _SDIST_TOP_ALLOWED)
           if unexpected:
               problems.append("unexpected top-level entries in the sdist: " + ", ".join(unexpected))
-          # One clause that covers ops/, .claude/, reports/, .env*, .modelpin/, .github/ and
+          # One clause that covers ops/, reports/, .env*, .modelpin/, .github/, every dot-dir and
           # everything nobody has thought of yet. MANIFEST.in prunes three directories; the
           # repo's own test only checks two of them, and it builds from a copy that strips
           # dotfiles before they could ever be seen -- so this workflow is the FIRST place this

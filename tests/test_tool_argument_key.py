@@ -218,7 +218,7 @@ def test_min_tool_arg_tvd_means_disjoint_in_the_equivalence_modes():
 
 
 def test_min_tool_arg_tvd_is_pinned_at_the_value_that_means_disjoint():
-    """`[M]` fp-guardian 2026-08-25: the test above cannot see this constant move.
+    """`[M]` FP review 2026-08-25: the test above cannot see this constant move.
 
     It asserts `tvd >= MIN_TOOL_ARG_TVD` where `tvd` is literally `1.0`, so **every** value
     at or below 1.0 satisfies it. `[M]` Mutating the constant `1.0 -> 0.8` in an isolated
@@ -256,7 +256,7 @@ def test_min_tool_arg_tvd_is_pinned_at_the_value_that_means_disjoint():
 
 
 def test_the_argument_gate_declines_when_the_two_sides_have_unequal_runs():
-    """`[M]` fp-guardian 2026-08-25: deleting the equal-runs clause left the suite green.
+    """`[M]` FP review 2026-08-25: deleting the equal-runs clause left the suite green.
 
     `modelpin/diff/__init__.py` gates `args_compared` on
     `len(baseline_traces) == len(candidate_traces)` first. Nothing covered it — `grep` for

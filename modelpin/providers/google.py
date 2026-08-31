@@ -247,7 +247,7 @@ def _finish_reason_name(candidate: Any) -> str:
 
 
 #: Gemini finish reasons that mean the run was cut short. `_BLOCKED_FINISH` is REUSED verbatim
-#: rather than widened -- it also drives `refused`, which is an fp-guardian sensitivity surface.
+#: rather than widened -- it also drives `refused`, which is an FP review sensitivity surface.
 _FINISH_TO_REASON: dict[str, IncompleteReason] = {
     "MAX_TOKENS": IncompleteReason.max_tokens,
     "MALFORMED_FUNCTION_CALL": IncompleteReason.malformed_tool_call,

@@ -558,7 +558,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sentences that carried it — requires each published fraction's interval to sit **within 350
   characters of it** rather than merely somewhere in the same file, and fails if either
   self-disclosure (the Unicode-apostrophe writeup, the "Other caveats" block) is deleted.
-  `[M]` **24 mutants applied, 24 red**, including all six that the claims-auditor gate found
+  `[M]` **24 mutants applied, 24 red**, including all six that the claims review gate found
   green against this guard's first version. **Named limits, per ADR-0024:** the precision-rate
   check is a banned-string list and does not generalise (ADR-0024:63 warns about this shape by
   name — a mutant spelling the rate "roughly two thirds" passed the first version and is
@@ -590,7 +590,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   were invisible for the same reason: **a directory can ship while the file you need is gone.**
   Deleting `graft tests` outright left the suite green, since setuptools already carries
   `tests/test*.py` — the only file that line adds is `tests/docs_extract.py`, a helper CI
-  invokes as a script. And `[M]` the packaging-verifier gate found that dropping
+  invokes as a script. And `[M]` the packaging review gate found that dropping
   `scripts/drift_map.py` and `scripts/calibrate_thresholds.py` while keeping
   `fp_measurement.py` passed every other new guard, because no shipped test imports them —
   yet `python scripts/drift_map.py` is the Drift Map's own published reproduce command.

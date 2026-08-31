@@ -149,7 +149,7 @@ def repertoire(
         "modal_share": f"{modal}/{len(raw)}" if raw else "0/0",
         "varies": len(set(raw)) > 1,
         "varies_beyond_key_order": len(set(canon)) > 1,
-        # [M] claims-auditor 2026-08-25: `sorted(set(raw))` discarded frequencies, so the
+        # [M] claims review 2026-08-25: `sorted(set(raw))` discarded frequencies, so the
         # 7-payload rounding distribution was unrecoverable from the artifact and the
         # disjointness risk it implies could not be audited. Counts, not a set.
         "payload_counts": dict(Counter(raw).most_common()),

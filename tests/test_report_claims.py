@@ -284,7 +284,7 @@ def test_the_tldr_does_not_credit_a_pair_whose_only_flags_are_artifacts():
 
 
 def test_the_casing_flip_behind_the_only_changed_minor_is_disclosed():
-    """`[M]` MP-102, found by the claims-auditor gate: the tenth verdict was never explained.
+    """`[M]` MP-102, found by the claims review gate: the tenth verdict was never explained.
 
     `sarcasm_sentiment` on `4o-mini` -> `4o` is `negative` (5/5) -> `Negative` (5/5) against a
     case-sensitive `must_contain: ["negative"]` (`structural.py:123`, `s in out`). We are NOT
@@ -324,7 +324,7 @@ def test_neither_disclosure_can_be_deleted_quietly():
     """ADR-0009 Consequences: *"Removing an inconvenient disclosure would be the single worst
     move this project could make."*
 
-    `[M]` claims-auditor 2026-08-25 ran this as a mutant against the first version of this
+    `[M]` claims review 2026-08-25 ran this as a mutant against the first version of this
     file: deleting the whole apostrophe-disclosure body - both quoted traces and the root
     cause - left the suite GREEN, because every other assertion here reads sentences that
     survive the deletion. A guard written for one document that cannot see its central
@@ -364,7 +364,7 @@ def test_neither_disclosure_can_be_deleted_quietly():
 def test_every_published_recall_fraction_carries_the_bound_its_own_helper_computes(
     detected: int, n: int, where: str
 ):
-    """`[M]` MP-102 / claims-auditor: `4/6` and `5/6` shipped bare on both surfaces.
+    """`[M]` MP-102 / claims review: `4/6` and `5/6` shipped bare on both surfaces.
 
     A bare `4/6` reads as 67%. The one-sided 95% lower bound at six trials is **27.1%**, and at
     `5/6` it is **41.8%**. `1 - upper_bound_95(misses, checked)` is the same reflection the
@@ -373,7 +373,7 @@ def test_every_published_recall_fraction_carries_the_bound_its_own_helper_comput
     `detected` is - flattering at 4/6 and understated at 5/6, which is precisely why it cannot
     be a bound.
 
-    **Adjacency is the assertion, not presence.** `[M]` claims-auditor: two mutants passed the
+    **Adjacency is the assertion, not presence.** `[M]` claims review: two mutants passed the
     first version of this test - adding a fourth BARE `4/6`, and moving `**27.1%**` away from
     the fraction it qualifies - because it only checked that both strings existed somewhere in
     the same file. That is MP-72's shape exactly: a correct paragraph coexisting with copies of

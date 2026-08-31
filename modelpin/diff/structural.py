@@ -144,7 +144,7 @@ def name_trajectory_is_stable(
         + argument gate, THIS precondition  916/72072 = 1.2710%   worst pool 12/252
     +0.0056 percentage points, and the pre-existing worst-case ceiling is unchanged.
 
-    RETRACTED 2026-08-25 (MP-105 / fp-guardian): this docstring previously called the
+    RETRACTED 2026-08-25 (MP-105 / FP review): this docstring previously called the
     precondition "the whole reason this fix is false-positive-neutral". **The fix is not
     false-positive-neutral, and the enumeration above structurally cannot show that it is**
     -- its null carries TWO payloads, while [M] the gate fires only when the two sides are

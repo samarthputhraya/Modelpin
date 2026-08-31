@@ -108,7 +108,7 @@ def classify(verdict: DiffVerdict) -> str:
 def upper_bound_95(k: int, n: int, alpha: float = 0.05) -> float:
     """One-sided 95% Clopper-Pearson upper bound on a rate of k failures in n trials.
 
-    [M] fp-guardian 2026-08-23: the closed form `1 - alpha**(1/n)` is this bound ONLY at
+    [M] FP review 2026-08-23: the closed form `1 - alpha**(1/n)` is this bound ONLY at
     k=0. Applied at k>0 it understates badly - and above k/n ~ 0.31 it returns a bound BELOW
     the observed rate, a self-contradicting number about the north-star metric, in the
     direction that flatters it:
@@ -193,13 +193,13 @@ def repertoire(traces: list) -> dict[str, int]:
 
 
 #: What each outcome contributes, and how it is labelled. Data, not control flow: the FP arm
-#: has no branch left to delete, which is what makes the accounting testable. [M] fp-guardian
+#: has no branch left to delete, which is what makes the accounting testable. [M] FP review
 #: killed an inline version of this loop with `if False:` and 271 tests stayed green.
 FP_OUTCOMES: dict[str, tuple[bool, bool, str, str]] = {
     # outcome:      (in the denominator?, in the numerator?, coverage bucket, label)
     "fp": (True, True, "", "  <-- FALSE POSITIVE"),
     "clean": (True, False, "", ""),
-    # [M] fp-guardian: the label says ALPHA, not "no effect". `unchanged` at confidence 1.0
+    # [M] FP review: the label says ALPHA, not "no effect". `unchanged` at confidence 1.0
     # is strictly BROADER than "nothing moved" - the one-sided mean statistic returns p=1.0
     # on a refusal-rate DROP (`stats.py:91-92`), and at N=5 the tool channel's p is exactly
     # 1.0 across the whole |i-j| <= 1 band: 16 of 36 cells, 10 of which genuinely differ.
@@ -236,7 +236,7 @@ def fp_summary(t: dict[str, int]) -> list[str]:
     """Everything the FP arm publishes after the per-scenario lines. Pure, so the numbers
     that reach the operator are testable.
 
-    [M] fp-guardian killed two mutants that lived here while this was inline in `main()`:
+    [M] FP review killed two mutants that lived here while this was inline in `main()`:
     reverting the interval to the closed form `1 - alpha**(1/n)` (wrong for every k > 0),
     and deleting the interval line outright. Both left the suite green. The helpers were
     pinned; nothing checked that the summary USED them.
@@ -291,7 +291,7 @@ def fp_report(rows) -> tuple[dict[str, int], list[str]]:
     `(scenario_id, DiffResult | None, base_repertoire, cand_repertoire)`; a None result is a
     provider error.
 
-    Exists so the CALL SITE is testable, not just the helpers under it. [M] fp-guardian
+    Exists so the CALL SITE is testable, not just the helpers under it. [M] FP review
     2026-08-23, second review: with this loop inline in `main()`, substituting
     `classify(r.verdict)` for `fp_outcome(r)` - a one-token change that restores the exact
     pre-MP-75 accounting and brings `0/8 = 0%` straight back - left all 281 tests green,
@@ -318,12 +318,12 @@ def fp_outcome(result) -> str:
     """The FP arm's entire per-scenario decision: "fp" | "clean" | "unmeasured" | "no-effect".
 
     Pure, and the ONLY place the FP arm decides anything, so the decision itself is testable
-    rather than just the helpers under it. [M] fp-guardian 2026-08-23: with the decision
+    rather than just the helpers under it. [M] FP review 2026-08-23: with the decision
     inline in `main()`, replacing it with `if False:` - deleting the entire point of MP-75 -
     left all 271 tests green. Helpers were pinned; the thing that used them was not.
 
     `unmeasured` (ADR-0018) is checked first, then flagged verdicts, then the exclusion. [M]
-    fp-guardian: this order is not currently load-bearing - the three `classify` outcomes map
+    FP review: this order is not currently load-bearing - the three `classify` outcomes map
     to disjoint verdicts, so hoisting the exclusion above the flagged check changes nothing
     and no test moves. Keep the order anyway: it makes the safety property (a flagged verdict
     can never reach the exclusion) true by reading as well as by construction, which is what a
@@ -346,7 +346,7 @@ def measurable(result) -> bool:
     i.e. the trial could not have fired at any ALPHA < 1.
 
     That is NOT the same as "no effect was measured", and the distinction is load-bearing.
-    [M] fp-guardian: golden pairs 3 and 4 in `tests/test_diff.py:117-119` have genuinely
+    [M] FP review: golden pairs 3 and 4 in `tests/test_diff.py:117-119` have genuinely
     DIFFERENT tool distributions (a:3/b:2 vs a:2/b:3; a:5 vs a:4+b:1) and both return
     `unchanged` at confidence 1.0000. Effects were measured; nothing could fire. NB the
     engine rounds to 3 places (`diff/__init__.py:302`), so the real predicate is
@@ -354,7 +354,7 @@ def measurable(result) -> bool:
     verdict never carries `unchanged`-confidence, so this can never remove a false positive
     from the rate.
 
-    [M] fp-guardian 2026-08-23 blocked the obvious alternative, and the reason is worth
+    [M] FP review 2026-08-23 blocked the obvious alternative, and the reason is worth
     keeping. Deciding from per-side variance ("each side is unimodal, so nothing varied")
     is WRONG: `stats.py:128-129` early-exits when the two sides are DISTRIBUTIONALLY
     IDENTICAL, not when each side is internally unimodal. Two internally-invariant sides
@@ -370,7 +370,7 @@ def measurable(result) -> bool:
 #: What each recall outcome contributes, and how it is labelled. The same shape as FP_OUTCOMES
 #: on purpose: the two arms are mirror images, so their accounting bugs are mirror images too,
 #: and a reader who has understood one table has understood both. Data, not control flow - [M]
-#: bug-reproducer 2026-08-23 found EIGHT surviving mutants in the branchy inline version this
+#: bug repro 2026-08-23 found EIGHT surviving mutants in the branchy inline version this
 #: replaces, against ONE in the FP arm that MP-75 had already been through four rounds on.
 #:
 #: NB the key sets barely overlap with FP_OUTCOMES ("unmeasured" alone is shared). That is
@@ -399,12 +399,12 @@ def recall_outcome(result) -> str:
     always counts the miss and leaves the adjudication to a human reading the per-scenario
     explanation. ADR-0022, closing paragraph.
 
-    [M] fp-guardian 2026-08-23: the second case is not hypothetical. `decline_pii` is 1 of the
+    [M] FP review 2026-08-23: the second case is not hypothetical. `decline_pii` is 1 of the
     3 entries in PERTURBATIONS, and on the run of record it returned `unchanged` because the
     model resisted the injected instruction and still declined - a CORRECT true negative that
     this arm nonetheless scores, and must score, as a miss.
 
-    [M] bug-reproducer 2026-08-23, with this decision inline in `main()`: `caught = True` and
+    [M] bug repro 2026-08-23, with this decision inline in `main()`: `caught = True` and
     the subtler `caught = kind != "unmeasured"` - which is the SAME always-true mutant, because
     the abstention has already `continue`d by then - both left all 302 tests green.
     """
@@ -417,7 +417,7 @@ def recall_outcome(result) -> str:
 def recall_tally(outcomes) -> dict[str, int]:
     """Fold per-scenario outcomes into the numbers the recall arm publishes.
 
-    [M] bug-reproducer 2026-08-23: `detected += int(caught)` -> `detected += 1` left all 302
+    [M] bug repro 2026-08-23: `detected += int(caught)` -> `detected += 1` left all 302
     tests green, so the harness would print `Detection: 3/3` for an engine that flagged
     nothing whatsoever. The numerator is a table lookup here for exactly that reason.
     """
@@ -437,7 +437,7 @@ def recall_report(rows) -> tuple[dict[str, int], list[str]]:
     a provider error.
 
     Exists so the CALL SITE is testable and not merely the helpers under it - MP-75's lesson,
-    applied to the arm that never got it. [M] bug-reproducer 2026-08-23, with this loop inline
+    applied to the arm that never got it. [M] bug repro 2026-08-23, with this loop inline
     in `main()`: replacing the whole per-scenario body with `continue` deleted 20 lines, made
     the arm report `0/0`, and left all 302 tests green.
 
@@ -465,7 +465,7 @@ def recall_summary(t: dict[str, int]) -> list[str]:
     """Everything the recall arm publishes after the per-scenario lines. Pure, so the numbers
     that reach the operator are testable.
 
-    [M] bug-reproducer 2026-08-23: deleting `main()`'s two closing `print()` calls - every
+    [M] bug repro 2026-08-23: deleting `main()`'s two closing `print()` calls - every
     detection number the run produced - left all 302 tests green.
 
     The fraction carries an interval and never a percentage (MP-82). `3/3` over three
@@ -509,7 +509,7 @@ def recall_summary(t: dict[str, int]) -> list[str]:
         # the same number, and a tool that published the bound bare would be more confident
         # than the documents it is aligning to.
         #
-        # The first line names what the rate is OVER. [M] fp-guardian and the MP-82 adversary
+        # The first line names what the rate is OVER. [M] FP review and the MP-82 adversary
         # both flagged that "the true rate" has a weaker antecedent here than in the FP arm,
         # whose preceding line NAMES its rate ("False-positive rate: ..."); this arm's reads
         # "Detection: 2/3 injected perturbations caught". Without the qualifier a reader can
@@ -559,7 +559,7 @@ def build_row(sid, base_scn, cand_scn, verdict_fn):
     """One `(sid, DiffResult | None, base_rep, cand_rep)` row, for either arm.
 
     Shared by both arms, which is exactly why it is out here rather than a closure inside
-    `main()`. [M] fp-guardian 2026-08-23: a poisoned row builder blanks BOTH denominators at
+    `main()`. [M] FP review 2026-08-23: a poisoned row builder blanks BOTH denominators at
     once - it is the single point of failure feeding the false-positive rate and the detection
     fraction - and as a closure no test could reach it.
 
@@ -733,7 +733,7 @@ def main() -> None:
     # source-slicing guards key on them (`tests/test_recall_arm.py`,
     # `tests/test_fp_measurement_repertoire.py` x2) because `main()` needs a provider and
     # ADR-0006 forbids a live call. They are comments, NOT operator prose, precisely so that
-    # rewording a banner cannot silently break the guards - [M] fp-guardian 2026-08-23: they
+    # rewording a banner cannot silently break the guards - [M] FP review 2026-08-23: they
     # previously keyed on the printed banner text, so this correction would have raised
     # ValueError in all three, taking out MP-75's FP call-site protection as collateral.
     print("EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm")
