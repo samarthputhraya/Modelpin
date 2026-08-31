@@ -425,6 +425,50 @@ def test_the_readme_publishes_no_relative_links():
     ), "README.md is the PyPI long description; these links are dead there: " + ", ".join(relative)
 
 
+#: Hosts a `[project.urls]` value may point at. Deliberately tiny: every entry must be somewhere
+#: that demonstrably exists today. Adding a host here is a claim that it resolves -- make it
+#: deliberately, and only after checking.
+_LIVE_URL_HOSTS = ("https://github.com/", "https://pypi.org/")
+
+
+def test_every_published_project_url_points_somewhere_that_exists():
+    """MP-126, the sibling of the relative-link guard above and the same failure one field over.
+
+    `[M] 2026-08-27` `pyproject.toml` set `Homepage = "https://modelpin.dev"` and
+    `nslookup modelpin.dev` returned a name with **no address**. PyPI renders `[project.urls]`
+    as the sidebar link list on the project page, so the single most-visited Modelpin surface a
+    stranger reaches led with a dead link to a domain that has never existed. `[M]` It shipped
+    that way in 0.2.0 -- verified live on `pypi.org/pypi/modelpin/json`.
+
+    `docs/PUBLISHING.md` carried this as an unticked checkbox from 2026-06-25 and nothing could
+    see that it was still unticked. This is that check, executable.
+
+    Offline by construction: an allowlist, not a DNS lookup. A network probe would be flaky in
+    CI and would pass for any domain someone happened to park -- the property worth guarding is
+    "we only publish URLs to hosts we have actually confirmed", which is a decision, not a
+    lookup. (ADR-0006 bans live PROVIDER calls specifically; the no-network-in-tests habit is
+    its consequence rather than its text, so this is that habit, not that decision.)
+
+    Parsed with `tomllib`, never a regex. `[M] 2026-08-27` packaging-verifier showed the first
+    draft's regex was double-quote-only: a single-quoted or multi-line dead URL parsed to
+    nothing and the guard went **green with the dead link still present**. A guard that can
+    silently pass is the defect class this file exists to catch, committed inside the fix for it.
+    """
+    import tomllib
+    from pathlib import Path
+
+    raw = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_bytes()
+    urls = tomllib.loads(raw.decode("utf-8")).get("project", {}).get("urls", {})
+    assert urls, "[project.urls] is missing or empty; PyPI would render no links at all"
+
+    dead = {k: v for k, v in urls.items() if not v.startswith(_LIVE_URL_HOSTS)}
+    assert not dead, (
+        f"[project.urls] publishes {dead} -- PyPI renders these on the project page and a "
+        f"description is FIXED AT UPLOAD, so a dead one can only be corrected by cutting a new "
+        f"version. Confirm the host resolves, then add it to _LIVE_URL_HOSTS deliberately."
+    )
+
+
 def test_a_published_report_never_cites_a_path_the_reader_cannot_open():
     """A Report travels: it lands as a PR comment on someone else's repo, and the wheel ships
     no `docs/`. A bare `docs/fp-measurement.md` resolves for nobody outside this checkout."""

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The `Homepage` link on the PyPI project page was dead.** `pyproject.toml` set
+  `Homepage = https://modelpin.dev`; `[M]` `nslookup modelpin.dev` returns a name with **no
+  address**, and the value shipped that way in 0.2.0 (verified live on
+  `pypi.org/pypi/modelpin/json`). PyPI renders `[project.urls]` as the sidebar link list, so the
+  most-visited Modelpin surface a stranger reaches led with a link to a domain that has never
+  existed. It now points at the repository. A guard in `tests/test_report_claims.py` allowlists
+  the hosts a published URL may use, so the check that had sat unticked in `docs/PUBLISHING.md`
+  since 2026-06-25 is now executable. (MP-126)
 - **The PR comment no longer leads a partially blind run with a green "no behavioral
   change".** The header branch tested `len(underpowered) >= len(results)`, so a run where only
   *some* scenarios were compared at a run count that could not reach significance fell through

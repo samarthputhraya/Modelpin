@@ -51,8 +51,11 @@ Maintain a moving `v1` tag (re-point it on each release) for consumers who pin t
 ## 3. Checklist before the first public release
 
 - [ ] `README.md` quickstart is accurate (install, `mp init/baseline/check`, the Action).
-- [ ] Repo URL in `pyproject.toml` `[project.urls]` is github.com/samarthputhraya/modelpin ✓
-      — verify the `Homepage = https://modelpin.dev` resolves (you own it) or point it at the repo.
+- [x] Every `[project.urls]` value points at a host that exists. **Now executable** —
+      `tests/test_report_claims.py::test_every_published_project_url_points_somewhere_that_exists`
+      allowlists the hosts, so this checkbox cannot silently go stale again. `[M] 2026-08-27`
+      it had been unticked since 2026-06-25 while `Homepage = https://modelpin.dev` — a domain
+      with no A record — shipped on the live 0.2.0 PyPI page (MP-126).
 - [ ] `LICENSE` present (Apache-2.0 ✓).
 - [ ] `version` synced in `pyproject.toml` + `modelpin/__init__.py`.
 - [ ] A green CI run of the Action against a real model (dogfood on this repo's examples).
