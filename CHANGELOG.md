@@ -39,6 +39,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content, the affirmative headline is replaced rather than qualified.
 
 ### Changed
+- **A scenario with no recorded baseline now reaches the report, and can no longer ride a green
+  tick.** `[M]` It reached exactly one console note that runs *after* `last-report.md` is
+  written, so a scenario the run never compared appeared in **zero** artifacts while the run
+  exited 0 — including, in the reproduction, a proven regression reported as adoptable. Such
+  scenarios are now named above the verdict buckets in the PR comment, on the console and in the
+  archived copy, counted on the provenance line, and they remove the affirmative
+  "looks safe to adopt" clearance. **Deliberately, they do not fail the build.** `[M]` The only
+  remedy, `modelpin baseline`, replays and re-bills the whole suite and re-pins every reference
+  to the `from` model's behaviour today, and adding a scenario is the most routine thing a user
+  does — a gate clearable only by overwriting your own reference is worse than no gate. That
+  changes once a baseline can be recorded for just the missing scenarios.
+  **Two exit-code corrections ship with it.** A run where *nothing* could be compared used to
+  exit **1** — the code meaning *regression* — over a run that measured nothing; it now exits 3,
+  per the rule that a run which measured nothing abstains. And that path wrote no artifact at
+  all, so the previous run's report stayed on disk and the Action published a stale verdict
+  under a failing run; it now writes its own. And a run with no usable baseline file exited 1,
+  so the Action annotated the PR with *"Modelpin detected a behavioral regression"* over a run
+  that never called a model — a false claim about someone's model, posted into their PR. It
+  abstains now. The documented exit-code contract was wrong in all four places it appears:
+  `--help` said 3 covered "no baseline recorded" (it never did), the README and `action.yml`
+  described 3 too broadly, and the Action README omitted 3 entirely. All four are corrected.
+  Also fixed: a scenario id containing rich markup (`[/]`) crashed `modelpin check` *after* the
+  report was written, and crashed `modelpin report` outright.
 - **The channel census now counts a tool the models actually CALLED, not one a scenario merely
   declared.** `[M]` Reproduced on byte-identical fixtures: a scenario carrying one `tools` entry
   that no run on either side ever exercised turned `could not measure … NOT cleared on content`

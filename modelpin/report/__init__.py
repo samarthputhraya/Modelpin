@@ -329,6 +329,41 @@ def _rejected_clearance(
     )
 
 
+def _skipped_clearance(
+    skipped: Sequence[str],
+    from_model: str,
+    to_model: str,
+    *,
+    arrow: str = "→",
+    fmt: Optional[Callable[[str], str]] = None,
+) -> str | None:
+    """MP-160's clearance. A scenario with no recorded baseline was never compared at all.
+
+    A THIRD way a run can fail to mean what its verdict says, alongside too few runs
+    (`underpowered`), too few armed channels (the census) and a provider refusal
+    (`rejected`). `[M] 2026-08-31` it was disclosed nowhere: `skipped` reached one console
+    note that runs AFTER `last-report.md` is written, so the artifact CI posts named the
+    scenario ZERO times while the run exited 0.
+
+    The remedy is deliberately NOT phrased as `rejected`'s -- "re-run" is free, recording a
+    baseline is not. That asymmetry is also why this condition does not fail the build. The
+    measurement, the options weighed and the revisit trigger are recorded once, in ADR-0033;
+    do not restate them here, and do not flip the exit code without superseding it.
+
+    ``fmt`` exists because the two surfaces escape differently: ``render_cli`` wraps the
+    whole line in rich ``escape()`` at emission, so it must receive RAW ids, while the
+    Markdown has no such wrapper and needs ``_md_inline``.
+    """
+    if not skipped:
+        return None
+    named = _named_blind(skipped, fmt or (lambda sid: f"`{_md_inline(sid)}`"))
+    return (
+        f"{arrow} {len(skipped)} scenario(s) had no recorded baseline for `{from_model}` and "
+        f"were never compared, so `{to_model}` is NOT fully cleared: {named}. An unmeasured "
+        f"scenario is not a passing one; record a baseline to include it."
+    )
+
+
 def _underpowered_clearance(
     underpowered: Sequence[str], total: int, to_model: str, *, arrow: str = "→"
 ) -> str | None:
@@ -374,6 +409,7 @@ def render_pr_comment(
     underpowered: Sequence[str] = (),
     census: Optional[ChannelCensus] = None,
     rejected: Sequence[tuple[str, str]] = (),
+    skipped: Sequence[str] = (),
 ) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
@@ -383,7 +419,14 @@ def render_pr_comment(
     minors = _b[DiffVerdict.changed_minor]
     unchanged = _b[DiffVerdict.unchanged]
     unmeasured = _b[DiffVerdict.insufficient_evidence]
-    if regs:
+    if not results:
+        # MP-160. Nothing was compared at all, so no bucket can speak for the run. Without
+        # this branch the chain below falls through to `underpowered or rejected or skipped`
+        # and publishes "partially measured" over a run that measured NOTHING -- a stronger
+        # claim than the evidence supports, on the line `action.yml` posts as the top of the
+        # PR comment.
+        header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
+    elif regs:
         header = f"\U0001f6a8 **Modelpin: behavioral regression — `{from_model}` → `{to_model}`**"
     elif unmeasured:
         # Above `minors`: "we could not measure" outranks "we measured a small change",
@@ -402,7 +445,9 @@ def render_pr_comment(
         # MP-116 fixed this exact contradiction for blind runs; shipping it again for inert
         # channels would be the same defect with a new cause.
         header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
-    elif underpowered or rejected:
+    elif underpowered or rejected or skipped:
+        # MP-160 joins `skipped` for the same reason MP-148 joined `rejected`: a scenario
+        # that was never compared makes the suite partial, whatever the compared ones said.
         # MP-148 joins `rejected` to this branch: a suite one scenario short is exactly as
         # partial as a suite one scenario cannot measure, and a green tick over either is
         # the same false clearance.
@@ -416,10 +461,19 @@ def render_pr_comment(
         header = f"❔ **Modelpin: partially measured — `{from_model}` → `{to_model}`**"
     else:
         header = f"✅ **Modelpin: no behavioral change — `{from_model}` → `{to_model}`**"
+    # MP-160. Two independent ways to lose a scenario, so this is composed rather than a
+    # single `if/else` on one suffix. `[M]` The reviewer cannot otherwise detect the
+    # shrinkage: this line published `Replayed N scenario(s)` with no denominator, so a suite
+    # that quietly went from 12 scenarios to 1 read exactly like a suite of 1.
+    _gaps = []
+    if rejected:
+        _gaps.append(f"{len(rejected)} could not be replayed at all")
+    if skipped:
+        _gaps.append(f"{len(skipped)} scenario(s) had no baseline")
     lines = [
         header,
         f"Replayed {len(results)} scenario(s) ×{runs} runs {_provenance(provider)}"
-        + (f"; {len(rejected)} could not be replayed at all." if rejected else "."),
+        + ("; " + "; ".join(_gaps) + "." if _gaps else "."),
         "",
     ]
     if rejected:
@@ -428,6 +482,19 @@ def render_pr_comment(
         lines.append(f"**COULD NOT REPLAY ({len(rejected)})** - excluded from every number below")
         for sid, reason in rejected:
             lines.append(f"❗ `{_md_inline(sid)}` — {_md_inline(reason)}")
+        lines.append("")
+    if skipped:
+        # MP-160, and this is the piece that carries the whole fix. It renders on EVERY run
+        # shape -- red, minor, unmeasured, clean -- because it sits ABOVE the verdict
+        # buckets. `[M]` The clearance line below cannot do this job: `render_report_md` and
+        # this function both reach it only in the all-clean `else` branch, so a
+        # clearance-shaped disclosure alone would be INERT on exactly the run a reviewer
+        # most needs it -- a red verdict pronounced over a fraction of the suite.
+        lines.append(f"**NO BASELINE ({len(skipped)})** - never compared, and in no number below")
+        for sid in skipped:
+            lines.append(
+                f"❗ `{_md_inline(sid)}` — no recorded baseline for " f"`{_md_inline(from_model)}`"
+            )
         lines.append("")
     if regs:
         lines.append(f"**REGRESSIONS ({len(regs)})**")
@@ -453,7 +520,14 @@ def render_pr_comment(
         lines.append("")
     _blind_set = set(underpowered)
     blind_ids = [r.scenario_id for r in unchanged if r.scenario_id in _blind_set]
-    if blind_ids:
+    if not results:
+        # MP-160. The unchanged bucket was emitted with no guard, so the zero-comparison
+        # artifact this row newly writes carried `**UNCHANGED (0)**` with a green tick
+        # between the NO BASELINE section and the clearance -- a green marker over a run
+        # that compared nothing. `render_cli` has always guarded the same bucket with
+        # `if unchanged:`; the two surfaces simply disagreed until now.
+        pass
+    elif blind_ids:
         # A green tick over a scenario that could not have gone red contradicts the very
         # line below it. Name the blind ones inside the bucket, not only in the footer.
         # [M] MP-117: this printed a COUNT and nothing else, so a reviewer told "2 of 4
@@ -473,7 +547,21 @@ def render_pr_comment(
     else:
         lines.append(f"**UNCHANGED ({len(unchanged)})** ✅")
     lines.append("")
-    if regs or minors:
+    if not results:
+        # MP-160. Nothing was compared, so there is no bucket to speak from and no clearance
+        # to give. `[M]` Without this the chain below fell through to its `else` and printed
+        # "No behavioral regressions found; X looks safe to adopt." directly under a
+        # "could not measure" header -- an affirmative clearance over a run that replayed
+        # nothing, on a shape this row newly made reachable AND newly writes to disk.
+        # It still has to say something: this artifact is posted to a PR on its own, and
+        # silence under a "could not measure" header reads like an omission rather than a
+        # finding.
+        lines.append(
+            f"→ Nothing was compared, so nothing is known about `{_md_inline(to_model)}`. "
+            f"This is NOT a clean result and NOT a regression -- it is the absence of a "
+            f"measurement. Record a baseline for `{_md_inline(from_model)}` and re-run."
+        )
+    elif regs or minors:
         lines.append(f"→ Pin to `{from_model}` until resolved, or review the full diff above.")
     elif unmeasured:
         # MP-49 was exactly this line rendering over a run that measured nothing. "Safe to
@@ -498,6 +586,7 @@ def render_pr_comment(
                 _underpowered_clearance(underpowered, len(results), to_model),
                 _census_clearance(census, to_model),
                 _rejected_clearance(rejected, to_model),
+                _skipped_clearance(skipped, from_model, to_model),
             )
             if x
         ]
@@ -526,6 +615,7 @@ def render_cli(
     underpowered: Sequence[str] = (),
     census: Optional[ChannelCensus] = None,
     rejected: Sequence[tuple[str, str]] = (),
+    skipped: Sequence[str] = (),
 ) -> str:
     """The CLI summary — ASCII text + rich color markup (safe on any console)."""
     _b = _bucket(results)
@@ -549,10 +639,32 @@ def render_cli(
         for sid, reason in rejected:
             lines.append(f"   [yellow]-[/] [bold]{escape(sid)}[/]: [dim]{escape(reason)}[/]")
         lines.append("")
-    for r in regs + unmeasured + minors:
+    if skipped:
+        # MP-160. Same shape and same rule as the block above: named FIRST, never with a
+        # verdict marker, and every id `escape`d -- a scenario id is author-controlled text
+        # reaching a rich console. `[M] 2026-08-31` the one pre-existing `skipped` message
+        # did NOT escape it, and `Scenario.id` has no pattern validator, so an id containing
+        # `[/]` raised `MarkupError` and aborted the command AFTER the report had been
+        # written -- CI publishing the artifact and then failing on a markup typo.
         lines.append(
-            f"{_CLI_MARK[r.verdict]} [bold]{r.scenario_id}[/]: {escape(r.explanation)} "
-            f"[dim](confidence {r.confidence:.2f})[/]"
+            f"[yellow]!![/] {len(skipped)} scenario(s) had no baseline, were never compared, "
+            f"and are in NO number below:"
+        )
+        for sid in skipped:
+            lines.append(f"   [yellow]-[/] [bold]{escape(sid)}[/]")
+        lines.append("")
+    for r in regs + unmeasured + minors:
+        # `escape` on the id as well as the explanation. `[M] 2026-09-01` first-run review
+        # found this by execution: the id was raw while its own neighbour on the SAME line
+        # was escaped, so a scenario id containing `[/]` raised `MarkupError` and killed
+        # `check` AND `report` -- at exit code 1, the code this round just finished defining
+        # as "a real regression". It crashes inside the `console.print(render_cli(...))` that
+        # runs BEFORE the report is written, so no artifact survives either. Untouched since
+        # the file's first commit; the FOURTH such site, found after two separate comments in
+        # this codebase claimed the last one had been closed.
+        lines.append(
+            f"{_CLI_MARK[r.verdict]} [bold]{escape(r.scenario_id)}[/]: "
+            f"{escape(r.explanation)} [dim](confidence {r.confidence:.2f})[/]"
         )
     if unchanged:
         # MP-138. Same rule as the Markdown bucket: no green marker over a bucket that could
@@ -621,6 +733,9 @@ def render_cli(
                 _underpowered_clearance(underpowered, len(results), to_model, arrow="->"),
                 _census_clearance(census, to_model, arrow="->"),
                 _rejected_clearance(rejected, to_model, arrow="->"),
+                _skipped_clearance(
+                    skipped, from_model, to_model, arrow="->", fmt=lambda sid: f"`{sid}`"
+                ),
             )
             if x
         ]

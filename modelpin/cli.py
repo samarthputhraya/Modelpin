@@ -513,6 +513,45 @@ def _exercised_tools(*sides: Sequence[Trace]) -> bool:
     return any(t.tool_calls for side in sides for t in side)
 
 
+def _publish_report(markdown: str, store_dir: str, from_model: str, to: str) -> list[str]:
+    """Write `last-report.md` and its durable archive copy; RETURN the notes to print.
+
+    MP-160 extracted this because the zero-comparison exit paths did not write one. `[M]`
+    A run whose scenarios are all un-baselined exits EXIT_UNMEASURED, and it used to leave
+    the PREVIOUS run's `last-report.md` untouched -- which `action.yml` posts whenever it
+    exists, independent of the exit code. CI published a stale verdict under a failing run.
+
+    It returns its console notes rather than printing them so the CALLER can write the
+    artifact first and print afterwards. `[M] 2026-09-01` that ordering is load-bearing: the
+    console summary can raise `UnicodeEncodeError` on a cp1252 terminal, and while it printed
+    first a crash there cost the artifact entirely.
+
+    MP-150's write order is preserved: the stable path CI reads is written FIRST and the
+    archive second, so if only one write can succeed it is the one CI reads.
+    """
+    notes: list[str] = []
+    report_path = Path(store_dir) / "last-report.md"
+    try:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(markdown, encoding="utf-8")
+        notes.append(
+            f"[dim]PR-style Markdown report written to {_rich_escape(str(report_path))}[/]"
+        )
+    except OSError as exc:
+        notes.append(
+            f"[yellow]warning:[/] could not write report to "
+            f"{_rich_escape(str(report_path))}: {_rich_escape(str(exc))}"
+        )
+        return notes
+    try:
+        archived = _archive_path(Path(store_dir), from_model, to)
+        archived.write_text(markdown, encoding="utf-8")
+        notes.append(f"[dim]archived for citation: {_rich_escape(str(archived))}[/]")
+    except OSError as exc:
+        notes.append(f"[yellow]warning:[/] could not archive the report: {_rich_escape(str(exc))}")
+    return notes
+
+
 def _channel_census(
     scenarios: Sequence[Scenario],
     judge: object | None,
@@ -770,9 +809,18 @@ def check(
     """Replay scenarios on a new model and report behavioral regressions.
 
     Exit codes: 0 = no regression. 1 = at least one real regression (the CI gate).
-    3 = at least one scenario could not be measured -- no baseline recorded, a side that
-    recorded nothing, or a scenario the provider rejected. 3 is deliberately not 1: "we could
-    not tell" is a different claim from "it broke".
+    3 = the run could not answer -- a scenario that WAS compared could not be measured, OR
+    the provider rejected a scenario, OR nothing could be compared at all (no usable
+    baseline; every scenario skipped or rejected). 3 is deliberately not 1: "we could not
+    tell" is a different claim from "it broke". A configuration error is neither: no
+    scenarios found exits 1, and a bad flag exits 2, which is Click's usage code.
+
+    A scenario with no recorded baseline is the deliberate exception: it is named in the
+    report, on the console and in the archive, and it removes the affirmative clearance, but
+    it does not by itself fail the build. `[M]` Precisely: it does not change the exit code,
+    so a run keeps whatever its COMPARED scenarios earned -- 0 if they were clean, 1 if one
+    of them regressed. Only when NOTHING is left to compare does the run abstain with 3.
+    Reasoning, options and revisit trigger: ADR-0033.
     """
     # `[M]` first-run review, 2026-08-31: the exit codes were documented in the README and in
     # `action.yml` and NOWHERE in `--help` -- which is where someone staring at a nonzero exit
@@ -789,12 +837,35 @@ def check(
     from_model = from_ or (cfg.models[0] if cfg.models else None)
     if not from_model:
         _fail("no baseline model. Pass --from or set `models:` in modelpin.yaml.")
+    # Resolved ABOVE the baseline load so the abstain branch below can publish an artifact.
+    prov = _resolve_provider(provider, cfg)
     try:
         base = load_baseline(from_model, store_dir)
-    except FileNotFoundError as e:
-        _fail(str(e))
-    except BaselineError as e:
-        _fail(str(e))
+    except (FileNotFoundError, BaselineError) as e:
+        # EXIT_UNMEASURED, not 1. `[M] 2026-09-01` claims review: with no usable baseline the
+        # run replays nothing and compares nothing, and this exited **1** -- so `action.yml`
+        # took its else-branch and annotated the PR with "Modelpin detected a behavioral
+        # regression migrating to 'X'" over a run that never called a model. A false claim
+        # about someone's model, posted into their PR: the same class MP-160 fixed one
+        # instance of, reached through the setup path instead of the scenario path. ADR-0018:
+        # a run that measured nothing abstains.
+        console.print(f"[yellow]could not measure:[/] {_rich_escape(str(e))}")
+        # `[M] 2026-09-01` This was the THIRD zero-comparison exit, and the only one still
+        # writing nothing -- the very defect `_publish_report` was extracted to remove, one
+        # branch from the extraction, added by the same commit. `action.yml` posts
+        # `last-report.md` whenever it exists with no reference to the exit code, so the
+        # PREVIOUS run's red header was republished under a run that never called a model.
+        # Every scenario is un-baselined here by construction, so all of them are skipped.
+        for _note in _publish_report(
+            render_pr_comment(
+                [], from_model, to, runs or cfg.runs, prov, (), None, (), [x.id for x in scenarios]
+            ),
+            store_dir,
+            from_model,
+            to,
+        ):
+            console.print(_note)
+        raise typer.Exit(code=EXIT_UNMEASURED)
     # [M] MP-116: an uneven baseline is scored correctly per scenario (MP-72), but it splits
     # the run into a measured half and a structurally blind half, and NOTHING said so -- the
     # posted report then led with a green clearance. Reported, not raised: `load_baseline` is
@@ -815,7 +886,6 @@ def check(
             f"`modelpin baseline --runs {RECOMMENDED_RUNS}` for uniform coverage."
         )
     n = _resolve_runs(runs, cfg, mode=mode, baseline_sizes=[len(v) for v in base.values() if v])
-    prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
     # Only scenarios that HAVE a baseline are replayed (the rest are skipped below), so
     # count those - an inflated pre-spend number is its own kind of false claim. MP-32.
@@ -862,7 +932,12 @@ def check(
                 # must still not be retried): skip, disclose, and refuse to call the run
                 # clean. ProviderError messages are key-scrubbed by the adapters.
                 console.print(
-                    f"[yellow]note:[/] scenario {_rich_escape(s.id)!r} could not be "
+                    # repr FIRST, then escape. `[M] 2026-09-01` the other order is a LIVE
+                    # crash: escaping inserts a backslash before the bracket, then repr
+                    # doubles that backslash, and rich re-parses the result as a literal
+                    # backslash followed by a live `[/]` tag. Inherited from MP-148; the
+                    # sibling site in `report()` already uses this order.
+                    f"[yellow]note:[/] scenario {_rich_escape(repr(s.id))} could not be "
                     f"replayed: {_rich_escape(str(exc))}"
                 )
                 rejected.append((s.id, str(exc)))
@@ -879,16 +954,43 @@ def check(
     _guard_replay(prov, _run_check)
 
     if not results:
+        # MP-160. Three ways to compare nothing, and they used to be told apart wrongly.
+        # `[M] 2026-08-31` with EVERY scenario un-baselined this fell to `_fail` and exited
+        # **1** -- the code that means REGRESSION -- over a run that compared nothing at all.
+        # ADR-0018 is explicit that a run which measured nothing ABSTAINS, and `action.yml`
+        # cannot tell exit 1 from exit 1, so a stale baseline was indistinguishable in CI
+        # from a caught regression. It is EXIT_UNMEASURED now, on every branch below.
+        #
+        # `[M]` The old message also lied under a MIXED cause: with one rejection and one
+        # missing baseline it printed "the provider rejected all 1 scenario(s)", which is
+        # false about the other one, and the `skipped` ids never reached the console at all
+        # because the note that would have named them sits further down, past this raise.
+        # The pre-MP-148 path had the opposite bug -- it sent a user whose provider had
+        # refused every scenario to `modelpin baseline`, advice for a condition they were
+        # not in. Say exactly what happened, name both causes, and abstain.
+        _why = []
         if rejected:
-            # The pre-MP-148 path sent the user to `modelpin baseline` here -- advice for a
-            # condition they were not in. A baseline exists; the provider refused every
-            # scenario. EXIT_UNMEASURED, not 1: nothing was measured, so nothing regressed.
+            _why.append(f"the provider rejected {len(rejected)} scenario(s)")
+        if skipped:
+            _why.append(f"{len(skipped)} scenario(s) had no recorded baseline")
+        detail = " and ".join(_why) if _why else "no scenario produced a comparison"
+        console.print(f"[yellow]could not measure:[/] nothing was compared -- {detail}.")
+        if skipped:
             console.print(
-                f"[yellow]could not measure:[/] the provider rejected all "
-                f"{len(rejected)} scenario(s); nothing was compared."
+                f"[dim]   no baseline: {_rich_escape(', '.join(skipped))}. "
+                f"Record one with `modelpin baseline`.[/]"
             )
-            raise typer.Exit(code=EXIT_UNMEASURED)
-        _fail("nothing to compare. Record a baseline first with `modelpin baseline`.")
+        # `[M]` This path wrote NO artifact, so the PREVIOUS run's `last-report.md` stayed on
+        # disk as the reviewer-facing verdict -- and `action.yml` posts that file whenever it
+        # exists, regardless of the exit code. A run that compared nothing has to say so in
+        # the artifact, not only on a console nobody reads.
+        _publish_report(
+            render_pr_comment([], from_model, to, n, prov, (), None, rejected, skipped),
+            store_dir,
+            from_model,
+            to,
+        )
+        raise typer.Exit(code=EXIT_UNMEASURED)
 
     # MP-55. Which scenarios were compared at run counts where NO signal could reach ALPHA?
     # Computed per scenario, because a stored baseline can hold a different number of runs
@@ -913,41 +1015,41 @@ def check(
     # cannot see because it is not a function of N.
     census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
-    console.print(render_cli(results, from_model, to, n, underpowered, census, rejected))
+    _summary = render_cli(results, from_model, to, n, underpowered, census, rejected, skipped)
 
     # Decide the CI exit code BEFORE any side effect, so a report-write failure
     # can never silently mask a real regression.
     has_regression = any(r.verdict == DiffVerdict.regression for r in results)
     unmeasured = [r for r in results if r.verdict == DiffVerdict.insufficient_evidence]
 
-    report_path = Path(store_dir) / "last-report.md"
-    markdown = render_pr_comment(results, from_model, to, n, prov, underpowered, census, rejected)
-    try:
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(markdown, encoding="utf-8")
-        console.print(f"\n[dim]PR-style Markdown report written to {report_path}[/]")
-    except OSError as exc:
-        console.print(f"[yellow]warning:[/] could not write report to {report_path}: {exc}")
-    else:
-        # MP-150. `last-report.md` is a MOVING target by design -- `action.yml:135` publishes
-        # that exact path and both CI workflows glob for it -- so it stays, and the durable
-        # copy is written beside it. `[M]` Before this, every `check` deleted the evidence of
-        # the previous one: the two dogfood runs in `ops/launch/` had to be transcribed by
-        # hand because the file they came from was already gone. A finding you cannot cite
-        # later is a finding you did not really record.
-        # Written SECOND on purpose: if only one write can succeed it must be the one CI
-        # reads, so an archive failure is a warning and never costs the stable report.
-        try:
-            archived = _archive_path(Path(store_dir), from_model, to)
-            archived.write_text(markdown, encoding="utf-8")
-            console.print(f"[dim]archived for citation: {archived}[/]")
-        except OSError as exc:
-            console.print(f"[yellow]warning:[/] could not archive the report: {exc}")
+    # MP-160. The artifact is written BEFORE the console summary prints, because
+    # `[M] 2026-09-01` the new `skipped` console block put scenario ids on the terminal ahead
+    # of the report write for the first time -- and on a cp1252 console (Windows CI with
+    # piped stdout) an id outside Latin-1 raises `UnicodeEncodeError` there, which used to
+    # cost the artifact entirely and let `action.yml` republish the previous run's verdict.
+    # The housekeeping notes are held and printed after the summary, so reading order is
+    # unchanged: verdict first, file paths after.
+    markdown = render_pr_comment(
+        results, from_model, to, n, prov, underpowered, census, rejected, skipped
+    )
+    _publish_notes = _publish_report(markdown, store_dir, from_model, to)
+    console.print(_summary)
+    for _note in _publish_notes:
+        console.print(_note)
 
     if skipped:
+        # MP-160. `escape`d: `Scenario.id` has no pattern validator (`models.py`), and
+        # `[M] 2026-08-31` an id containing `[/]` raised `MarkupError` HERE and aborted the
+        # command -- after the report and the archive had already been written, so CI
+        # published the artifact and then failed on a markup typo. `[M]` Review corrected an
+        # earlier version of this comment, which claimed this was the file's LAST unescaped
+        # join: `report()` carried two more, and `modelpin report` aborted the same way. Both
+        # are escaped below. The ROOT cause is still open -- `_fail` prints its message
+        # through rich unescaped (MP-170), which is how a provider error carrying a scenario
+        # id crashes `modelpin baseline`.
         console.print(
             f"[yellow]note:[/] {len(skipped)} scenario(s) had no baseline and were skipped: "
-            f"{', '.join(skipped)}. Re-run `modelpin baseline` to cover them."
+            f"{_rich_escape(', '.join(skipped))}. Re-run `modelpin baseline` to cover them."
         )
 
     if has_regression:
@@ -1071,7 +1173,12 @@ def report(
         except ProviderError as exc:
             # One scenario failing must not sink the whole report — it documents findings.
             # ProviderError messages are already key-scrubbed by the adapters.
-            console.print(f"[yellow]note:[/] scenario {s.id!r} skipped: {exc}")
+            # `_rich_escape` on BOTH: a scenario id has no pattern validator and a provider
+            # message is remote text. MP-160 found this pair by disproving its own comment.
+            console.print(
+                f"[yellow]note:[/] scenario {_rich_escape(repr(s.id))} skipped: "
+                f"{_rich_escape(str(exc))}"
+            )
             skipped.append(s.id)
             continue
         if _exercised_tools(base_traces, cand_traces):
@@ -1159,7 +1266,7 @@ def report(
     if skipped:
         console.print(
             f"[yellow]note:[/] {len(skipped)} scenario(s) skipped and excluded from the "
-            f"report counts: {', '.join(skipped)}."
+            f"report counts: {_rich_escape(', '.join(skipped))}."
         )
     # NB: report() never exits non-zero on a regression — it publishes findings, not a CI gate.
 

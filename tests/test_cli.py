@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 
 from modelpin.cli import _report_basename, app
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
+from modelpin import cli
 from modelpin.models import ToolCall, Trace
 from modelpin.providers import ProviderError
 from modelpin.scenarios import load_scenarios
@@ -127,7 +128,11 @@ def test_check_without_baseline_fails_clearly(tmp_path):
             str(tmp_path / "empty"),
         ],
     )
-    assert r.exit_code == 1
+    # MP-160 / ADR-0018. EXIT_UNMEASURED, not 1. `[M] 2026-09-01` with no usable baseline the
+    # run compares NOTHING, and exit 1 made `action.yml` take its else-branch and annotate the
+    # PR "Modelpin detected a behavioral regression" over a run that never called a model.
+    # Both codes still fail CI (`action.yml` gates on != 0); only the false claim is gone.
+    assert r.exit_code == cli.EXIT_UNMEASURED
     assert "baseline" in r.output.lower()
 
 
