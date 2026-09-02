@@ -23,6 +23,7 @@ from rich.box import ASCII as ASCII_BOX
 from rich.console import Console
 from rich.markup import escape as _rich_escape
 from rich.table import Table
+from rich.text import Text
 
 from modelpin import __version__
 from modelpin.config import (
@@ -118,7 +119,31 @@ judge_model: gpt-4o-mini   # semantic LLM-judge (optional; extra calls). Remove 
 
 
 def _fail(message: str) -> NoReturn:
-    console.print(f"[red]error:[/] {message}")
+    """Print an error and exit 1. The message is ESCAPED: it is text, never markup.
+
+    MP-161 + MP-170. `[M] 2026-09-02` Unescaped, rich parsed any bracketed run in an error
+    message as a style tag, with two distinct failure modes:
+
+        in : pip install 'modelpin[providers]'   ->  out: pip install 'modelpin'
+        in : scenario [bold]alpha[/] failed      ->  out: scenario alpha failed
+
+    The first is the worst message in the product to corrupt: it is what a stranger whose
+    install lacks the SDK is told to run, so they are handed the command they just ran. The
+    second is worse in kind -- no exception, no signal, a plausible message naming something
+    that does not exist. Scenario ids have no pattern validator and provider messages are
+    remote text, so neither input is ours to trust.
+
+    `[M]` This class was found FIVE times at individual call sites, and four separate
+    comments claimed the last one was closed. `_fail_no_scenarios` even escaped its own
+    argument and explained why -- the symptom patched one function away from the cause. The
+    escape belongs HERE; that local workaround is removed in the same commit, because
+    keeping both would double-escape and print a literal backslash at the one careful site.
+
+    `[M]` Checked across all **28** `_fail` call sites (`grep -c "_fail("` reports 29 and
+    counts this definition; two more reach it via the `_fail_*` wrappers): none passes
+    intentional markup.
+    """
+    console.print(f"[red]error:[/] {_rich_escape(message)}")
     raise typer.Exit(code=1)
 
 
@@ -334,11 +359,11 @@ def _scenarios_remedy(resolved: Path, source: str, config_path: str) -> str:
 
 def _fail_no_scenarios(raw: str, source: str, config_path: str) -> NoReturn:
     resolved = Path(raw).resolve()
-    # _rich_escape: _fail() prints through Rich markup, so a path containing '[' would
-    # otherwise be swallowed as a style tag and corrupt the very message meant to unstick
-    # the user.
+    # No local escape: `_fail` escapes its whole message now (MP-161/MP-170). Escaping here
+    # too would print a literal backslash before the bracket -- making the one call site
+    # that had been careful the only one that looks broken.
     _fail(
-        f"no scenarios found in {_rich_escape(str(resolved))} ({_SOURCE_LABEL[source]}) -\n"
+        f"no scenarios found in {resolved} ({_SOURCE_LABEL[source]}) -\n"
         f"       {_dir_state(Path(raw))}.\n"
         f"       {_scenarios_remedy(resolved, source, config_path)}"
     )
@@ -397,7 +422,10 @@ def _warn_unrecognised_assertions(scenarios_dir: str) -> None:
     found = unrecognised_assertion_keys(scenarios_dir)
     if not found:
         return
-    keys = ", ".join(f"`{k}`" for k in sorted(found))
+    # `_rich_escape` for the same reason the ids below it are escaped: these keys are read
+    # out of the user's own scenario JSON, so they are text, not markup. Escaping one and not
+    # the other on the same printed line is the inconsistency that hides the next defect.
+    keys = ", ".join(f"`{_rich_escape(str(k))}`" for k in sorted(found))
     ids = sorted({sid for sids in found.values() for sid in sids})
     console.print(
         f"[yellow]note:[/] {len(ids)} scenario(s) declare {keys} under `assertions`, which "
@@ -667,7 +695,13 @@ def scan(path: str = typer.Argument(".", help="Repo root to scan.")) -> None:
         return
     table = Table("model", "file", "line", title="Models this repo depends on", box=ASCII_BOX)
     for h in sorted(hits, key=lambda x: (x["model"], x["file"], x["line"])):
-        table.add_row(h["model"], h["file"], str(h["line"]))
+        # `Text(...)`, not raw strings: a rich Table parses cell content as MARKUP, and these
+        # cells are paths discovered in someone else's repo. `[M] 2026-09-02` a folder named
+        # `src [experimental]` rendered as `src ` -- `scan` reporting a file path that does
+        # not exist, on one of the first commands a stranger runs. A Next.js repo, whose
+        # route folders are literally `[slug]`, would have every such row corrupted.
+        # `Text` is used rather than `_rich_escape` because it cannot be re-parsed downstream.
+        table.add_row(Text(h["model"]), Text(h["file"]), Text(str(h["line"])))
     console.print(table)
     console.print(f"[dim]{len({h['model'] for h in hits})} distinct model(s).[/]")
 
@@ -690,9 +724,16 @@ def init(
         if written:
             console.print("[green]Offline demo written:[/]")
             for p in written:
-                console.print(f"  - {p}")
+                # `[M] 2026-09-02` These paths are built from the directory the USER named on
+                # the command line, so `init --demo "target [wip] dir"` reported writing to
+                # `target  dir` -- the tool misdescribing files it had just created, using the
+                # argument the user typed.
+                console.print(f"  - {_rich_escape(str(p))}")
         else:
-            console.print(f"[dim]{root / DEMO_DIRNAME} already exists; left untouched.[/]")
+            console.print(
+                f"[dim]{_rich_escape(str(root / DEMO_DIRNAME))} already exists; "
+                f"left untouched.[/]"
+            )
         console.print("\nNext, run these three lines:")
         console.print(f"  [bold]cd {DEMO_DIRNAME}[/]")
         console.print(f"  [bold]modelpin baseline --fixtures {DEMO_FIXTURES}[/]")
@@ -731,7 +772,7 @@ def init(
     if created:
         console.print("[green]Scaffolded:[/]")
         for c in created:
-            console.print(f"  - {c}")
+            console.print(f"  - {_rich_escape(str(c))}")
         console.print("\nNext: add scenarios, then run [bold]modelpin baseline[/].")
         console.print(
             "[dim]No API key yet? Run `modelpin init --demo` for a free offline walkthrough.[/]"
@@ -742,10 +783,14 @@ def init(
         # had never seen, which `baseline` then replayed on their key. Name what was adopted.
         # `existing` is not stale here: this branch means nothing was created, so no
         # greeting.json was written after the glob.
-        console.print(f"Already initialised (modelpin.yaml + {sub}/ present).")
+        # `sub` is the config's own `scenarios_dir:` value and `cfg_path` derives from the
+        # directory argument -- both user-authored text on the line that exists to tell a user
+        # WHAT they just adopted (MP-32). Corrupting it defeats the disclosure.
+        _sub = _rich_escape(str(sub))
+        console.print(f"Already initialised (modelpin.yaml + {_sub}/ present).")
         console.print(
-            f"[dim]{len(existing)} scenario(s) in {sub}/ - `modelpin baseline` replays "
-            f"all of them on your own key. Not yours? Check {cfg_path}.[/]"
+            f"[dim]{len(existing)} scenario(s) in {_sub}/ - `modelpin baseline` replays "
+            f"all of them on your own key. Not yours? Check {_rich_escape(str(cfg_path))}.[/]"
         )
 
 
@@ -1044,9 +1089,12 @@ def check(
         # published the artifact and then failed on a markup typo. `[M]` Review corrected an
         # earlier version of this comment, which claimed this was the file's LAST unescaped
         # join: `report()` carried two more, and `modelpin report` aborted the same way. Both
-        # are escaped below. The ROOT cause is still open -- `_fail` prints its message
-        # through rich unescaped (MP-170), which is how a provider error carrying a scenario
-        # id crashes `modelpin baseline`.
+        # are escaped below. The ROOT cause is CLOSED as of MP-161/MP-170: `_fail` escapes
+        # its whole message now. These escapes stay because this site is a `console.print`,
+        # not a `_fail` message, so nothing upstream escapes it. `[M]` Left as written, this
+        # comment sent the next reader hunting a bug that had already been fixed one commit
+        # earlier -- which is how this codebase accumulated four comments each claiming the
+        # last unescaped site was closed.
         console.print(
             f"[yellow]note:[/] {len(skipped)} scenario(s) had no baseline and were skipped: "
             f"{_rich_escape(', '.join(skipped))}. Re-run `modelpin baseline` to cover them."
@@ -1258,10 +1306,16 @@ def report(
         json_path.write_text(
             json.dumps(to_report_sidecar(results, meta), indent=2), encoding="utf-8"
         )
-        console.print(f"\n[green]Modelpin Report written[/] -> {md_path}")
-        console.print(f"[dim]raw results (JSON) -> {json_path}[/]")
+        # MP-161 sweep: `--output-dir` is user-supplied and an OSError carries a path, so
+        # both are TEXT, not markup. A directory called `[wip]` otherwise vanishes from the
+        # one line telling the user where their Report went.
+        console.print(f"\n[green]Modelpin Report written[/] -> {_rich_escape(str(md_path))}")
+        console.print(f"[dim]raw results (JSON) -> {_rich_escape(str(json_path))}[/]")
     except OSError as exc:
-        console.print(f"[yellow]warning:[/] could not write report to {out}: {exc}")
+        console.print(
+            f"[yellow]warning:[/] could not write report to "
+            f"{_rich_escape(str(out))}: {_rich_escape(str(exc))}"
+        )
 
     if skipped:
         console.print(
