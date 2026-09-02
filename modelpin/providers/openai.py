@@ -34,10 +34,29 @@ _GEN_PARAM_KEYS: tuple[str, ...] = (
     "response_format",
 )
 
-#: o-series reasoning models reject a non-default ``temperature``/``top_p`` and require
-#: ``max_completion_tokens`` instead of ``max_tokens``. GPT-family models are unaffected,
-#: so we keep this set narrow to avoid silently dropping params a GPT model accepts.
-_REASONING_PREFIXES: tuple[str, ...] = ("o1", "o3", "o4")
+#: Reasoning models reject a non-default ``temperature``/``top_p`` and require
+#: ``max_completion_tokens`` instead of ``max_tokens``.
+#:
+#: `[S] 2026-08-31` learn.microsoft.com/en-us/azure/foundry/openai/how-to/reasoning (page
+#: titled "GPT-5 series, o3-mini, o1, o1-mini"): "The following are currently unsupported with
+#: reasoning models: `temperature`, `top_p`, `presence_penalty`, `frequency_penalty`,
+#: `logprobs`, `top_logprobs`, `logit_bias`, `max_tokens`".
+#:
+#: **The old comment here said "GPT-family models are unaffected". That is no longer true, and
+#: it was the load-bearing sentence.** The gpt-5 family IS reasoning: `[S]` a live 400 reported
+#: against `gpt-5.6-luna` reads *"Unsupported value: 'temperature' does not support 0.8 with
+#: this model. Only the default (1) value is supported."* `[M] 2026-08-31` our own
+#: `data/models.json` ships `gpt-5.5` as `status: active` and points `gpt-5.2` at it as a
+#: replacement -- so the registry was recommending models this gate missed, and the failure is
+#: a hard 400 on EVERY scenario and every run, not a degraded one.
+#:
+#: Over-suppression is the deliberate direction. `gpt-5.1` defaults `reasoning_effort` to
+#: `none` and may well accept a temperature, so a flat `gpt-5` prefix costs it determinism it
+#: could have had. That is strictly better than the alternative: under-suppressing costs the
+#: whole run. `[A]` Sending `reasoning_effort: "none"` alongside `temperature: 0` may restore
+#: determinism for gpt-5.x -- NOT confirmed against a primary doc, so it is not done here.
+#: Falsified by: a primary OpenAI doc documenting temperature support on a gpt-5.x model.
+_REASONING_PREFIXES: tuple[str, ...] = ("o1", "o3", "o4", "gpt-5")
 
 #: Cap on model<->tool turns per run so a model that loops on tool calls can't run forever.
 MAX_TOOL_TURNS = 6
@@ -140,7 +159,15 @@ def _explain_api_error(
 
 
 def _is_reasoning_model(model_id: str) -> bool:
-    return model_id.startswith(_REASONING_PREFIXES)
+    """True when this model rejects `temperature`/`top_p` and needs `max_completion_tokens`.
+
+    The tail is checked as well as the whole id because OpenAI-compatible hosts namespace
+    their ids: `[M] 2026-08-31` `openai/gpt-5.6` and `openai/o3` are real OpenRouter/Groq ids,
+    and a bare `startswith` can never match one -- so the gate silently stood down on exactly
+    the hosts MP-143 just opened the judge to.
+    """
+    tail = model_id.rsplit("/", 1)[-1]
+    return model_id.startswith(_REASONING_PREFIXES) or tail.startswith(_REASONING_PREFIXES)
 
 
 def _to_tools(raw: Any) -> list[dict[str, Any]] | None:

@@ -35,9 +35,9 @@ from __future__ import annotations
 from modelpin.models import DiffResult, DiffSignals, DiffVerdict
 from modelpin.report import ChannelCensus, render_cli, render_pr_comment
 
-_ARMED = ChannelCensus(tools_declared=True, assertions_declared=True, judge_enabled=True)
+_ARMED = ChannelCensus(tools_exercised=True, assertions_declared=True, judge_enabled=True)
 #: The dogfood's actual shape: assertions only, no tools, no judge.
-_DOGFOOD = ChannelCensus(tools_declared=False, assertions_declared=True, judge_enabled=False)
+_DOGFOOD = ChannelCensus(tools_exercised=False, assertions_declared=True, judge_enabled=False)
 
 
 def _unchanged(scenario_id: str = "s1") -> DiffResult:
@@ -92,7 +92,7 @@ def test_a_fully_armed_suite_still_gets_its_affirmative_clearance():
 
 
 def test_declaring_tools_alone_restores_the_clearance():
-    census = ChannelCensus(tools_declared=True, assertions_declared=False, judge_enabled=False)
+    census = ChannelCensus(tools_exercised=True, assertions_declared=False, judge_enabled=False)
     assert census.hard_content_channels == ["tool trajectory"]
     assert "looks safe to adopt" in render_pr_comment(
         [_unchanged()], "m1", "m2", 5, "g", (), census
@@ -100,7 +100,7 @@ def test_declaring_tools_alone_restores_the_clearance():
 
 
 def test_enabling_the_judge_alone_restores_the_clearance():
-    census = ChannelCensus(tools_declared=False, assertions_declared=False, judge_enabled=True)
+    census = ChannelCensus(tools_exercised=False, assertions_declared=False, judge_enabled=True)
     assert census.hard_content_channels == ["semantic judge"]
     assert "looks safe to adopt" in render_pr_comment(
         [_unchanged()], "m1", "m2", 5, "g", (), census
@@ -144,7 +144,7 @@ def test_a_fully_armed_run_carries_no_coverage_footnote():
 
 
 def test_the_inert_list_names_every_channel_and_why():
-    census = ChannelCensus(tools_declared=False, assertions_declared=False, judge_enabled=False)
+    census = ChannelCensus(tools_exercised=False, assertions_declared=False, judge_enabled=False)
     joined = " ".join(census.inert)
     assert "tool trajectory + arguments" in joined
     assert "semantic judge" in joined
@@ -218,10 +218,17 @@ def test_a_real_regression_still_leads_with_the_alarm_not_the_census():
 # ---------------------------------------------------------------------------------------
 
 _ALL_CENSUSES = [
-    ChannelCensus(tools_declared=t, assertions_declared=a, judge_enabled=j)
+    ChannelCensus(
+        tools_exercised=t, assertions_declared=a, judge_enabled=j, declared_unused_tools=d
+    )
     for t in (True, False)
     for a in (True, False)
     for j in (True, False)
+    # MP-159. The fourth axis exists because first-run review found the new
+    # "declared but never called in:" remedy was reachable on the CLI surface and reached by
+    # NO cp1252 test -- the same shape as the gap that let MP-138 ship a console crash: the
+    # string was only ever built in a state the suite never constructed.
+    for d in ((), ("scn_a", "scn_b"))
 ]
 
 
@@ -274,7 +281,7 @@ def test_the_judge_reason_is_carried_not_inferred():
     provider is the offline fake". Inferring the first would print a false statement inside the
     disclosure that exists to be honest."""
     offline = ChannelCensus(
-        tools_declared=False,
+        tools_exercised=False,
         assertions_declared=True,
         judge_enabled=False,
         judge_off_reason="disabled on the offline `fake` provider",

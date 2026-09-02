@@ -4,7 +4,7 @@ never raw tracebacks, and never silently produce a misleading result. All offlin
 
 from typer.testing import CliRunner
 
-from modelpin.cli import app
+from modelpin.cli import EXIT_UNMEASURED, app
 
 runner = CliRunner()
 
@@ -242,7 +242,14 @@ def test_check_fails_when_the_fixtures_miss_the_target_model(tmp_path):
          "--fixtures", fx, "--scenarios-dir", scen, "--store-dir", store, "--runs", "5"],
         # fmt: on
     )
-    assert rc.exit_code == 1, rc.output
+    # MP-148 moved this from 1 to EXIT_UNMEASURED, deliberately. MP-28's invariant is that
+    # a run measuring NOTHING must not read as a pass -- non-zero exit, no fabricated trace,
+    # no `unchanged` line -- and all three still hold. The code changed because 1 means "a
+    # regression was found", which is a claim this run is in no position to make; 3 is the
+    # code this project already reserved for "could not measure" (and `action.yml` gates on
+    # `code != '0'`, so CI fails identically).
+    assert rc.exit_code == EXIT_UNMEASURED, rc.output
+    assert rc.exit_code != 0, rc.output
     # The VERDICT line is what must never appear. ("unchanged" alone would match the
     # error's own explanation of why it refuses to invent a trace.)
     assert "scenario(s) unchanged" not in rc.output, rc.output

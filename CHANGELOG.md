@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The semantic judge runs cross-vendor.** It accepted OpenAI judge models only, which left a
+  hole with teeth: cross-vendor is a core promise, and for a suite that declares no `tools` the
+  judge is the *only* CI-failing channel that responds to a change in meaning — so a Groq- or
+  Gemini-only user was running an engine that could not catch a wrong-but-confident answer at
+  all. Judges now run on OpenAI, Google/Gemini and the four OpenAI-compatible hosts. A new
+  optional `judge_provider:` key names the host when the model id does not: `gpt-*` and
+  `gemini-*` do, `qwen/qwen3.8-27b` does not, and Modelpin will not guess — an
+  OpenRouter id such as `openai/gpt-oss-120b` begins with a *different* vendor's name, so a
+  prefix parse would spend the wrong key against the wrong host. **The judge's false-positive
+  rate has only ever been measured with an OpenAI judge**; running everywhere is not the same
+  as being calibrated everywhere, and `docs/fp-measurement.md` now separates those two claims.
+- **A `modelpin check` run that produces a report also archives it, where the next run cannot
+  delete it.** Alongside the unchanged `.modelpin/last-report.md`, the run writes
+  `.modelpin/runs/check-<from>-to-<to>-<UTC>.md`, byte-identical to it. Previously one path was
+  overwritten on every run, so no result survived to be cited or diffed. Two runs still leave
+  nothing, because both exit before a report exists: one where the provider rejects *every*
+  scenario, and one with no baseline. An archive failure is a warning and never costs the
+  stable report. Model ids are slugged in the filename, and a same-second collision gains a
+  `-2` suffix rather than overwriting.
+
 - **A channel census: both `modelpin check` and the public Modelpin Report now disclose what
   they could not measure.** `check` gained it first in this cycle (MP-138) and `modelpin
   report` — the artifact that goes to strangers — did not, so a Report over a suite with no
@@ -19,6 +39,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content, the affirmative headline is replaced rather than qualified.
 
 ### Changed
+- **The channel census now counts a tool the models actually CALLED, not one a scenario merely
+  declared.** `[M]` Reproduced on byte-identical fixtures: a scenario carrying one `tools` entry
+  that no run on either side ever exercised turned `could not measure … NOT cleared on content`
+  into `no behavioral change … looks safe to adopt`, over a baseline of *"FRAUD DETECTED: block
+  this transaction"* against a candidate of *"Looks fine, approve it."* The census read the
+  suite and the config; it never read the traces. A declared tool nothing calls sits exactly
+  where refusal already sits — it can only fire if the candidate *starts* calling tools, so a
+  confident wrong answer never touches it — and the census had always excluded refusal for that
+  reason. **Worse, the disclosure's own remedy was the exploit:** it told the user to *"add
+  `tools`"*, and doing so bought the green. That message now names the scenarios whose declared
+  tools went uncalled and points at a `judge_model` instead. **No verdict, confidence or exit
+  code changes** — the census governs disclosure only — but the PR-comment headline flips from
+  `✅ no behavioral change` to `❔ could not measure` on such a run, and never the other way:
+  the census requires **both** a declaration and a recorded call, so it can only ever withhold
+  a clearance the previous version granted. Two details for anyone parsing the output: the
+  phrase ``declare no `tools` `` in the coverage line became `called no tool`, and the Report
+  sidecar's `coverage.tools_declared` key became `tools_exercised`, joined by a new
+  `declared_unused_tools`.
+  `[M]` The defect is not hypothetical. On a six-scenario suite run against a real model
+  (`openai/gpt-oss-120b`), all six scenarios declared `tools` and only four ever called one —
+  a third of the suite was collecting a clearance it had not earned. (That run is a
+  maintainer dogfood suite and is not in the public repo; the reproduction in `tests/` is.)
+  **This closes the declaration-shaped instance, not the whole class.** A tool called
+  *identically* on both sides still clears a run whose answer inverted, because the trajectory
+  channel reads what the model *does*, not what it *says*. That residual is pinned by a strict
+  `xfail` in `tests/test_census_from_traces.py` rather than left to a tracker.
+- **The public suite `modelpin-public-v2` is now version `3.0.0`** (`sha256:ffd99774f681` →
+  `sha256:5cba1dc8b691`). `Assertion.expected_tool_calls` and `Assertion.output_schema` were
+  **removed**: they were recorded and never read. `expected_tool_calls` was proved inert by
+  differential over five trace configurations returning byte-identical verdicts with the field
+  set and with no assertions at all; `output_schema` had zero readers and was declared by no
+  scenario in any shipped suite. **No scenario's meaning changed and no verdict moves** — the suite hash covers the
+  validated model, so deleting a field moves it even when behaviour is identical, and a
+  published artifact whose fingerprint changes without its version changing is an unannounced
+  change. A scenario file still carrying either key is not an error, but Modelpin now **names
+  it** on every run rather than letting pydantic drop it silently; the same check also catches
+  a typo such as `must_containn`, which no version has ever compared. Use `must_contain` /
+  `must_not_contain`, or rely on the tool-trajectory channel, which measures tool use
+  distributionally and always did the work `expected_tool_calls` appeared to.
+  The held-out false-positive set `examples/suite/` carried the same dead keys and its
+  fingerprint moved with them: `sha256:44cbde8e3b74` → `sha256:3edf6b1ae19a` (`order_status` is
+  left declaring no assertions). It is unversioned and no published number cites its hash —
+  `docs/fp-measurement.md` quotes none — but the fingerprint moved, so it is announced here
+  rather than left to be discovered.
+
 - **The report JSON sidecar gained a top-level `coverage` object** alongside `meta` and
   `results` — `channels_live`, `channels_inert`, `underpowered_scenarios`. A consumer
   pinning the sidecar's exact key set will see one new key. **`null` and `[]` mean different
@@ -26,7 +91,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Report rendered by a caller that never measured coverage), while `[]` means a census was
   taken and found none. `meta` also gained `census` and `underpowered`; both default to
   absent, so a sidecar written by an earlier version still re-renders.
+
 ### Fixed
+- **One scenario a provider rejects no longer deletes the whole run.** A hard 400 on a single
+  scenario aborted every scenario in the run and produced no verdicts and no report — including
+  when the cause was a model *hallucinating a tool name*, which is itself the behavior change
+  Modelpin exists to catch. `check` now skips the scenario, names it with the provider's own
+  message, excludes it from every coverage number, and withholds the clean clearance. A real
+  regression elsewhere still exits 1; otherwise the run exits `3` (could not measure) rather
+  than reporting a regression it did not find. This is not a retry — a 400 is still never
+  retried.
+- **The GitHub Action's `provider` input advertised `anthropic`, whose adapter raises
+  `NotImplementedError`.** It was also unmarked in the `--provider` help for `baseline`,
+  `check` and `report`, and in the unknown-provider error — five places. Four now render from
+  one source (`provider_help()`); `action.yml` cannot call Python, so its string stays
+  hand-written and is pinned to the same list by a test. `anthropic` is still listed, and now
+  says it is not yet implemented.
+- **The Groq quickstart named a model Groq had retired.** `llama-3.3-70b-versatile` returns
+  `404 model_not_found`; the copy-paste command in the README could not run. Replaced with a
+  currently-available id and a note that Groq rotates its catalogue. The earlier measured
+  result that used it is kept and annotated, not deleted.
 - **The `Homepage` link on the PyPI project page was dead.** `pyproject.toml` set
   `Homepage = https://modelpin.dev`; `[M]` `nslookup modelpin.dev` returns a name with **no
   address**, and the value shipped that way in 0.2.0 (verified live on
@@ -91,7 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   direction: the argument gate runs at all only when the tool-name trajectory is unimodal on
   each side *and* identical across them (`structural.py::name_trajectory_is_stable`), so
   `tool_tvd` is exactly `0.0` wherever `Arg match` is populated and the new value is exactly
-  `1.00` wherever the old one was `1 - arg_tvd`. `[M]` fp-guardian priced how often that
+  `1.00` wherever the old one was `1 - arg_tvd`. `[M]` an FP review priced how often that
   differs by resampling the committed argument repertoires over 120,000 args-compared
   comparisons at N=2–6 × 4 match modes: 36,581 move (30.5%), every one toward `1.00` and none
   away. That is why this lands before the next Report publication rather than after it, and

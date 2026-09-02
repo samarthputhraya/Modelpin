@@ -75,8 +75,24 @@ class ToolCall(BaseModel):
 
 
 class Assertion(BaseModel):
-    expected_tool_calls: Optional[list[str]] = None
-    output_schema: Optional[dict[str, Any]] = None
+    """What the ENGINE can check about a scenario's output.
+
+    `expected_tool_calls` and `output_schema` used to live here and were consulted by
+    NOTHING (MP-142, proved by differential over five trace configurations, not by grep).
+    They were deleted in MP-147, which is why `examples/report-suite` moved to suite version
+    3.0.0: `compute_suite_hash` hashes the VALIDATED model, so removing a field is a suite
+    change even though no scenario's meaning moved.
+
+    Nothing was lost with them. `expected_tool_calls` was redundant with a channel that
+    works: the tool-TRAJECTORY diff is what actually measures whether a scenario called the
+    tool it should have, and it does so distributionally over N runs instead of by a static
+    list. A field that silently does nothing is the same class of defect as a green tick
+    over an unmeasured run -- so the fix is to remove it, not to keep documenting it.
+
+    Every field below is READ by `diff/structural.py::violates_text_assertions`. Adding one
+    that is not is the defect this docstring exists to prevent a second time.
+    """
+
     must_contain: Optional[list[str]] = None
     must_not_contain: Optional[list[str]] = None
 

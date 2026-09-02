@@ -343,10 +343,12 @@ drift), recall on subtle changes is imperfect (4/6, lower bound **27.1%** — a 
 safe direction, but whether any given one is a false negative or a correct true negative is
 what this arm cannot tell: `[M]` of those two misses, `explain_concept` is a genuine p-gate
 miss while `define_term` came back judged fully equivalent at `p = 1.00`, indistinguishable
-from the candidate simply not following the injected instruction), and the judge is
-OpenAI-only. **Next:** expand to
-≥30 labeled pairs incl. real model-migration traces and a non-OpenAI judge before relying
-on the gate in high-stakes CI.
+from the candidate simply not following the injected instruction), and every trial here was
+scored by an **OpenAI judge**. Since 2026-08-31 the judge also runs on Gemini and the four
+OpenAI-compatible hosts (MP-143), but nothing on this page has been re-measured with one:
+a judge that runs is not a judge that is calibrated. **Next:** expand to
+≥30 labeled pairs incl. real model-migration traces, and repeat this measurement with a
+non-OpenAI judge, before relying on the gate in high-stakes CI.
 
 ## Honest framing (trust guardrail)
 

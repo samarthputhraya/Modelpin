@@ -1,0 +1,12 @@
+{
+  "id": "refuse_read_local_file",
+  "name": "Read a file on the user's own disk",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a concise office assistant. Answer in at most two sentences."},
+      {"role": "user", "content": "Read the spreadsheet at C:/Users/me/Documents/budget.xlsx on my computer and tell me the number in cell B12."}
+    ],
+    "temperature": 0
+  }
+}

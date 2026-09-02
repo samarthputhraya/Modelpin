@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from modelpin.cli import _report_basename, app
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
-from modelpin.models import Trace
+from modelpin.models import ToolCall, Trace
 from modelpin.providers import ProviderError
 from modelpin.scenarios import load_scenarios
 
@@ -251,6 +251,13 @@ def _suite_fixtures(path: Path, *, regress: str | None = None) -> str:
     """
     records = []
     for scenario in load_scenarios(REPORT_SUITE):
+        # MP-159. The census reads TRACES now, so a scenario that declares a tool must be
+        # shown calling it -- which is what a real run of these three scenarios does. Left
+        # empty, the whole public suite would be content-blind here and the report would
+        # (correctly) withhold the green headline this test is about. Identical on both
+        # sides, so the trajectory itself is unchanged and `unchanged` is still earned.
+        # `[M]` 3 of the 14 public scenarios declare `tools`, all as bare strings.
+        declared = [t for t in (scenario.input.get("tools") or []) if isinstance(t, str)]
         for model in ("model-y", "model-x"):
             refused = scenario.id == regress and model == "model-x"
             records.append(
@@ -259,6 +266,7 @@ def _suite_fixtures(path: Path, *, regress: str | None = None) -> str:
                     model_id=model,
                     final_output="I can't help with that." if refused else "ok",
                     refused=refused,
+                    tool_calls=[ToolCall(name=declared[0])] if declared else [],
                 ).model_dump(mode="json")
             )
     path.write_text(json.dumps(records), encoding="utf-8")
@@ -299,7 +307,7 @@ def test_report_renders_the_public_suite_provenance(tmp_path):
     assert r.exit_code == 0, r.output
     md = next(out.glob("*.md")).read_text(encoding="utf-8")
     assert "modelpin-public-v2" in md
-    assert "sha256:ffd99774f681" in md  # the committed public suite's pinned hash
+    assert "sha256:5cba1dc8b691" in md  # the committed public suite's pinned hash (v3.0.0, MP-147)
     assert "`unordered`" in md  # --match was threaded into the settings block
     assert "`disabled`" in md  # fake provider -> no judge -> labeled disabled
     assert "No behavioral change observed" in md  # earned: identical traces on both sides

@@ -563,7 +563,7 @@ def test_a_heterogeneous_baseline_reaches_the_partial_header_end_to_end(tmp_path
 
 
 def test_the_uniformity_warning_ignores_scenarios_the_run_will_not_replay():
-    """`[M]` claims-auditor, on the first draft of this fix: unscoped, the warning fired on a
+    """`[M]` a claims review, on the first draft of this fix: unscoped, the warning fired on a
     baseline entry whose scenario file had been DELETED, and on an entry holding 0 recorded
     runs -- which `check` skips -- in both cases while every scenario in the run was measured
     at full power. A pre-spend power warning that fires when nothing in the run is affected
@@ -593,7 +593,7 @@ def test_the_uniformity_warning_ignores_zero_run_entries():
 
 
 def test_the_partial_clearance_prose_is_still_free_of_comparative_language():
-    """ADR-0009 / spec section 9. `[M]` claims-auditor: the `_BANNED` regex was applied at
+    """ADR-0009 / spec section 9. `[M]` a claims review: the `_BANNED` regex was applied at
     three sites, none of which passed a non-empty `underpowered`, so every string this branch
     adds to the report was unguarded prose. A Report is posted on someone else's repository;
     "worse", "downgrade" and their kin must be unreachable on EVERY branch, not most."""
@@ -609,7 +609,7 @@ def test_the_partial_clearance_prose_is_still_free_of_comparative_language():
 
 # --- what the new prose does under adversarial input --------------------------------------
 #
-# `[M] 2026-08-27` first-run-auditor, on the first draft of this branch. Both findings are
+# `[M] 2026-08-27` a first-run review, on the first draft of this branch. Both findings are
 # in code this branch ADDED, not pre-existing, and neither had any test.
 
 

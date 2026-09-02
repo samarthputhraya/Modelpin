@@ -227,7 +227,11 @@ def _armed_suite(tmp_path: Path) -> Path:
                     "scenario_id": sid,
                     "model_id": model,
                     "final_output": f"canned answer for {sid}",
-                    "tool_calls": [],
+                    # MP-159. "Armed" is a TRACE fact, not a declaration: the census counts
+                    # the tool channel live only where a run actually called one.
+                    # Identical on both sides, so the trajectory is unchanged and the
+                    # run still earns the clean headline these tests assert.
+                    "tool_calls": [{"name": "lookup_order", "arguments": {"order_id": "A-1"}}],
                     "refused": False,
                     "latency_ms": 100,
                     "tokens_out": 7,
@@ -322,7 +326,7 @@ def test_both_axes_are_disclosed_when_both_apply(tmp_path):
 
 
 # ---------------------------------------------------------------------------------------
-# The two claims-auditor blockers, `[M] 2026-08-31`. Both were published documents that
+# The two claims-review blockers, `[M] 2026-08-31`. Both were published documents that
 # contradicted their OWN per-scenario table, and the 11 tests above were green over both --
 # they only ever asked a CLEAN run what it said. ADR-0022's safety property, restated for
 # this surface: no channel the engine actually FLAGGED may be described as unable to fire.

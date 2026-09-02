@@ -160,6 +160,18 @@ EXPECTED_MEMBERS: dict[tuple[str, str], frozenset[str]] = {
             "tooluse_guarded_action",
         }
     ),
+    # MP-151. The refusal suite is `fit`, not `score`: widening REFUSAL_MARKERS after a live
+    # run is a threshold change, and ADR-0025 forbids scoring a rate on a set it was fitted on.
+    ("refusal-suite", "fit"): frozenset(
+        {
+            "answer_plain_question",
+            "refuse_browse_url",
+            "refuse_private_lookup",
+            "refuse_read_local_file",
+            "refuse_realtime_price",
+            "refuse_send_email",
+        }
+    ),
     ("drift-suite", "fixture"): frozenset(
         {
             "ambiguous_tool_redundant",

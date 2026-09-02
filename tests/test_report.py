@@ -170,7 +170,7 @@ def test_report_md_uses_measurement_framing_and_no_banned_words(overrides):
     """ADR-0009's Consequences make this guard the enforcement mechanism for the whole
     document, so it must run over every SHAPE the document can take.
 
-    `[M] 2026-08-31` claims-auditor: it did not. The bare ``_meta()`` sets no census and no
+    `[M] 2026-08-31` a claims review: it did not. The bare ``_meta()`` sets no census and no
     ``underpowered``, so MP-140's entire coverage block and both new `❔` headline branches
     were unreachable from this test -- the prose most likely to editorialise was the prose
     the banned-words guard could not see. (It was clean; that was luck, not coverage.)

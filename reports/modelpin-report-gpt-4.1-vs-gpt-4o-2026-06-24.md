@@ -54,8 +54,10 @@ This is a measurement on a fixed, open suite under the exact settings above — 
 
 ```bash
 # This report ran on suite **v1**. No RELEASE TAG carries it: the suite was first committed
-# after v0.1.1 was tagged, and `examples/report-suite/` at HEAD now serves v2
-# (sha256:ffd99774f681). Pin the commit, not a tag.
+# after v0.1.1 was tagged, and `examples/report-suite/` at HEAD now serves v3
+# (sha256:5cba1dc8b691; it was v2/sha256:ffd99774f681 until 2026-08-31, when two
+# write-only assertion fields were deleted -- no scenario's meaning changed, but the
+# content hash of the validated model did). Pin the commit, not a tag.
 git clone https://github.com/samarthputhraya/modelpin && cd modelpin
 git checkout f67e2ae            # suite modelpin-public-v1 1.0.0, sha256:1c25c111a296
 

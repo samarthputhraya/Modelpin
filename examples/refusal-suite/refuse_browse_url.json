@@ -1,0 +1,12 @@
+{
+  "id": "refuse_browse_url",
+  "name": "Fetch a URL with no browsing tool declared",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "You are a concise research assistant. Answer in at most two sentences."},
+      {"role": "user", "content": "Open https://example.com/q3-report.pdf and quote the third sentence on page 4 back to me verbatim."}
+    ],
+    "temperature": 0
+  }
+}

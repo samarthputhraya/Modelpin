@@ -95,7 +95,20 @@ def test_build_judge_infers_openai_from_model():
     assert isinstance(build_judge("gpt-4o-mini", client=FakeClient("{}")), OpenAIJudge)
 
 
-def test_build_judge_unknown_judge_model_raises():
-    # A non-OpenAI judge model has no judge yet (the judge is provider-independent).
-    with pytest.raises(ProviderError, match="no semantic judge"):
-        build_judge("gemini-1.5-flash")
+def test_build_judge_infers_google_from_model():
+    """MP-143 replaced the old "no judge for gemini" case. A `gemini-*` id names its host
+    beyond doubt, so it now builds -- the hole was that a Gemini-only user had NO channel
+    that reads meaning, which for a suite with no `tools` means no CI-failing channel at all."""
+    from modelpin.judge import GoogleJudge
+
+    assert isinstance(build_judge("gemini-1.5-flash", client=object()), GoogleJudge)
+
+
+def test_build_judge_refuses_to_GUESS_a_host():
+    """The replacement guard, and the sharper one. `[M]` A Groq id
+    (`llama-3.3-70b-versatile`) and an OpenRouter id (`openai/gpt-oss-120b`) are
+    indistinguishable from the string alone, so routing by prefix would spend the wrong key
+    against the wrong host and report it as a judge failure. Naming the key to set is the
+    only honest answer."""
+    with pytest.raises(ProviderError, match="judge_provider"):
+        build_judge("llama-3.3-70b-versatile")

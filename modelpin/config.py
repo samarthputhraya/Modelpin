@@ -48,6 +48,13 @@ class ModelpinConfig(BaseModel):
     providers: list[str] = Field(default_factory=lambda: [DEFAULT_PROVIDER])
     runs: int = Field(default=DEFAULT_RUNS, ge=1)
     judge_model: Optional[str] = None
+    #: Which HOST runs the judge. Optional, because `gpt-*` and `gemini-*` name their own
+    #: vendor; required for every other id, because a Groq id and an OpenRouter id are
+    #: indistinguishable from the string alone and guessing would spend the wrong key
+    #: against the wrong host (MP-143). Unset and un-inferable, `check` falls back to the
+    #: REPLAY provider and says so on the console rather than silently disabling the only
+    #: channel that reads meaning.
+    judge_provider: Optional[str] = None
     regression_threshold: float = 0.2
 
 

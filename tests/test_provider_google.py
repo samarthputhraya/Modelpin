@@ -370,7 +370,7 @@ def test_a_vertex_client_failure_is_wrapped_and_names_ADC(monkeypatch):
     """The failure mode a user WILL hit: Vertex selected, but `gcloud auth
     application-default login` never run. The message must not read as a missing API key.
 
-    [M] provider-sdk-verifier 2026-08-25: the FIRST version of this test was a guard that
+    [M] provider-SDK review 2026-08-25: the FIRST version of this test was a guard that
     asserted nothing real. It raised from `Client()`, and the SDK does not fail there - it
     only calls `load_auth` when `project` is ABSENT, and this code path requires `project`,
     so ADC is deferred to the first REQUEST. `preflight()` therefore passed with no
@@ -421,7 +421,7 @@ def test_credentials_are_resolved_before_a_client_exists(monkeypatch):
 
 
 def test_the_default_location_serves_current_models_not_just_legacy_ones(spy_genai, monkeypatch):
-    """[M] provider-sdk-verifier 2026-08-25, free `count_tokens` against a real project:
+    """[M] provider-SDK review 2026-08-25, free `count_tokens` against a real project:
 
         us-central1  gemini-2.5-flash  SERVED     global  gemini-2.5-flash  SERVED
         us-central1  gemini-3.5-flash  404        global  gemini-3.5-flash  SERVED

@@ -66,9 +66,15 @@ def _unchanged(sid):
 def test_one_armed_scenario_does_not_clear_its_blind_neighbours():
     """The sharp case, reduced from the CLI reproduction: the ONLY difference between these
     two censuses is a third scenario that declares `tools` and is itself unchanged."""
-    blind_only = _channel_census([_scn("blind_a"), _scn("blind_b")], None, "fake")
+    blind_only = _channel_census(
+        [_scn("blind_a"), _scn("blind_b")], None, "fake", tool_active=set()
+    )
     plus_armed = _channel_census(
-        [_scn("blind_a"), _scn("blind_b"), _scn("armed", tools=True)], None, "fake"
+        [_scn("blind_a"), _scn("blind_b"), _scn("armed", tools=True)],
+        None,
+        "fake",
+        # MP-159: "armed" now means a run CALLED the tool, not that the scenario declared it.
+        tool_active={"armed"},
     )
     assert blind_only.blind_scenarios == ("blind_a", "blind_b")
     # Before MP-141 this was `()` -- the `any()` said "tools declared" and every scenario
@@ -79,7 +85,10 @@ def test_one_armed_scenario_does_not_clear_its_blind_neighbours():
 
 def test_the_pr_comment_withholds_a_full_clearance_when_only_some_scenarios_are_armed():
     census = _channel_census(
-        [_scn("blind_a"), _scn("blind_b"), _scn("armed", tools=True)], None, "fake"
+        [_scn("blind_a"), _scn("blind_b"), _scn("armed", tools=True)],
+        None,
+        "fake",
+        tool_active={"armed"},
     )
     md = render_pr_comment(
         [_unchanged("blind_a"), _unchanged("blind_b"), _unchanged("armed")],
@@ -94,8 +103,10 @@ def test_the_pr_comment_withholds_a_full_clearance_when_only_some_scenarios_are_
 
 
 def test_a_fully_armed_suite_still_earns_its_clearance():
-    """The anti-crying-wolf half: every scenario declares `tools`, so nothing is withheld."""
-    census = _channel_census([_scn("a", tools=True), _scn("b", tools=True)], None, "fake")
+    """The anti-crying-wolf half: every scenario CALLED a tool, so nothing is withheld."""
+    census = _channel_census(
+        [_scn("a", tools=True), _scn("b", tools=True)], None, "fake", tool_active={"a", "b"}
+    )
     assert census.blind_scenarios == ()
     md = render_pr_comment([_unchanged("a"), _unchanged("b")], "m1", "m2", 5, census=census)
     assert "looks safe to adopt" in md
@@ -105,13 +116,15 @@ def test_a_fully_armed_suite_still_earns_its_clearance():
 def test_an_enabled_judge_arms_every_scenario_including_those_without_tools():
     """The judge is suite-wide and reads MEANING on every scenario, so with it on nothing is
     content-blind -- the per-scenario rule must not over-fire into a false alarm."""
-    census = _channel_census([_scn("a"), _scn("b")], object(), "openai")
+    census = _channel_census([_scn("a"), _scn("b")], object(), "openai", tool_active=set())
     assert census.blind_scenarios == ()
     assert census.judge_enabled is True
 
 
 def test_the_cli_does_not_print_a_green_tick_over_a_blind_scenario():
-    census = _channel_census([_scn("blind"), _scn("armed", tools=True)], None, "fake")
+    census = _channel_census(
+        [_scn("blind"), _scn("armed", tools=True)], None, "fake", tool_active={"armed"}
+    )
     out = render_cli([_unchanged("blind"), _unchanged("armed")], "m1", "m2", 5, census=census)
     assert "[green]OK[/]" not in out
     assert "[yellow]OK?[/]" in out
@@ -124,7 +137,9 @@ def test_the_terminal_gets_the_run_count_remedy_not_the_channel_one():
     """`[M]` `_underpowered_clearance` was called only from `render_pr_comment`, so a run
     blind purely on RUN COUNT was told on the terminal to `add tools, a judge_model` --
     advice that fixes nothing, confidently given."""
-    armed = _channel_census([_scn("a", tools=True), _scn("b", tools=True)], None, "fake")
+    armed = _channel_census(
+        [_scn("a", tools=True), _scn("b", tools=True)], None, "fake", tool_active={"a", "b"}
+    )
     out = render_cli(
         [_unchanged("a"), _unchanged("b")], "m1", "m2", 2, underpowered=["a", "b"], census=armed
     )
@@ -133,7 +148,7 @@ def test_the_terminal_gets_the_run_count_remedy_not_the_channel_one():
 
 
 def test_both_remedies_appear_on_the_terminal_when_both_axes_are_blind():
-    blind = _channel_census([_scn("a"), _scn("b")], None, "fake")
+    blind = _channel_census([_scn("a"), _scn("b")], None, "fake", tool_active=set())
     out = render_cli(
         [_unchanged("a"), _unchanged("b")], "m1", "m2", 2, underpowered=["a", "b"], census=blind
     )
@@ -145,7 +160,7 @@ def test_the_terminal_clearances_stay_cp1252_encodable():
     """`[M] 2026-08-30` MP-138 shipped U+2192 into `render_cli` and crashed `modelpin check`
     on a default Windows console. `_underpowered_clearance` had only ever reached UTF-8
     Markdown, so wiring it into the terminal re-opened that exact hole."""
-    blind = _channel_census([_scn("a"), _scn("b")], None, "fake")
+    blind = _channel_census([_scn("a"), _scn("b")], None, "fake", tool_active=set())
     for up in ([], ["a"], ["a", "b"]):
         out = render_cli(
             [_unchanged("a"), _unchanged("b")], "m1", "m2", 2, underpowered=up, census=blind
@@ -157,32 +172,59 @@ def test_the_terminal_clearances_stay_cp1252_encodable():
 
 
 def test_an_assertion_the_engine_never_reads_is_not_counted_as_coverage():
-    """`[M]` `demo.py` gives `angry_customer` an `Assertion` whose only field is
-    `expected_tool_calls`, which `modelpin/diff/` consults nowhere (MP-142). The engine reads
-    `must_contain` / `must_not_contain` only."""
+    """`[M]` `demo.py` once gave `angry_customer` an `Assertion` whose only field was
+    `expected_tool_calls`, which `modelpin/diff/` consulted nowhere (MP-142). MP-147 deleted
+    that field, so the same file now parses to an EMPTY `Assertion` -- which pydantic accepts
+    silently. Still not coverage, and this is still the assertion that says so: the engine
+    reads `must_contain` / `must_not_contain` only."""
     dead = _channel_census(
         [_scn("s", assertions=Assertion(expected_tool_calls=["cancel_subscription"]))],
         None,
         "fake",
+        tool_active=set(),
     )
     assert dead.assertions_declared is False
-    live = _channel_census([_scn("s", assertions=Assertion(must_contain=["TOTAL"]))], None, "fake")
+    live = _channel_census(
+        [_scn("s", assertions=Assertion(must_contain=["TOTAL"]))], None, "fake", tool_active=set()
+    )
     assert live.assertions_declared is True
 
 
 def test_the_shipped_demo_suite_is_reported_per_scenario():
-    """`[M]` The suite `modelpin init --demo` writes: 4 scenarios, 2 declare `tools`."""
-    from modelpin.demo import write_demo
+    """`[M]` The suite `modelpin init --demo` writes: 4 scenarios, 2 declare `tools`.
+
+    MP-159 makes this stronger than a declaration count: the census is derived from a real
+    replay of the demo's OWN fixtures. That also pins the thing MP-159 could plausibly have
+    broken -- the two tool-declaring demo scenarios really do call their tools, so a
+    brand-new user's first `mp check` keeps exactly the coverage it had before the change.
+    """
+    from modelpin.cli import _exercised_tools
+    from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
+    from modelpin.providers.fake import FakeProvider
+    from modelpin.replay import replay
     from modelpin.scenarios import load_scenarios
 
     root = Path(tempfile.mkdtemp(prefix="modelpin-mp141-"))
     write_demo(root)
-    scenarios = load_scenarios(str(root / "modelpin-demo" / "scenarios"))
-    census = _channel_census(scenarios, None, "fake")
+    demo = root / DEMO_DIRNAME
+    scenarios = load_scenarios(str(demo / "scenarios"))
+    adapter = FakeProvider.from_fixtures(str(demo / DEMO_FIXTURES))
+    called = {
+        s.id
+        for s in scenarios
+        if _exercised_tools(
+            replay(s, DEMO_FROM, adapter, runs=1), replay(s, DEMO_TO, adapter, runs=1)
+        )
+    }
+    census = _channel_census(scenarios, None, "fake", tool_active=called)
     assert census.compared == 4
     assert len(census.blind_scenarios) == 2, census.blind_scenarios
-    assert census.tools_declared is True  # the suite-wide reading is still True...
+    assert census.tools_exercised is True  # the suite-wide reading is still True...
     assert census.blind_scenarios  # ...and it no longer speaks for the blind half
+    # MP-159. On the SHIPPED demo, declaration and exercise agree -- so the fix costs a
+    # first-run user nothing, and the empty `declared_unused_tools` is what says so.
+    assert called == {s.id for s in scenarios if s.input.get("tools")}
+    assert census.declared_unused_tools == ()
 
 
 # --- back-compat: a census with no per-scenario data keeps MP-138's behaviour -----------
@@ -191,7 +233,7 @@ def test_the_shipped_demo_suite_is_reported_per_scenario():
 def test_a_census_without_per_scenario_data_still_reads_suite_wide():
     """MP-138's constructor shape must keep working: `blind_scenarios` defaults to empty and
     the suite-wide reading stands, so the disclosure never gets LESS honest than it was."""
-    legacy = ChannelCensus(tools_declared=False, assertions_declared=True, judge_enabled=False)
+    legacy = ChannelCensus(tools_exercised=False, assertions_declared=True, judge_enabled=False)
     md = render_pr_comment([_unchanged("s")], "m1", "m2", 5, census=legacy)
     assert "NOT cleared on content" in md
     assert "looks safe to adopt" not in md

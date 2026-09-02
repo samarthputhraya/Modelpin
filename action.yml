@@ -18,7 +18,9 @@ inputs:
     required: false
     default: ""
   provider:
-    description: "Provider for the candidate replay: openai | google | anthropic | groq | openrouter | together | cerebras."
+    # MP-128: `anthropic` is a STUB that raises NotImplementedError. Listing it unmarked
+    # made this the one place where following the documentation reaches a crash.
+    description: "Provider for the candidate replay: openai | google | groq | openrouter | together | cerebras. (`anthropic` is NOT yet implemented and will fail the run.)"
     required: false
     default: "openai"
   config:

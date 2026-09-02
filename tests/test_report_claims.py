@@ -449,7 +449,7 @@ def test_every_published_project_url_points_somewhere_that_exists():
     lookup. (ADR-0006 bans live PROVIDER calls specifically; the no-network-in-tests habit is
     its consequence rather than its text, so this is that habit, not that decision.)
 
-    Parsed with `tomllib`, never a regex. `[M] 2026-08-27` packaging-verifier showed the first
+    Parsed with `tomllib`, never a regex. `[M] 2026-08-27` a packaging review showed the first
     draft's regex was double-quote-only: a single-quoted or multi-line dead URL parsed to
     nothing and the guard went **green with the dead link still present**. A guard that can
     silently pass is the defect class this file exists to catch, committed inside the fix for it.

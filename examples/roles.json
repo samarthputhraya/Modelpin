@@ -96,6 +96,19 @@
         "strict_json_escape",
         "tool_missing_param"
       ]
+    },
+    {
+      "path": "refusal-suite",
+      "role": "fit",
+      "why": "The suite built to make the REFUSAL channel fire. [M] 2026-08-31: refusal had never been observed on real material (0 of 60 traces on the kavach dogfood, 0 of 30 on aegis), so it was the last of the five verdict-bearing channels whose live behaviour was an assumption. Role `fit` and not `score`, deliberately: if a live run shows real declines that REFUSAL_MARKERS misses, widening those markers is a threshold change, and it must happen on a set no rate is ever claimed from. The refusal false-positive rate belongs on the held-out examples/suite, which already carries decline_pii. Content-disjoint from every other set.",
+      "scenarios": [
+        "answer_plain_question",
+        "refuse_browse_url",
+        "refuse_private_lookup",
+        "refuse_read_local_file",
+        "refuse_realtime_price",
+        "refuse_send_email"
+      ]
     }
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "suite_id": "modelpin-refusal-v1",
+  "suite_version": "1.0.0",
+  "created": "2026-08-31",
+  "description": "The one suite built to make the REFUSAL channel fire. [M] As of 2026-08-31 refusal had never been observed on real material -- 0 of 60 traces on the first dogfood app, 0 of 30 on the second -- so of the five verdict-bearing channels it was the last one whose live behaviour was an assumption rather than a measurement. Every scenario here asks for something a competent assistant declines for a CAPABILITY or PRIVACY reason (live market data, fetching a URL, reading a local file, sending mail with no tool, personal details of a private individual). Capability boundaries are deliberate: they are harmless to ship in a public repo, they decline consistently across vendors, and a model that GAINS the capability stops declining. [M] The refusal channel is ONE-SIDED by design (ADR-0002) and cannot see that drop -- baseline 5/5 refused -> candidate 0/5 returns `unchanged` at confidence 1.00, refusal_delta -1.0 -- so on these scenarios the drop is visible only to a configured semantic judge. The suite was authored assuming otherwise; the README says so. answer_plain_question is the quiet anchor: it must never read as a refusal, so the suite proves the detector discriminates rather than merely fires. Role `fit` in examples/roles.json (ADR-0025): the refusal markers may be calibrated here, and therefore NO false-positive rate may ever be claimed from it -- that measurement belongs on the held-out examples/suite. Disjoint from every other set. [M] 2026-08-31, run live on Groq: 50 of 50 refuse_* traces on two models recorded refused=True and 0 of 15 on the anchor, so the DETECTOR is measured. A third model's 25 traces are [A], NOT counted: its check returned `unchanged`, which on a one-sided channel cannot distinguish 'also refused' from 'stopped refusing'. No refusal-rate delta was seen, so the channel moving a VERDICT on real material is still [A]. The raw traces are not published, so these figures are maintainer assertions, not numbers a reader can recount.",
+  "scenarios": [
+    "answer_plain_question",
+    "refuse_browse_url",
+    "refuse_private_lookup",
+    "refuse_read_local_file",
+    "refuse_realtime_price",
+    "refuse_send_email"
+  ]
+}

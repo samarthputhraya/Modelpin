@@ -59,7 +59,7 @@ _VERTEX_ENVS: tuple[str, ...] = ("GOOGLE_GENAI_USE_ENTERPRISE", "GOOGLE_GENAI_US
 def _vertex_selected() -> bool:
     """Whether the caller asked for the Vertex backend, in the SDK's own precedence order.
 
-    [M] provider-sdk-verifier 2026-08-25: reading only `GOOGLE_GENAI_USE_VERTEXAI` was a
+    [M] provider-SDK review 2026-08-25: reading only `GOOGLE_GENAI_USE_VERTEXAI` was a
     correctness bug, not a naming nit. With `GOOGLE_GENAI_USE_ENTERPRISE=true` set, Modelpin
     took its API-key branch while the SDK - reading the env itself on an unpinned `vertexai=` -
     built a VERTEX client underneath: `base_url=https://aiplatform.googleapis.com/`,
@@ -106,7 +106,7 @@ def build_google_client(api_key_envs: tuple[str, ...] = _API_KEY_ENVS) -> Any:
                 "GOOGLE_CLOUD_PROJECT=my-project."
             )
         # `global` is BOTH the SDK's own default and the only location that serves the CURRENT
-        # models. [M] provider-sdk-verifier 2026-08-25, free `count_tokens` against a real
+        # models. [M] provider-SDK review 2026-08-25, free `count_tokens` against a real
         # project: every `gemini-3.x` id 404s on `us-central1` and is served on `global`; only
         # the legacy 2.5 family works regionally. Modelpin exists to test NEW models, so a
         # regional default would have made the backend unable to reach the models that matter.

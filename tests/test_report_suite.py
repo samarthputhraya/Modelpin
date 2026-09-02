@@ -1,8 +1,11 @@
 """Tests for the public report-suite helpers (content hash + manifest) and the
 integrity of the committed suite. All offline — no providers, no network."""
 
+import json
 import re
 from pathlib import Path
+
+import pytest
 
 from modelpin.models import Scenario
 from modelpin.report.suite import (
@@ -21,7 +24,10 @@ HELD_OUT_SUITE = str(REPO / "examples" / "suite")
 #: Pinned content hash of the committed public suite. If a scenario changes, bump
 #: examples/report-suite/manifest.json's suite_version AND update this value in the same
 #: commit — that is the point: a silent scenario mutation fails CI here.
-GOLDEN_SUITE_HASH = "sha256:ffd99774f681"
+# MP-147 moved this deliberately: `sha256:ffd99774f681` -> suite version 3.0.0. The two
+# write-only assertion fields were deleted, which changes the hash of the VALIDATED model
+# without changing any scenario's meaning or any verdict.
+GOLDEN_SUITE_HASH = "sha256:5cba1dc8b691"
 
 #: Comparative-quality words a public report must never emit about a model (spec section 9).
 _BANNED = re.compile(
@@ -60,7 +66,10 @@ def test_suite_hash_changes_on_scenario_mutation():
 
 
 def test_read_manifest_returns_suite_identity():
-    assert read_manifest(REPORT_SUITE) == ("modelpin-public-v2", "2.0.0")
+    # 3.0.0 since MP-147 removed the two write-only assertion fields. The suite ID does not
+    # move with it: `-v2` names the DISCRIMINATING generation of the suite (v1 was the easy
+    # one a published report already calls superseded), not its semver.
+    assert read_manifest(REPORT_SUITE) == ("modelpin-public-v2", "3.0.0")
 
 
 def test_read_manifest_falls_back_to_documented_defaults_when_absent(tmp_path):
@@ -99,12 +108,27 @@ def test_report_suite_ids_disjoint_from_held_out_suite():
     assert report_ids.isdisjoint(held_out_ids)
 
 
-def test_public_suite_carries_no_comparative_quality_words():
+def _declared_suite_dirs() -> list[Path]:
+    """Every scenario directory `examples/roles.json` declares.
+
+    `[M]` claims review 2026-08-31: the guard below was pinned to `REPORT_SUITE` alone, so
+    `examples/refusal-suite/` landed entirely outside it. Deriving the list from `roles.json`
+    -- which a new suite must join anyway, or `test_suite_roles.py` fails -- means the next
+    suite is covered on the day it lands rather than the day someone remembers.
+    """
+    roles = json.loads((REPO / "examples" / "roles.json").read_text(encoding="utf-8"))
+    return sorted({REPO / "examples" / entry["path"] for entry in roles["sets"]})
+
+
+@pytest.mark.parametrize("suite_dir", _declared_suite_dirs(), ids=lambda p: p.name)
+def test_no_shipped_suite_carries_comparative_quality_words(suite_dir):
     """Framing guardrail (spec section 9): scenario ids, names, and tool names flow into the
     published report (via the diff explanation), so the suite itself must be free of
     comparative-quality words — else a tool named e.g. `upgrade_plan` would smuggle a banned
     word into a report about named commercial models."""
-    for s in load_scenarios(REPORT_SUITE):
+    scenarios = load_scenarios(suite_dir)
+    assert scenarios, f"{suite_dir.name} declares a role but loads no scenarios"
+    for s in scenarios:
         tokens = [s.id, s.name, *(s.input.get("tools") or [])]
         for token in tokens:
             hit = _BANNED.search(str(token))

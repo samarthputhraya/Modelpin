@@ -444,7 +444,7 @@ def test_check_judge_disclosure_bounds_the_judge_calls_it_makes(
     adapter = CountingAdapter()
     judge = CountingJudge()
     monkeypatch.setattr("modelpin.cli._adapter", lambda provider, fixtures: adapter)
-    monkeypatch.setattr("modelpin.cli._build_judge", lambda provider, cfg: judge)
+    monkeypatch.setattr("modelpin.cli._build_judge", lambda provider, cfg, **kw: judge)
 
     result = CliRunner().invoke(
         app,

@@ -15,7 +15,7 @@ import json
 import shlex
 from datetime import datetime, timezone
 from pathlib import Path
-from collections.abc import Sequence
+from collections.abc import Sequence, Set as AbstractSet
 from typing import NoReturn, Optional
 
 import typer
@@ -47,8 +47,8 @@ from modelpin.diff.stats import (
     min_achievable_pvalue_distribution,
     min_achievable_pvalue_mean,
 )
-from modelpin.models import DiffResult, DiffVerdict, Scenario
-from modelpin.providers import ProviderAdapter, ProviderError, get_adapter
+from modelpin.models import Assertion, DiffResult, DiffVerdict, Scenario, Trace
+from modelpin.providers import ProviderAdapter, ProviderError, get_adapter, provider_help
 from modelpin.providers.fake import FakeProvider
 from modelpin.replay import replay
 from modelpin.report import (
@@ -61,7 +61,7 @@ from modelpin.report import (
 )
 from modelpin.report.suite import compute_suite_hash, read_manifest, slug
 from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
-from modelpin.scenarios import ScenarioError, load_scenarios
+from modelpin.scenarios import ScenarioError, load_scenarios, unrecognised_assertion_keys
 from modelpin.storage import (
     STORE_DIRNAME,
     BaselineError,
@@ -112,6 +112,8 @@ providers:
   - openai                 # uses YOUR OPENAI_API_KEY from the environment
 runs: {DEFAULT_RUNS}                    # N replays per scenario; below 4 the tool signal cannot fire
 judge_model: gpt-4o-mini   # semantic LLM-judge (optional; extra calls). Remove to disable.
+# judge_provider: groq    # only needed when the judge model id does not name its own
+#                         # vendor: gpt-* and gemini-* do, qwen/qwen3.8-27b does not.
 """
 
 
@@ -214,7 +216,7 @@ def _replay_plan(
     return plan
 
 
-def _build_judge(provider: str, cfg: ModelpinConfig):
+def _build_judge(provider: str, cfg: ModelpinConfig, to_model: str | None = None):
     """Construct + preflight the semantic LLM-judge if configured. Returns None when no
     judge_model is set or the run is offline (fake), so the diff stays purely structural."""
     if not cfg.judge_model or provider == "fake":
@@ -222,13 +224,29 @@ def _build_judge(provider: str, cfg: ModelpinConfig):
     try:
         from modelpin.judge import build_judge
 
-        # The judge is independent of the models being compared (the judge model id picks
-        # its provider), so a cross-vendor check (e.g. google vs openai) can still judge.
-        judge = build_judge(cfg.judge_model)
+        from modelpin.judge import infer_judge_provider
+
+        # The judge is independent of the models being compared, so a cross-vendor check
+        # (e.g. google vs openai) can still judge. MP-143: which HOST runs it is resolved
+        # explicitly -- `judge_provider:` first, then an unambiguous model-id prefix, then
+        # the REPLAY provider as the last resort. That last step is what makes the common
+        # zero-config case work for a Groq-only user, who otherwise had no channel that
+        # reads meaning at all; it is never a guess between two hosts, and the host is
+        # printed below so the choice is visible before any of the user's money is spent.
+        host = cfg.judge_provider or infer_judge_provider(cfg.judge_model) or provider
+        judge = build_judge(cfg.judge_model, provider=host)
         judge.preflight()
     except (ProviderError, ImportError) as exc:
         _fail(f"semantic judge ({cfg.judge_model!r}): {exc}")
-    console.print(f"[dim]semantic judge: {cfg.judge_model}[/]")
+    console.print(f"[dim]semantic judge: {cfg.judge_model} on {host}[/]")
+    if cfg.judge_model == to_model:
+        # Not an error -- it can be a deliberate, cheap choice -- but a model judging its own
+        # output is not an independent reading of it, and the north-star metric is the FP
+        # RATE of what we publish. Say so once, at the point of choosing.
+        console.print(
+            "[yellow]note:[/] the judge model is the model being checked, so the semantic "
+            "channel is not an independent reading. Prefer a different judge model."
+        )
     return judge
 
 
@@ -335,59 +353,66 @@ def _load_scenarios_or_fail(
         _fail(str(exc))
     if not scenarios:
         _fail_no_scenarios(scenarios_dir, source, config_path)
-    _warn_unimplemented_assertions(scenarios)
+    _warn_unrecognised_assertions(scenarios_dir)
     return scenarios
 
 
-#: Assertion fields this version records but never checks (MP-142). `[M] 2026-08-31`,
-#: differential proof: for five trace configurations -- including baseline SATISFIES the
-#: expectation while the candidate VIOLATES it, and the candidate calling a tool the
-#: expectation never named -- `diff_scenario` returns a byte-identical verdict, confidence
-#: and explanation whether the field is set or `None`. `[M]` References that READ either
-#: field anywhere under `modelpin/`: zero. They are write-only.
-_UNIMPLEMENTED_ASSERTION_FIELDS = ("expected_tool_calls", "output_schema")
+#: The assertion fields this version actually CHECKS, quoted back to the user when their file
+#: declares something else. Read off the model so the message cannot drift from the code --
+#: three hand-maintained copies of one list is the MP-03 shape, and MP-128 hit it again.
+def _live_assertion_fields() -> str:
+    return " / ".join(f"`{f}`" for f in Assertion.model_fields)
 
 
-def _warn_unimplemented_assertions(scenarios: Sequence[Scenario]) -> None:
-    """Say once, per run, that a declared assertion field is not one this version checks.
+#: Keys MP-147 deleted, each with the remedy that is actually true for IT. Kept separate from
+#: the generic "this version checks ..." line because that line is correct advice for a TYPO
+#: and misleading for these two: neither has a `must_contain` equivalent.
+_REMOVED_ASSERTION_KEYS: dict[str, str] = {
+    "expected_tool_calls": (
+        "removed in suite v3. The tool-TRAJECTORY channel already measures which tools a "
+        "scenario calls, distributionally over N runs -- it always did the work this field "
+        "appeared to. Delete the field; you lose nothing."
+    ),
+    "output_schema": (
+        "removed in suite v3. No version ever checked it. For a structural claim about the "
+        "output, assert a marker with `must_contain` / `must_not_contain`, or delete it."
+    ),
+}
 
-    The defect MP-142 names is the word SILENTLY -- "a model field that silently does
-    nothing is the same class of defect as a green tick over an unmeasured run". This
-    removes the silence, which is the half that misleads.
 
-    Deliberately NOT deleting the fields, and that is a scope decision with evidence behind
-    it, not an omission. `[M] 2026-08-31` `compute_suite_hash` hashes the VALIDATED pydantic
-    model (`report/suite.py:38-41`), so removing them from `Assertion` changes the content
-    hash of both shipped suites: `examples/report-suite` (role `public`, ADR-0009)
-    `sha256:ffd99774f681` -> `sha256:eed334061b5e`, and `examples/suite` (role `score`, the
-    held-out false-positive set ADR-0025 forbids tuning on) `sha256:44cbde8e3b74` ->
-    `sha256:5482ccd734fd`. The first is cited in a PUBLISHED report's own reproduce block,
-    in `GOLDEN_SUITE_HASH`, and by the frozen `drift-suite` fixture behind the Drift Map.
-    Deleting is therefore a public suite-version bump, not the one-hour edit the row
-    assumed -- so it is filed as its own decision rather than taken as a side effect here.
+def _warn_unrecognised_assertions(scenarios_dir: str) -> None:
+    """Say once, per run, that a declared assertion key is not one this version checks.
 
-    A warning, not an error: our own shipped suites declare these fields, and failing on
-    them would refuse to run the suite the published Report is built from.
+    MP-142's defect was the word SILENTLY -- "a model field that silently does nothing is the
+    same class of defect as a green tick over an unmeasured run". MP-147 then deleted the two
+    dead fields (`expected_tool_calls`, `output_schema`), which alone would have made this
+    WORSE for anyone with existing scenario files: pydantic ignores unknown keys, so their
+    assertion would have gone from documented-but-inert to invisible. So the advisory moved
+    with the fields -- it now reads the raw JSON rather than the parsed model, and therefore
+    also catches a typo (`must_containn`) that no version has ever checked.
+
+    A warning, not an error: refusing to run over an unknown key would turn a stale scenario
+    file into a hard failure on upgrade, which is a worse trade than an honest note.
     """
-    flagged = {
-        f: [
-            s.id
-            for s in scenarios
-            if s.assertions is not None and getattr(s.assertions, f, None) is not None
-        ]
-        for f in _UNIMPLEMENTED_ASSERTION_FIELDS
-    }
-    named = {f: ids for f, ids in flagged.items() if ids}
-    if not named:
+    found = unrecognised_assertion_keys(scenarios_dir)
+    if not found:
         return
-    fields = ", ".join(f"`{f}`" for f in named)
-    ids = sorted({sid for ids in named.values() for sid in ids})
+    keys = ", ".join(f"`{k}`" for k in sorted(found))
+    ids = sorted({sid for sids in found.values() for sid in sids})
     console.print(
-        f"[yellow]note:[/] {len(ids)} scenario(s) declare {fields}, which this version "
-        f"records but never checks -- no verdict, no exit code, and no coverage is derived "
-        f"from them ({', '.join(ids)}). Use `must_contain` / `must_not_contain` for an "
-        f"assertion that is actually compared."
+        f"[yellow]note:[/] {len(ids)} scenario(s) declare {keys} under `assertions`, which "
+        f"this version does not check -- no verdict, no exit code, and no coverage is derived "
+        f"from them ({', '.join(_rich_escape(i) for i in ids)})."
     )
+    # A key MP-147 REMOVED needs its own remedy. `[M]` first-run review, 2026-08-31: the
+    # generic line below is right for a typo and WRONG for `expected_tool_calls` -- there is
+    # no text assertion that expresses "expect this tool call", so a user reading it either
+    # guesses the field is safe to delete or wastes time shoehorning a tool check into
+    # `must_contain`. Say what actually does the job instead.
+    for key in sorted(k for k in found if k in _REMOVED_ASSERTION_KEYS):
+        console.print(f"[dim]  `{key}`: {_REMOVED_ASSERTION_KEYS[key]}[/]")
+    if any(k not in _REMOVED_ASSERTION_KEYS for k in found):
+        console.print(f"[dim]  this version checks {_live_assertion_fields()}.[/]")
 
 
 def _scenarios_source(scenarios_dir: Optional[str], config_path: str) -> str:
@@ -476,14 +501,47 @@ def _cannot_reach_alpha(nb: int, nc: int, mode: str) -> bool:
     return mode in EQUIVALENCE_MODES and min_achievable_pvalue_distribution(nb, nc) > ALPHA
 
 
+def _exercised_tools(*sides: Sequence[Trace]) -> bool:
+    """Did a tool actually get CALLED, on any run of any side?
+
+    MP-159. This is the question the tool channel's liveness turns on, and
+    ``Trace.tool_calls`` (`models.py`) is the only thing that can answer it. `[M]` The
+    diff signal cannot: ``DiffSignals.tool_call_match`` reads **1.00** -- a perfect match --
+    between two sides that each called zero tools, so a signal-based proxy would report the
+    channel live in exactly the case it is dead.
+    """
+    return any(t.tool_calls for side in sides for t in side)
+
+
 def _channel_census(
-    scenarios: Sequence[Scenario], judge: object | None, prov: str
+    scenarios: Sequence[Scenario],
+    judge: object | None,
+    prov: str,
+    *,
+    tool_active: AbstractSet[str],
 ) -> ChannelCensus:
     """MP-138's census, read off the scenarios that were actually COMPARED (MP-140).
 
-    Shared by ``check`` and ``report``. Read off the suite and the config, never off the
-    traces: a channel the scenarios never armed could not have fired however the models
-    behaved, which is exactly what a clearance must not paper over.
+    Shared by ``check`` and ``report``. The judge half is read off the config; the TOOL half
+    is read off the RECORDED TRACES, carried in by ``tool_active`` -- the ids whose runs
+    actually called a tool.
+
+    MP-159 replaced a declaration read with that trace read, for the reason this module
+    already applies to refusal one screen below. `[M] 2026-08-31`, reproduced end to end on
+    byte-identical fixtures: a scenario declaring one `tools` entry that NO run on either
+    side ever called flipped `could not measure ... NOT cleared on content` into
+    `no behavioral change ... looks safe to adopt` -- over a baseline of *"FRAUD DETECTED:
+    block this transaction"* against a candidate of *"Looks fine, approve it. asdf qwerty
+    zzzz garbage."* A declared tool that nothing calls sits in exactly the position
+    ``hard_content_channels`` already excludes refusal for: it can only fire if the
+    candidate STARTS calling tools, so a confident wrong answer never touches it. Counting
+    it restored the false comfort this census exists to remove -- and the disclosure's own
+    printed remedy, *"add `tools`"*, was what bought the green.
+
+    ``tool_active`` is keyword-only with NO default on purpose. A caller that cannot supply
+    traces must be made to say so at the call site: defaulting to "none exercised" would be
+    safe in DIRECTION but would put a false sentence -- "no run called a tool" -- inside the
+    disclosure that exists to be honest, which is the same defect one surface over.
 
     `[M]` The judge reason is computed HERE from the provider rather than inferred from
     ``judge is None`` downstream: the offline `fake` provider disables the judge regardless
@@ -491,19 +549,48 @@ def _channel_census(
     statement inside the disclosure that exists to be honest.
     """
     judge_enabled = judge is not None
+
     # MP-141. A scenario's OWN content coverage: the judge is suite-wide (one config key),
-    # but `tools` is declared per scenario, so with the judge off a scenario that declares
-    # none has no CI-failing channel that reads content -- whatever its neighbours declare.
-    blind = () if judge_enabled else tuple(s.id for s in scenarios if not s.input.get("tools"))
+    # but a tool call happens per scenario, so with the judge off a scenario whose runs
+    # called nothing has no CI-failing channel that reads content -- whatever its neighbours
+    # did. MP-159 is the second half of that sentence: the trace must show a CALL, not just
+    # the suite a declaration.
+    #
+    # BOTH halves are required, and the conjunction is the whole point of the shape. `[M]`
+    # FP review BLOCKED the first cut, which tested `s.id in tool_active` alone: a scenario
+    # with NO `tools` key whose traces nevertheless carry `tool_calls` went from HEAD's
+    # "NOT cleared on content" to "looks safe to adopt" over the same content inversion --
+    # MP-159's own defect, arriving through the other door in the same commit. That state is
+    # not reachable from a live replay (both live adapters gate the request `tools` on
+    # `scenario.input["tools"]`), but it is reachable from a hand-edited `traces.json` --
+    # which `README.md` explicitly invites -- and from a baseline recorded before the `tools`
+    # key was removed, since the store round-trips `tool_calls` faithfully.
+    #
+    # Requiring both makes the new blind set a SUPERSET of the old one for every input, so
+    # this change can only ever withhold a clearance HEAD granted, never grant one HEAD
+    # withheld. That monotonicity is the property that makes it safe to ship without new
+    # calibration, and it is the same one MP-141 claimed for itself.
+    def _tool_live(s: Scenario) -> bool:
+        return bool(s.input.get("tools")) and s.id in tool_active
+
+    blind = () if judge_enabled else tuple(s.id for s in scenarios if not _tool_live(s))
     return ChannelCensus(
-        tools_declared=any(s.input.get("tools") for s in scenarios),
+        tools_exercised=any(_tool_live(s) for s in scenarios),
+        # MP-159. The scenarios that ASKED for the tool channel and did not get it. Only the
+        # remedy wording reads this, and that is the point: telling a user to "add `tools`"
+        # when they already have is not merely useless, it is the advice that bought the
+        # false clearance in the first place.
+        declared_unused_tools=tuple(
+            s.id for s in scenarios if s.input.get("tools") and s.id not in tool_active
+        ),
         # MP-141. Read the fields the ENGINE reads, not the presence of an `Assertion`
         # object. `[M]` `diff/__init__.py` consults only `must_contain` / `must_not_contain`
-        # (`structural.py::violates_text_assertions`); `expected_tool_calls` and
-        # `output_schema` are consulted by nothing (MP-142). `[M]` The shipped demo relies on
-        # the difference: `demo.py` gives `angry_customer` an `Assertion` whose ONLY field is
-        # `expected_tool_calls`, so the old test counted a dead channel as armed in the suite
-        # a brand-new user runs first.
+        # (`structural.py::violates_text_assertions`). MP-147 deleted the two fields that
+        # were read by nothing, so today an `Assertion` with neither live field set is an
+        # EMPTY one -- which is still not coverage, and this check is still what says so.
+        # `[M]` The shipped demo relied on the difference: `angry_customer` once carried an
+        # `Assertion` whose only field was dead, and the old test counted it as armed in the
+        # suite a brand-new user runs first.
         assertions_declared=any(
             s.assertions is not None
             and (s.assertions.must_contain or s.assertions.must_not_contain)
@@ -628,9 +715,7 @@ def baseline(
     model: Optional[str] = typer.Option(
         None, "--model", help="Model to baseline (default: config)."
     ),
-    provider: Optional[str] = typer.Option(
-        None, "--provider", help="openai | google | anthropic | groq | openrouter | fake."
-    ),
+    provider: Optional[str] = typer.Option(None, "--provider", help=provider_help()),
     fixtures: Optional[str] = typer.Option(
         None, "--fixtures", help="Canned traces for --provider fake (required with it)."
     ),
@@ -670,9 +755,7 @@ def baseline(
 def check(
     to: str = typer.Option(..., "--to", help="The new model id to test against your baseline."),
     from_: Optional[str] = typer.Option(None, "--from", help="Baseline model (default: config)."),
-    provider: Optional[str] = typer.Option(
-        None, "--provider", help="openai | google | anthropic | groq | openrouter | fake."
-    ),
+    provider: Optional[str] = typer.Option(None, "--provider", help=provider_help()),
     fixtures: Optional[str] = typer.Option(
         None, "--fixtures", help="Canned traces for --provider fake (required with it)."
     ),
@@ -684,7 +767,17 @@ def check(
     scenarios_dir: Optional[str] = typer.Option(None, "--scenarios-dir"),
     store_dir: str = typer.Option(STORE_DIRNAME, "--store-dir"),
 ) -> None:
-    """Replay scenarios on a new model and report behavioral regressions."""
+    """Replay scenarios on a new model and report behavioral regressions.
+
+    Exit codes: 0 = no regression. 1 = at least one real regression (the CI gate).
+    3 = at least one scenario could not be measured -- no baseline recorded, a side that
+    recorded nothing, or a scenario the provider rejected. 3 is deliberately not 1: "we could
+    not tell" is a different claim from "it broke".
+    """
+    # `[M]` first-run review, 2026-08-31: the exit codes were documented in the README and in
+    # `action.yml` and NOWHERE in `--help` -- which is where someone staring at a nonzero exit
+    # in a CI log actually looks. Kept short above on purpose: the rationale belongs here, the
+    # user-facing surface gets the answer.
     mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
     src_dir = scenarios_dir or cfg.scenarios_dir
@@ -710,7 +803,7 @@ def check(
     # `min(baseline_sizes)` and so describes the weakest scenario, not every one.
     uneven = nonuniform_run_counts(base, [s.id for s in scenarios])
     if uneven:
-        # `escape`, not raw: `[M]` first-run-auditor crashed `mp check` with an unhandled
+        # `escape`, not raw: `[M]` a first-run review crashed `mp check` with an unhandled
         # rich MarkupError and a full traceback (exit 1, no warning printed) on a scenario
         # id containing a lone `[/]`. Scenario ids are author-controlled text and reach
         # every console string through this path; `report/render_cli` already escapes them.
@@ -737,10 +830,19 @@ def check(
         f"[dim]provider={prov} from={from_model} to={to} runs={n} match={mode} | {plan}[/]"
     )
     _preflight_or_fail(adapter, prov)
-    judge = _build_judge(prov, cfg)
+    judge = _build_judge(prov, cfg, to_model=to)
 
     results = []
     skipped: list[str] = []
+    #: MP-159. Scenario ids whose runs ACTUALLY called a tool, on either side. Accumulated
+    #: in the replay loop because that is the only place both sides' traces exist: `cand` is
+    #: a loop local and `DiffResult` carries no traces, so a census computed after the loop
+    #: has nothing left to read and used to fall back on the declaration.
+    tool_active: set[str] = set()
+    #: (scenario_id, provider message) for scenarios the provider REFUSED outright. A
+    #: different condition from `skipped` (no baseline recorded) and from an
+    #: `insufficient_evidence` verdict (replayed, but nothing usable came back).
+    rejected: list[tuple[str, str]] = []
 
     def _run_check() -> None:
         for s in scenarios:
@@ -748,14 +850,44 @@ def check(
             if not base_traces:
                 skipped.append(s.id)
                 continue
-            cand = replay(s, to, adapter, runs=n)
+            try:
+                cand = replay(s, to, adapter, runs=n)
+            except ProviderError as exc:
+                # MP-148. One scenario the provider rejects must not delete the others.
+                # `[M] 2026-08-31` three hard 400s on the live aegis run each killed all six
+                # scenarios and produced NOTHING -- including one where the model
+                # HALLUCINATED a tool name, which is itself the behaviour change this tool
+                # exists to catch. `report` already survived this; `check`, the command CI
+                # runs, did not. Deliberately NOT a retry (that is MP-139's rule, and a 400
+                # must still not be retried): skip, disclose, and refuse to call the run
+                # clean. ProviderError messages are key-scrubbed by the adapters.
+                console.print(
+                    f"[yellow]note:[/] scenario {_rich_escape(s.id)!r} could not be "
+                    f"replayed: {_rich_escape(str(exc))}"
+                )
+                rejected.append((s.id, str(exc)))
+                continue
+            if _exercised_tools(base_traces, cand):
+                tool_active.add(s.id)
             results.append(
                 diff_scenario(s.id, from_model, to, base_traces, cand, s, mode, judge=judge)
             )
 
+    # NotImplementedError stays a HARD failure: an unimplemented adapter is a config error
+    # that would fail every scenario identically, so swallowing it per scenario would turn a
+    # misconfigured run into a silent no-op instead of an answerable message (MP-128).
     _guard_replay(prov, _run_check)
 
     if not results:
+        if rejected:
+            # The pre-MP-148 path sent the user to `modelpin baseline` here -- advice for a
+            # condition they were not in. A baseline exists; the provider refused every
+            # scenario. EXIT_UNMEASURED, not 1: nothing was measured, so nothing regressed.
+            console.print(
+                f"[yellow]could not measure:[/] the provider rejected all "
+                f"{len(rejected)} scenario(s); nothing was compared."
+            )
+            raise typer.Exit(code=EXIT_UNMEASURED)
         _fail("nothing to compare. Record a baseline first with `modelpin baseline`.")
 
     # MP-55. Which scenarios were compared at run counts where NO signal could reach ALPHA?
@@ -768,15 +900,20 @@ def check(
     # The scenarios that actually produced `results` -- a scenario with no stored baseline is
     # skipped above and never diffed. Both disclosures below must be read off THIS set, or
     # they describe a run that did not happen.
-    compared = [s for s in scenarios if base.get(s.id)]
+    # ...and NOT the ones the provider rejected: a scenario that never replayed was never
+    # measured, so counting it here would price coverage for a run that did not happen.
+    # MP-138 shipped exactly that mistake once and review caught it; MP-148 is the same
+    # trap with a new cause.
+    _rejected_ids = {sid for sid, _ in rejected}
+    compared = [s for s in scenarios if base.get(s.id) and s.id not in _rejected_ids]
     underpowered = [s.id for s in compared if _blind(s.id)]
 
     # MP-138. `underpowered` above prices RUN COUNT. This prices CHANNEL AVAILABILITY --
     # the other way a run can be structurally unable to fail, and one `_resolve_runs`
     # cannot see because it is not a function of N.
-    census = _channel_census(compared, judge, prov)
+    census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
-    console.print(render_cli(results, from_model, to, n, underpowered, census))
+    console.print(render_cli(results, from_model, to, n, underpowered, census, rejected))
 
     # Decide the CI exit code BEFORE any side effect, so a report-write failure
     # can never silently mask a real regression.
@@ -784,15 +921,28 @@ def check(
     unmeasured = [r for r in results if r.verdict == DiffVerdict.insufficient_evidence]
 
     report_path = Path(store_dir) / "last-report.md"
+    markdown = render_pr_comment(results, from_model, to, n, prov, underpowered, census, rejected)
     try:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(
-            render_pr_comment(results, from_model, to, n, prov, underpowered, census),
-            encoding="utf-8",
-        )
+        report_path.write_text(markdown, encoding="utf-8")
         console.print(f"\n[dim]PR-style Markdown report written to {report_path}[/]")
     except OSError as exc:
         console.print(f"[yellow]warning:[/] could not write report to {report_path}: {exc}")
+    else:
+        # MP-150. `last-report.md` is a MOVING target by design -- `action.yml:135` publishes
+        # that exact path and both CI workflows glob for it -- so it stays, and the durable
+        # copy is written beside it. `[M]` Before this, every `check` deleted the evidence of
+        # the previous one: the two dogfood runs in `ops/launch/` had to be transcribed by
+        # hand because the file they came from was already gone. A finding you cannot cite
+        # later is a finding you did not really record.
+        # Written SECOND on purpose: if only one write can succeed it must be the one CI
+        # reads, so an archive failure is a warning and never costs the stable report.
+        try:
+            archived = _archive_path(Path(store_dir), from_model, to)
+            archived.write_text(markdown, encoding="utf-8")
+            console.print(f"[dim]archived for citation: {archived}[/]")
+        except OSError as exc:
+            console.print(f"[yellow]warning:[/] could not archive the report: {exc}")
 
     if skipped:
         console.print(
@@ -802,12 +952,43 @@ def check(
 
     if has_regression:
         raise typer.Exit(code=1)  # fail CI on a real regression
-    if unmeasured:
+    if unmeasured or rejected:
+        # `rejected` (MP-148) rides the same exit as `insufficient_evidence`: both mean the
+        # suite did not fully answer the question. Deliberately BELOW the regression check --
+        # a real regression in the scenarios that DID run is still the strongest true claim
+        # available, and downgrading it to "could not measure" because a sibling scenario
+        # 400'd would hide the finding CI exists to surface.
         # EXIT_UNMEASURED, not 1: a run that measured nothing is not a regression, and
         # reporting it as one would put a false claim in the Action's PR comment. Not 2
         # either -- Click already uses 2 for a usage error, so `mp check --bogus` exits 2.
         # The Action gates on `code != '0'`, so CI still fails without any workflow change.
         raise typer.Exit(code=EXIT_UNMEASURED)
+
+
+#: Per-run `check` reports, kept beside the stable `last-report.md` so a run's evidence
+#: survives the next run (MP-150). Under the store dir, not the working tree: it holds
+#: measurements about a model, which is what `.modelpin/` already is.
+REPORT_ARCHIVE_DIRNAME = "runs"
+
+
+def _archive_path(store: Path, from_model: str, to_model: str, stamp: str | None = None) -> Path:
+    """A collision-free, citable path for THIS run's report.
+
+    The name has to be readable back to a run -- both model ids and the UTC instant -- or it
+    is a file, not a citation. Timestamps are one second wide and CI runs are fast, so a
+    same-second collision disambiguates with a counter rather than clobbering: overwriting is
+    the entire defect this function exists to remove.
+    """
+    stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    directory = store / REPORT_ARCHIVE_DIRNAME
+    directory.mkdir(parents=True, exist_ok=True)
+    stem = f"check-{slug(from_model)}-to-{slug(to_model)}-{stamp}"
+    candidate = directory / f"{stem}.md"
+    n = 2
+    while candidate.exists():
+        candidate = directory / f"{stem}-{n}.md"
+        n += 1
+    return candidate
 
 
 #: Where rendered Modelpin Reports (.md + .json) are written by default.
@@ -833,9 +1014,7 @@ def report(
         help="Reference/incumbent model to compare against (pass the same id as --to for a "
         "baseline characterization).",
     ),
-    provider: Optional[str] = typer.Option(
-        None, "--provider", help="openai | google | anthropic | groq | openrouter | fake."
-    ),
+    provider: Optional[str] = typer.Option(None, "--provider", help=provider_help()),
     fixtures: Optional[str] = typer.Option(
         None, "--fixtures", help="Canned traces for --provider fake (required with it)."
     ),
@@ -876,10 +1055,11 @@ def report(
     plan = _replay_plan(len(scenarios), suite_dir, n, prov, cfg.judge_model, sides=2)
     console.print(f"[dim]provider={prov} from={from_} to={to} runs={n} match={mode} | {plan}[/]")
     _preflight_or_fail(adapter, prov)
-    judge = _build_judge(prov, cfg)
+    judge = _build_judge(prov, cfg, to_model=to)
 
     results: list[DiffResult] = []
     skipped: list[str] = []
+    tool_active: set[str] = set()  # MP-159, as in `check`: read off the traces, not the suite
     for s in scenarios:
         try:
             base_traces = replay(s, from_, adapter, runs=n)
@@ -894,6 +1074,8 @@ def report(
             console.print(f"[yellow]note:[/] scenario {s.id!r} skipped: {exc}")
             skipped.append(s.id)
             continue
+        if _exercised_tools(base_traces, cand_traces):
+            tool_active.add(s.id)
         results.append(
             diff_scenario(s.id, from_, to, base_traces, cand_traces, s, mode, judge=judge)
         )
@@ -912,7 +1094,7 @@ def report(
     # per-scenario run count must not need this call site changed to stay honest.
     compared = [s for s in scenarios if s.id not in set(skipped)]
     underpowered = [s.id for s in compared] if _cannot_reach_alpha(n, n, mode) else []
-    census = _channel_census(compared, judge, prov)
+    census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
     console.print(render_cli(results, from_, to, n, underpowered, census))
 
