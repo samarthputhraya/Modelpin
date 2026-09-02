@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-02
+
+Two ways a run could report `looks safe to adopt` over something it never measured are
+closed, and the first error a stranger hits no longer hands them the command they just ran.
+
+**A green exit code is still not proof of full coverage.** A scenario with no recorded
+baseline is disclosed everywhere a reviewer looks, and costs the run its affirmative
+clearance, but it does not by itself fail the build (ADR-0033). A published Report's headline
+also does not yet qualify itself when scenarios were skipped. Read the coverage disclosure,
+not the exit code.
+
+### Fixed
+- **User-facing error text is text, not markup.** `[M]` A user whose install lacked the SDK
+  extra was told to run `pip install 'modelpin'` — the command they had just run — because
+  rich parsed `[providers]` as a style tag and ate it. It is the first error such a user
+  hits. The same defect had a quieter half: a message containing anything bracket-shaped was
+  silently rewritten, with no exception, naming something that did not exist. Errors are now
+  escaped once at the root rather than at each call site, where the class had been closed
+  five separate times.
+- **`modelpin scan` reported file paths that do not exist**, and `modelpin init` misdescribed
+  the directory you had just named. `[M]` A folder called `src [experimental]` rendered as
+  `src ` — a rich table parses its cells as markup, and those cells are paths discovered in
+  your repo. Any project using bracketed directory names, such as Next.js route folders, saw
+  every affected row corrupted.
+
+
 ### Added
 - **The semantic judge runs cross-vendor.** It accepted OpenAI judge models only, which left a
   hole with teeth: cross-vendor is a core promise, and for a suite that declares no `tools` the
@@ -870,7 +896,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/samarthputhraya/modelpin/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/samarthputhraya/modelpin/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/samarthputhraya/modelpin/compare/v0.1.0...v0.1.1
