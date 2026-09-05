@@ -14,7 +14,7 @@ four of them had been observed working on real material and one had not:
 | tool trajectory | dogfood #2 (a real tool-calling app) — flagged 3 of 6 at 0.95–0.99 |
 | tool arguments | dogfood #2 — exercised, same-model only |
 | semantic judge | dogfood #2 — scored 0.80–1.00 and varied |
-| **refusal** | **never** — `[M]` 0 of 60 traces on dogfood #1, 0 of 30 on #2 |
+| **refusal** | **never moved a verdict** — `[M]` every decline seen on a real app was two-sided (5/5 → 5/5, delta 0). **Corrected 2026-09-05 (MP-187):** this cell used to read *"never — 0 of 60 traces on dogfood #1, 0 of 30 on #2"*. `[M]` The #2 figure is false and that run's own artifact refutes it: 5 of its 30 traces store `refused=true`. `[M]` MP-178 then moved a verdict for the first time — `refusal_delta +1.0` on `examples/voicerag-suite`. |
 
 A channel that has never fired is an assumption wearing a measurement's clothes. Neither
 dogfood suite asked for anything a model would decline, so the zero says nothing about

@@ -100,7 +100,7 @@
     {
       "path": "refusal-suite",
       "role": "fit",
-      "why": "The suite built to make the REFUSAL channel fire. [M] 2026-08-31: refusal had never been observed on real material (0 of 60 traces on the kavach dogfood, 0 of 30 on aegis), so it was the last of the five verdict-bearing channels whose live behaviour was an assumption. Role `fit` and not `score`, deliberately: if a live run shows real declines that REFUSAL_MARKERS misses, widening those markers is a threshold change, and it must happen on a set no rate is ever claimed from. The refusal false-positive rate belongs on the held-out examples/suite, which already carries decline_pii. Content-disjoint from every other set.",
+      "why": "The suite built to make the REFUSAL channel fire. [M] 2026-08-31: refusal had never MOVED A VERDICT on real material, so it was the last of the five verdict-bearing channels whose live behaviour was an assumption. (CORRECTED 2026-09-05, MP-187: this entry used to say refusal had never been OBSERVED -- '0 of 60 traces on the kavach dogfood, 0 of 30 on aegis'. The aegis half is false and its own artifact refutes it: [M] ops/launch/aegis-suite/baseline-openai_gpt-oss-120b.json stores refused=true on 5 of 30 traces, all five refusal_probe runs. What was true is the delta claim -- every observed decline was two-sided, 5/5 -> 5/5, and ADR-0002 makes the channel one-sided, so no verdict could move. [M] MP-178 closed that on examples/voicerag-suite: 0/5 refused on gpt-oss-20b against 5/5 on gpt-oss-120b, refusal_delta +1.0, the first refusal-driven regression on real material.) Role `fit` and not `score`, deliberately: if a live run shows real declines that REFUSAL_MARKERS misses, widening those markers is a threshold change, and it must happen on a set no rate is ever claimed from. The refusal false-positive rate belongs on the held-out examples/suite, which already carries decline_pii. Content-disjoint from every other set.",
       "scenarios": [
         "answer_plain_question",
         "refuse_browse_url",
@@ -108,6 +108,21 @@
         "refuse_read_local_file",
         "refuse_realtime_price",
         "refuse_send_email"
+      ]
+    },
+    {
+      "path": "voicerag-suite",
+      "role": "score",
+      "why": "MP-178. The first suite modelled on a real app whose CORE behaviour is a calibrated decline: VoiceRAG (the maintainer's own public repo) answers from retrieved passages or emits the sentinel ABSTAIN_TOKEN `INSUFFICIENT_CONTEXT`. Every scenario reproduces VoiceRAG's SYSTEM_PROMPT byte-for-byte and its render() user shape (`PASSAGES:` / `QUESTION:` / `ANSWER:`), so the assertions encode THAT APP's stated contract (its prompt rules 1-5) and nothing else. Role `score`, and the consequence is binding: the published run in docs/reports/modelpin-voicerag-abstention-1.md was measured here, so no threshold may ever be fitted here AND no assertion may be edited to make a result come out differently. [M] 2026-09-05: an adversarial scenario review read the suite AFTER it had been scored and found six real assertion defects; they were filed as MP-186 for a v2 suite rather than applied, precisely because editing them post-hoc is the fitting ADR-0025 forbids. [M] The tool-trajectory and tool-argument channels are dead here (no scenario declares `tools`); the live channels are refusal, text assertions and the semantic judge.",
+      "scenarios": [
+        "abstain_empty_context",
+        "abstain_topic_no_answer",
+        "abstain_unsafe_question",
+        "answer_multi_hop",
+        "answer_over_distractor",
+        "answer_paraphrase_gap",
+        "cite_in_range",
+        "format_one_spoken_sentence"
       ]
     }
   ]

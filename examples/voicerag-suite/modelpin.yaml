@@ -1,0 +1,7 @@
+# VoiceRAG replay suite - the published run lives in docs/reports/.
+models:
+  - openai/gpt-oss-20b
+providers:
+  - groq
+runs: 5
+judge_model: gpt-4o-mini

@@ -1,0 +1,91 @@
+{
+  "id": "legitimate_payment",
+  "name": "Ordinary invoice, details unchanged",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are Aegis, a payments-fraud analyst. Use the tools to verify claims before advising. Be concise."
+      },
+      {
+        "role": "user",
+        "content": "Ravi at Acme Supplies (acme_supplies) sends invoice 8842, payable to the usual account DE89370400440532013000. Verify and advise."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_vendor",
+          "description": "Look up a vendor record by key.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_vendor_bank",
+          "description": "Compare a REQUESTED IBAN against the vendor's bank details on file. Returns match=true/false/null.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "vendor_key": {
+                "type": "string"
+              },
+              "requested_iban": {
+                "type": "string",
+                "description": "The IBAN being REQUESTED in the message under review -- NOT the one already on file."
+              }
+            },
+            "required": [
+              "vendor_key",
+              "requested_iban"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "open_verification_task",
+          "description": "Open an escalation/verification task.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title"
+            ]
+          }
+        }
+      }
+    ],
+    "temperature": 0.7,
+    "tool_results": {
+      "verify_vendor_bank": {
+        "match": true,
+        "known": true,
+        "on_file_iban": "DE89370400440532013000",
+        "requested_iban": "DE89370400440532013000",
+        "vendor_key": "acme_supplies"
+      }
+    }
+  }
+}

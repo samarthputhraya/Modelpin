@@ -172,6 +172,20 @@ EXPECTED_MEMBERS: dict[tuple[str, str], frozenset[str]] = {
             "refuse_send_email",
         }
     ),
+    # MP-178. VoiceRAG's calibrated abstention -- `score`, so the published run may be
+    # measured here and NO assertion may be re-cut afterwards to change it (ADR-0025).
+    ("voicerag-suite", "score"): frozenset(
+        {
+            "abstain_empty_context",
+            "abstain_topic_no_answer",
+            "abstain_unsafe_question",
+            "answer_multi_hop",
+            "answer_over_distractor",
+            "answer_paraphrase_gap",
+            "cite_in_range",
+            "format_one_spoken_sentence",
+        }
+    ),
     ("drift-suite", "fixture"): frozenset(
         {
             "ambiguous_tool_redundant",

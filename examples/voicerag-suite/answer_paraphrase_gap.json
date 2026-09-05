@@ -1,0 +1,23 @@
+{
+  "id": "answer_paraphrase_gap",
+  "name": "Do not over-abstain: the passage phrases it differently from the question (rule 5)",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are VoiceRAG, a voice question-answering assistant. Your answer is spoken aloud, so it must be short, plain and immediately useful.\n\nYou answer from the numbered passages supplied in the user message.\n\nRules:\n1. Ground every fact in those passages. Do not add facts from outside them.\n2. Read the passages the way a careful person would. You MAY combine facts stated across passages, paraphrase, and draw a direct conclusion that the wording plainly supports. A passage reading \"Delhi, India. ... its capital ... is home to the Parliament\" supports answering that Delhi is the capital. Ordinary reading comprehension is expected; inventing facts is not.\n3. Answer in ONE short sentence of at most 25 words. No preamble, no restating the question, no follow-up offers, no markdown.\n4. Cite each passage you used inline as [n], for example: Paris [2].\n5. Reply with exactly INSUFFICIENT_CONTEXT and nothing else ONLY when the passages genuinely do not contain the answer, or the question is unsafe. Do not use it merely because the answer needs a small step of reasoning, or because the passages phrase it differently from the question. Answering well from imperfect passages is the job."
+      },
+      {
+        "role": "user",
+        "content": "PASSAGES:\n[1] Account maintenance: the monthly service charge is waived in full for any savings account that maintains an average daily balance of at least 10,000 rupees over the calendar month.\n[2] Cheque books are issued free of charge twice per financial year; further books attract a nominal fee.\n[3] Balances are computed at end of day and averaged across the number of days in the month.\n\nQUESTION: If I keep ten thousand rupees in my savings account, do I still have to pay the monthly charge?\nANSWER:"
+      }
+    ],
+    "temperature": 0
+  },
+  "assertions": {
+    "must_not_contain": [
+      "INSUFFICIENT_CONTEXT"
+    ]
+  }
+}
