@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -489,3 +490,116 @@ def test_a_published_report_never_cites_a_path_the_reader_cannot_open():
     bare = re.findall(r"docs/[\w./-]+\.md", stripped)
     assert not bare, f"published report cites unreachable path(s): {sorted(set(bare))}"
     assert "https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md" in md
+
+
+# --------------------------------------------------------------------------------------
+# MP-183 -- the published report must state the run date its own traces carry.
+#
+# `[M] 2026-09-02`, BEFORE this change: `grep -c "2026-06-24" docs/reports/modelpin-drift-map-1.md`
+# -> 0 (reproduce with `git show HEAD~1:docs/reports/modelpin-drift-map-1.md | grep -c`). Today it
+# returns non-zero, which is the point -- the command that documented the defect had to stop
+# returning zero for the fix to be real. The one
+# artifact this project asks a stranger to open carried NO run date in its text, while
+# `drift-map-launch-assets.md`'s guardrail says results stated in the present tense without the
+# run date are "the tool's own argument used against the post". The date lived only in the JSON
+# and in the private launch drafts, so the outreach templates instructed the sender to say a date
+# the recipient could not check against the document they were sent.
+# --------------------------------------------------------------------------------------
+
+_CACHE = _ROOT / "docs" / "reports" / "data" / "drift_cache_drift-suite.json"
+
+
+def _trace_run_dates() -> Counter:
+    """Every `ts` stamp in the shipped cache, by calendar day."""
+    stamps: Counter = Counter()
+
+    def walk(o: object) -> None:
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if k == "ts" and isinstance(v, str):
+                    stamps[v[:10]] += 1
+                else:
+                    walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+
+    walk(json.loads(_CACHE.read_text(encoding="utf-8")))
+    return stamps
+
+
+def test_the_published_report_states_the_run_date_its_own_traces_carry():
+    """Not "a date" -- THE date, read from the artifact shipped beside the report. A guard that
+    accepted any date would pass on a stale one, which is the failure it exists to prevent."""
+    dates = _trace_run_dates()
+    assert dates, "no `ts` stamps in the shipped cache -- the guard has nothing to check against"
+    run_date, n = dates.most_common(1)[0]
+    doc = _doc()
+    assert run_date in doc, (
+        f"the drift map does not state its own run date {run_date!r}, which {n} of its shipped "
+        "traces carry. A reader told to 'say the date' cannot check it against this document."
+    )
+
+
+def test_the_reports_self_check_block_still_produces_the_output_it_claims():
+    """The report hands the reader a paste-able block and prints its expected output. If the two
+    ever disagree, the report is teaching a stranger to run a check that fails -- worse than
+    publishing no check at all. So the test RUNS the published code and diffs it against the
+    published output, rather than asserting on either one alone."""
+    doc = _doc()
+    code_blocks = re.findall(r"```python\n(.*?)```", doc, re.S)
+    code = next((c for c in code_blocks if "drift_cache_drift-suite.json" in c), None)
+    assert code, "the drift map no longer carries its self-check block"
+
+    # Skip PAST the python block's own closing fence first. Without this the search runs
+    # from that fence to the next one and captures the prose in between, not the output.
+    after = doc[doc.index(code) + len(code) :]
+    after = after[after.index("```") + 3 :]
+    claimed = re.search(r"```\n(.*?)```", after, re.S)
+    assert claimed, "the self-check block no longer publishes its expected output"
+
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert proc.returncode == 0, f"the published self-check block does not run: {proc.stderr}"
+
+    # Compare with all whitespace collapsed. The report wraps and the terminal does not; an
+    # assertion about CONTENT must not become an assertion about where a line broke.
+    def norm(s: str) -> str:
+        return "".join(s.split())
+
+    assert norm(proc.stdout) == norm(claimed.group(1)), (
+        "the drift map's self-check block no longer prints what the report says it prints.\n"
+        f"published:\n{claimed.group(1)}\nactual:\n{proc.stdout}"
+    )
+
+
+def test_the_self_check_block_survives_being_pasted_into_a_repl():
+    """`[M] 2026-09-02` review. The prose tells a reader to run the block; the sibling
+    guard above executes it in SCRIPT mode, which is not the only way a reader will. Pasted into
+    an interactive `>>>` session, a top-level statement flush against the preceding `def` is a
+    SyntaxError -- and the REPL then CONTINUES and prints `run date(s): {}`, exit 0. The one
+    number the section exists to establish, silently empty, with no failure to notice. A blank
+    line before `walk(cache)` is the whole fix; this test is what keeps it there."""
+    doc = _doc()
+    code = next(
+        c
+        for c in re.findall(r"```python\n(.*?)```", doc, re.S)
+        if "drift_cache-suite" in c or "drift_cache_drift-suite.json" in c
+    )
+    proc = subprocess.run(
+        [sys.executable, "-i"],
+        input=code,
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert "run date(s): {'2026-06-24': 360}" in proc.stdout, (
+        "the self-check block does not survive a REPL paste -- a reader following the prose gets "
+        f"an empty result and no error. stdout: {proc.stdout!r}"
+    )

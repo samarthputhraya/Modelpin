@@ -1,6 +1,6 @@
 # The Modelpin Drift Map #1: What Actually Breaks When You Swap Models
 
-**TL;DR.** We replayed an open suite of 12 deliberately-hard scenarios (5 runs each) across 5 real model-migration pairs, with a semantic judge on. The engine stayed quiet on 50 of 60 comparisons and returned a non-`unchanged` verdict on the other 10 — 9 `regression`, 1 `changed_minor`. Every pair drew at least one flag, but they are not worth the same, and the split below says which: on our open suite, under these settings, **four of the five pairs** carry a `regression` that survives a read of the raw traces. The fifth (`gpt-4o-mini` → `gpt-4o`) does not — its only `regression` is a bug in our **own** refusal detector, and its `changed_minor` is a real but cosmetic casing flip (`negative` → `Negative`). We disclose both below. What the other four surfaced: an agent that switched from *asking* to *hallucinating a booking*, **prompt-injection behavior that moved in opposite directions across model versions** (one version refused an embedded instruction that a later version followed), and a multi-constraint format that broke across a version bump. Catching our **own** measurement misfiring — twice — is the most useful thing in this report.
+**TL;DR.** On **2026-06-24** we replayed an open suite of 12 deliberately-hard scenarios (5 runs each) across 5 real model-migration pairs, with a semantic judge on. *(That date is load-bearing: these are point-in-time measurements on a product whose whole thesis is that models change under you. See [Check the headline numbers in this report without an API key](#check-the-headline-numbers-in-this-report-without-an-api-key) for a runnable check of the headline numbers below.)* The engine stayed quiet on 50 of 60 comparisons and returned a non-`unchanged` verdict on the other 10 — 9 `regression`, 1 `changed_minor`. Every pair drew at least one flag, but they are not worth the same, and the split below says which: on our open suite, under these settings, **four of the five pairs** carry a `regression` that survives a read of the raw traces. The fifth (`gpt-4o-mini` → `gpt-4o`) does not — its only `regression` is a bug in our **own** refusal detector, and its `changed_minor` is a real but cosmetic casing flip (`negative` → `Negative`). We disclose both below. What the other four surfaced: an agent that switched from *asking* to *hallucinating a booking*, **prompt-injection behavior that moved in opposite directions across model versions** (one version refused an embedded instruction that a later version followed), and a multi-constraint format that broke across a version bump. Catching our **own** measurement misfiring — twice — is the most useful thing in this report.
 
 > **Framing.** This is measurement and opinion, not a leaderboard. Everything here is a statement of the form *"on our open suite, under these settings, we observed model X behave differently from model Y on scenario Z."* It is **not** a claim that any model is better, worse, or "best." Run the harness yourself and you get the same traces — your mileage on your own app's scenarios will differ, which is exactly the point.
 
@@ -54,6 +54,51 @@ We re-ran the same pairs — **plus `gpt-4o` → `gpt-4.1`, which the easy run n
 
 - **Keys:** BYO end-user key, read from the environment. We never ship or hardcode keys.
 - **Reproducible:** one command — `python scripts/drift_map.py --suite-dir examples/drift-suite`. The exact raw traces and per-scenario diffs from *this* run are published in [`docs/reports/data/`](data/); running the harness regenerates the same files under `.modelpin/`.
+- **Run date: `2026-06-24`.** `[M]` All **360** replay traces in the shipped cache carry a `ts` on that day — a single 11-minute window, `2026-06-24T16:27:59.261684Z` to `2026-06-24T16:39:00.149828Z`. The field is a full timestamp, not a bare date, so grep for the day and parse it; the block below does. **360 = 6 model ids × 12 scenarios × 5 runs** — the cache is keyed per *model*, so a model appearing in more than one pair is replayed once, which is why 360 is neither 300 nor 600. The results file carries no timestamp at any depth, so this is the date of the **replays**; the judge and diff pass is dated only by the commit that published both files. **These are point-in-time measurements, not current statements about any model.** `[A]` We have not re-run since, so we cannot tell you *from measurement* how far provider-side updates have moved them — that gap is the argument for the tool, and the reason this line exists.
+- **Engine version: not recorded, and that is our gap.** `[M]` Neither shipped artifact carries a version field at any depth. The run predates `v0.2.0` (tagged 2026-08-27) and sits a few commits *after* `v0.1.1` on an untagged tree — the commit that published this data also carried the refusal-detector fix described below. The four effect-size floors that gated this run — `ALPHA = 0.05`, `MIN_TOOL_TVD = 0.5`, `MIN_REFUSAL_DELTA = 0.34`, `MIN_SEMANTIC_DELTA = 0.5` — still hold those exact values today (`git show v0.1.1:modelpin/diff/__init__.py` against the current file). **The engine around them has not stayed still, and we do not claim today's build reproduces these verdicts.** Today's refusal detector, run over these same shipped traces, moves `refusal_delta` from `1.0` to `0.0` on **two of the nine `regression` flags** — the apostrophe defect disclosed further down this page. Today's gate also adds a fifth floor (`MIN_TOOL_ARG_TVD = 1.0`, which can raise `unchanged` to `changed_minor`) and an `insufficient_evidence` verdict that did not exist in June. **The numbers on this page are presented as run.** Recording the engine version and a suite hash in the artifact is an open issue.
+
+### Check the headline numbers in this report without an API key
+
+Clone the repo and run this **from the repo root** — save it to a file, or use `python - <<'EOF'`. *(Pasting it straight into the `>>>` REPL will not work: the REPL needs a blank line to close the `def`, and without one it prints an empty result rather than failing loudly.)* It reads only the two committed artifacts — no API key, no network — and prints the run date, the suite/judge/pair settings, and the verdict tally the headline is built on. The per-scenario numbers below (the `9 - 3 = 6` split, the per-pair table, the `refusal_delta` values) are all in [`drift_results_drift-suite.json`](data/drift_results_drift-suite.json) beside it.
+
+```python
+import json, collections
+
+cache = json.load(open("docs/reports/data/drift_cache_drift-suite.json", encoding="utf-8"))
+res = json.load(open("docs/reports/data/drift_results_drift-suite.json", encoding="utf-8"))
+
+stamps = collections.Counter()
+def walk(o):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if k == "ts" and isinstance(v, str):
+                stamps[v[:10]] += 1
+            else:
+                walk(v)
+    elif isinstance(o, list):
+        for v in o:
+            walk(v)
+
+walk(cache)
+
+print("run date(s):", dict(stamps))
+print("suite:", res["suite"], "| judge:", res["judge"], "| pairs:", len(res["pairs"]))
+print("verdicts:", dict(collections.Counter(
+    r["verdict"] for p in res["pairs"] for r in p["results"])))
+print("engine version recorded:", any("version" in k.lower() for k in res))
+```
+
+`[M] 2026-09-02`, verbatim output:
+
+```
+run date(s): {'2026-06-24': 360}
+suite: examples/drift-suite | judge: gpt-4o-mini | pairs: 5
+verdicts: {'unchanged': 50, 'regression': 9, 'changed_minor': 1}
+engine version recorded: False
+```
+
+The last line is deliberately in the output. A report that asks you to check it should also show you the one field it cannot produce.
+
 
 ---
 
