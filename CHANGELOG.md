@@ -31,6 +31,10 @@ key first.
   tagged and published — while this release carries a breaking exit-code change. Nothing in the
   suite compared the two, so the gate stayed green while the repo was un-releasable. A test now
   fails if the declared version matches an existing tag.
+- **`modelpin version` now reads the installed distribution, not a second hardcoded copy.**
+  `[M]` `modelpin/__init__.py` held its own literal, so the bump moved `pyproject.toml` and left
+  `modelpin version` printing `0.2.1` — the string a bug report quotes. A test now pins the two
+  together.
 - **The sdist ships `actions/`.** `[M]` An sdist installed exactly as `CONTRIBUTING.md`
   instructs failed 3 of its own tests, from two missing directories. `actions/` — the Action's
   published output-contract docs — is now grafted. `.github/` deliberately stays out (it is a
