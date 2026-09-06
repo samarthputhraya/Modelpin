@@ -73,3 +73,15 @@ def looks_like_refusal(text: str) -> bool:
 def scrub_secrets(text: str) -> str:
     """Redact key-shaped tokens so a secret can never reach the terminal or a log."""
     return _SECRET_RE.sub("[redacted]", text or "")
+
+
+def contains_secret(text: str) -> bool:
+    """Whether `text` holds a key-shaped token, using the SAME pattern as `scrub_secrets`.
+
+    Detection and redaction must never drift apart, which is why this reads `_SECRET_RE`
+    rather than re-stating the pattern. `[M] 2026-09-06` (MP-189): every one of
+    `scrub_secrets`'s call sites is inside a provider ERROR message, so nothing on the
+    baseline WRITE path had ever asked this question -- and a key-shaped token in a model
+    output was persisted verbatim into the one file the docs tell users to `git add`.
+    """
+    return bool(_SECRET_RE.search(text or ""))

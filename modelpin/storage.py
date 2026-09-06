@@ -53,6 +53,85 @@ def save_baseline(
     return path
 
 
+#: Text a *fabricating* provider wrote instead of replaying a model. The pre-ADR-0015
+#: `FakeProvider` returned this for any key it did not hold, and `baseline` persisted it.
+#: ADR-0015 closed the generator and says in terms: "It does nothing for baselines already
+#: on disk - see MP-43". This is that guard, at the only boundary that can still see them.
+FABRICATED_TRACE_MARKERS: tuple[str, ...] = ("(fake) no canned trace",)
+
+
+def _trace_texts(trace: Trace) -> list[str]:
+    """Every free-text field of a trace: the prompt the user wrote AND the model's output.
+
+    Prompts are included deliberately -- a key pasted into a scenario is the likelier leak,
+    because the user typed it themselves.
+    """
+    texts = [trace.final_output or ""]
+    for message in trace.messages or []:
+        if isinstance(message, dict):
+            content = message.get("content")
+            if isinstance(content, str):
+                texts.append(content)
+    for call in trace.tool_calls or []:
+        for value in (call.arguments or {}).values():
+            if isinstance(value, str):
+                texts.append(value)
+    return texts
+
+
+def fabricated_scenarios(baseline: dict[str, list[Trace]]) -> dict[str, int]:
+    """Scenario -> count of traces that were INVENTED rather than replayed.
+
+    `[M] 2026-09-06` (MP-189) Reproduced: 5 such traces against a genuine, well-behaved
+    candidate yield `REGRESSION ... refusal rate 0% -> 100% (confidence 1.00)`. That is the
+    north-star promise inverted at maximum confidence, so this is a hard error, not a warning.
+    Keyed on the sentinel and never on the word "fake" -- a scenario about fake news must
+    still load.
+    """
+    out: dict[str, int] = {}
+    for sid, traces in baseline.items():
+        n = sum(
+            1 for t in traces if any(m in (t.final_output or "") for m in FABRICATED_TRACE_MARKERS)
+        )
+        if n:
+            out[sid] = n
+    return out
+
+
+def degenerate_scenarios(baseline: dict[str, list[Trace]]) -> dict[str, int]:
+    """Scenario -> run count, for sides where EVERY run is unusable for comparison.
+
+    Degeneracy is `diff/structural.py`'s own definition -- no tool call, no refusal, no
+    text -- imported rather than restated so the two can never drift. Only an ALL-degenerate
+    scenario qualifies: a side with one good run still carries signal, and warning about it
+    would be the crying-wolf shape the north-star metric exists to prevent.
+    """
+    from modelpin.diff.structural import is_degenerate  # local: avoids an import cycle
+
+    out: dict[str, int] = {}
+    for sid, traces in baseline.items():
+        if traces and all(is_degenerate(t) for t in traces):
+            out[sid] = len(traces)
+    return out
+
+
+def secret_bearing_scenarios(baseline: dict[str, list[Trace]]) -> dict[str, int]:
+    """Scenario -> count of traces holding a key-shaped token, in prompt OR output.
+
+    Deliberately reports rather than rewrites. Silently mutating recorded evidence would
+    make the artifact disagree with the run that produced it, and this project treats
+    recorded evidence as load-bearing. The caller warns; the user decides.
+    """
+    from modelpin.providers._common import contains_secret
+
+    out: dict[str, int] = {}
+    for sid, traces in baseline.items():
+        n = sum(1 for t in traces if any(contains_secret(x) for x in _trace_texts(t)))
+        if n:
+            out[sid] = n
+    return out
+
+
 def load_baseline(model_id: str, store_dir: str | Path = STORE_DIRNAME) -> dict[str, list[Trace]]:
     """Load recorded traces per scenario for a model.
 
@@ -66,13 +145,26 @@ def load_baseline(model_id: str, store_dir: str | Path = STORE_DIRNAME) -> dict[
         )
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-        return {
+        loaded = {
             sid: [Trace(**t) for t in traces] for sid, traces in raw.get("scenarios", {}).items()
         }
     except (json.JSONDecodeError, ValidationError, AttributeError, TypeError) as exc:
         raise BaselineError(
             f"Baseline {path} is corrupt ({exc}). Delete it and re-run `modelpin baseline`."
         ) from exc
+
+    fabricated = fabricated_scenarios(loaded)
+    if fabricated:
+        named = ", ".join(f"{sid} ({n} run(s))" for sid, n in sorted(fabricated.items()))
+        raise BaselineError(
+            f"Baseline {path} holds FABRICATED traces that were never replayed against any "
+            f"model: {named}. They were written by an older `--provider fake` run with no "
+            f"matching fixture. Comparing against them reports a confident regression for a "
+            f"candidate that did nothing wrong, so this run is refused rather than answered. "
+            f"Delete the file and re-record it with `modelpin baseline` against a real "
+            f"provider (or with `--provider fake --fixtures <file>` that covers every scenario)."
+        )
+    return loaded
 
 
 def nonuniform_run_counts(

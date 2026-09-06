@@ -68,7 +68,9 @@ from modelpin.storage import (
     BaselineError,
     load_baseline,
     nonuniform_run_counts,
+    degenerate_scenarios,
     save_baseline,
+    secret_bearing_scenarios,
 )
 
 #: A behavioral diff compares run *distributions*; fewer than this can't form one.
@@ -833,6 +835,34 @@ def baseline(
         f"[green]Baseline recorded[/] for [bold]{from_model}[/]: "
         f"{len(scenarios)} scenario(s) x{n} runs -> {path}"
     )
+
+    # MP-189. Recording used to be unconditionally green, which made two failure modes silent.
+    # `[M] 2026-09-06` A side whose every run is degenerate exits 0 here, and the later `check`
+    # tells the user to "re-record with `modelpin baseline`" -- which succeeds again under the
+    # same conditions, forever. Naming it at RECORDING time is the only place the loop breaks.
+    degenerate = degenerate_scenarios(traces)
+    if degenerate:
+        named = ", ".join(f"{sid} ({n_runs} run(s))" for sid, n_runs in sorted(degenerate.items()))
+        console.print(
+            f"[yellow]warning:[/] every recorded run is empty for: {named}. "
+            "Nothing was captured for those scenarios -- no tool call, no refusal, no text -- "
+            "so `modelpin check` cannot compare them and will say so. Re-running `modelpin "
+            "baseline` will NOT fix this on its own: check the provider, the model id and the "
+            "scenario's own messages first, because the same conditions produce the same result."
+        )
+
+    # `[M] 2026-09-06` A key-shaped token in a prompt or a model output is persisted verbatim.
+    # `.gitignore` deliberately un-ignores `baseline-*.json` and `actions/README.md` tells the
+    # user to `git add` it, so the default path publishes it. We report and never rewrite:
+    # silently editing recorded evidence would make the artifact disagree with its own run.
+    leaky = secret_bearing_scenarios(traces)
+    if leaky:
+        named = ", ".join(f"{sid} ({n_hits} trace(s))" for sid, n_hits in sorted(leaky.items()))
+        console.print(
+            f"[yellow]warning:[/] a key-shaped token appears in the recorded traces for: {named}. "
+            f"{path} stores prompts and model output verbatim and is NOT git-ignored by default. "
+            "Review it before committing, and rotate the credential if it is real."
+        )
 
 
 @app.command()
