@@ -274,8 +274,18 @@ def test_a_tool_call_without_a_declaration_does_not_buy_a_clearance(tmp_path: Pa
         "channel -- the census would then clear a run HEAD refused to clear."
     )
     assert "NOT cleared on content" in md
-    # It is undeclared, so the remedy is the plain one, not the declared-but-unused branch.
-    assert "no scenario declares `tools`" in md
+    # MP-194. This line used to assert `"no scenario declares `tools`" in md` -- and that
+    # sentence, in THIS state, was false: the traces carry `tool_calls`, the diff engine reads
+    # them, and on a regressing pair the tool channel is what fires. So the guard was pinning
+    # the misleading half of the disclosure while the two assertions above pinned the correct
+    # half. The clearance behaviour it was really protecting is unchanged -- both of those
+    # still hold -- and the wording now says what actually happened.
+    assert "no scenario declares `tools`" not in md, (
+        "The disclosure claims no scenario declares `tools` as the reason the channel was "
+        "inert, in a run where the channel fired on undeclared tool calls."
+    )
+    assert "called a tool they do not declare" in md
+    assert "not credited as coverage" in md
 
 
 @pytest.mark.xfail(

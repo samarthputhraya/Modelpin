@@ -19,7 +19,7 @@ import time
 from typing import Any
 
 from modelpin.models import IncompleteReason, Scenario, ToolCall, Trace
-from modelpin.providers._common import looks_like_refusal, scrub_secrets
+from modelpin.providers._common import elide, looks_like_refusal, scrub_secrets
 from modelpin.providers.base import ProviderAdapter, ProviderError
 
 #: Generation params we pass through from ``scenario.input`` when present. Anything
@@ -154,7 +154,7 @@ def _explain_api_error(
             else ""
         )
         return f"{base} [{name}].{where}"
-    detail = scrub_secrets(str(exc))[:300]
+    detail = elide(scrub_secrets(str(exc)))
     return f"{base} [{name}: {detail}]."
 
 

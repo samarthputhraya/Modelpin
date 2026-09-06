@@ -180,12 +180,20 @@ def test_a_skipped_scenario_denies_the_affirmative_clearance(tmp_path):
         f"affirmative clearance.\n--- report ---\n{md}"
     )
     assert "NOT fully cleared" in md
-    # Either honest headline is acceptable; the GREEN one is not. Which of the two renders
-    # depends on the compared scenario's own coverage -- here the census also has nothing
-    # live, so "could not measure" outranks "partially measured".
+    # Any honest headline is acceptable; the GREEN one is not. Which one renders depends on
+    # the compared scenario's own coverage -- here the census also has nothing live.
+    #
+    # MP-202. This used to enumerate the two phrasings it expected, and broke when the
+    # census-blind branch stopped reusing "could not measure" -- a phrase `check --help` binds
+    # to EXIT 3, while this run deliberately exits 0. The enumeration was testing the WORDING;
+    # what the test is for is that the headline is not an affirmative clearance. Asserted as
+    # that, so a future honest rewording does not read as a regression.
     headline = md.splitlines()[0]
     assert "no behavioral change" not in headline, headline
-    assert ("partially measured" in headline) or ("could not measure" in headline), headline
+    assert headline.startswith("❔") or headline.startswith("⚠️"), (
+        "the headline is neither an abstention nor a warning, over a run in which three of "
+        f"four scenarios were never compared: {headline}"
+    )
     assert r.exit_code == 0  # deliberate: disclose, do not coerce -- see the module docstring
 
 

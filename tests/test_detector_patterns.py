@@ -135,10 +135,22 @@ def test_a_scan_of_a_vendored_emoji_table_reports_no_models(tmp_path):
 
 def test_this_repo_reports_no_bogus_o_token():
     """`[M]` The regression fixture for the in-repo false positive. Before MP-135,
-    `scan_repo('.')` reported `o3XPaKcS` twice."""
+    `scan_repo('.')` reported `o3XPaKcS` twice.
+
+    `[M] 2026-09-06` The filter was `h["model"].startswith("o")`, which was equivalent to
+    "matched by the o-series pattern" only while the o-series was the sole pattern that could
+    produce an `o`-initial token. MP-195 added `openai/gpt-oss-*`, and `openai/gpt-oss-120b`
+    -- a real model this repo genuinely uses, in its own published report data -- starts with
+    `o` and is not an o-series id, so the guard failed on a CORRECT detection.
+
+    It now asks the question it was always asking: *did the o-series pattern match something
+    the o-series does not contain?* That is checked against the shipped pattern rather than a
+    copy of it, so narrowing `_O_SERIES_DIGITS` cannot leave this guard testing a stale one.
+    """
     bogus = [
         h
         for h in scan_repo(".")
-        if h["model"].startswith("o") and not re.fullmatch(r"o[134](-[\w.\-]*)?", h["model"])
+        if _O_PATTERN.fullmatch(h["model"])
+        and not re.fullmatch(rf"o[{_O_SERIES_DIGITS}](-[\w.\-]*)?", h["model"])
     ]
     assert bogus == [], bogus

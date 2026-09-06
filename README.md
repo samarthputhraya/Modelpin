@@ -395,8 +395,10 @@ modelpin check --provider groq --from gpt-4o-mini --to qwen/qwen3.8-27b
 ```
 
 **The judge is a separate bill — but it can now be Groq's.** `mp init` scaffolds
-`judge_model: gpt-4o-mini`, so out of the box that run bills your `OPENAI_API_KEY`, or exits 1
-asking for it if only `GROQ_API_KEY` is set. To keep the whole run on one free key, name the
+`judge_model: gpt-4o-mini`, so out of the box that run bills your `OPENAI_API_KEY`, or exits 4
+asking for it if only `GROQ_API_KEY` is set. Pick a judge that is **neither** model you are
+comparing — a model reading its own output is not an independent reading of it, and Modelpin
+says so on the console when it spots the collision. To keep the whole run on one free key, name the
 host as well — the model id alone cannot say which one it is:
 
 ```yaml
@@ -529,8 +531,8 @@ trials" claim is withdrawn — those 8 could not have fired, so the honest score
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **805 tests passing** (+4 `xfail` pinning the open
-MP-05 scenario-id collision and the MP-165 trajectory residual, so 809 collected), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **873 tests passing** (+4 `xfail` pinning the open
+MP-05 scenario-id collision and the MP-165 trajectory residual, so 877 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 
