@@ -192,6 +192,10 @@ providers:
   - openai                 # uses YOUR OPENAI_API_KEY from the environment
 runs: {DEFAULT_RUNS}                    # N replays per scenario; below 4 the tool signal cannot fire
 judge_model: gpt-4o-mini   # semantic LLM-judge (optional; extra calls). Remove to disable.
+#                          # MP-196: pick a judge that is NEITHER model you are comparing.
+#                          # A model reading its own output is not an independent reading of
+#                          # it, and this line ships equal to `models:` above -- so if you
+#                          # keep gpt-4o-mini as your app's model, change this one.
 # judge_provider: groq    # only needed when the judge model id does not name its own
 #                         # vendor: gpt-* and gemini-* do, qwen/qwen3.8-27b does not.
 """
@@ -324,7 +328,12 @@ def _replay_plan(
     return plan
 
 
-def _build_judge(provider: str, cfg: ModelpinConfig, to_model: str | None = None):
+def _build_judge(
+    provider: str,
+    cfg: ModelpinConfig,
+    to_model: str | None = None,
+    from_model: str | None = None,
+):
     """Construct + preflight the semantic LLM-judge if configured. Returns None when no
     judge_model is set or the run is offline (fake), so the diff stays purely structural."""
     if not cfg.judge_model or provider == "fake":
@@ -347,12 +356,22 @@ def _build_judge(provider: str, cfg: ModelpinConfig, to_model: str | None = None
     except (ProviderError, ImportError) as exc:
         _fail(f"semantic judge ({cfg.judge_model!r}): {exc}")
     console.print(f"[dim]semantic judge: {cfg.judge_model} on {host}[/]")
-    if cfg.judge_model == to_model:
+    # MP-196. BOTH sides, not just the candidate. `[M] 2026-09-06` this compared against
+    # `to_model` alone, so a judge equal to the BASELINE never triggered it -- and that is
+    # precisely the state `mp init` shipped, since the scaffold wrote `models: [gpt-4o-mini]`
+    # and `judge_model: gpt-4o-mini`. A brand-new user's first `check` therefore had a judge
+    # reading its own output as the reference, silently.
+    #
+    # The baseline side is not the milder case. A judge grading its own output as the
+    # REFERENCE biases toward calling the pair equivalent, which is a false NEGATIVE -- the
+    # failure the semantic channel exists to prevent, in the run where the user trusts it most.
+    if cfg.judge_model in {m for m in (to_model, from_model) if m}:
         # Not an error -- it can be a deliberate, cheap choice -- but a model judging its own
         # output is not an independent reading of it, and the north-star metric is the FP
         # RATE of what we publish. Say so once, at the point of choosing.
+        side = "being checked" if cfg.judge_model == to_model else "it is compared against"
         console.print(
-            "[yellow]note:[/] the judge model is the model being checked, so the semantic "
+            f"[yellow]note:[/] the judge model is the model {side}, so the semantic "
             "channel is not an independent reading. Prefer a different judge model."
         )
     return judge
@@ -1070,7 +1089,7 @@ def check(
         f"[dim]provider={prov} from={_rich_escape(from_model)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
     )
     _preflight_or_fail(adapter, prov)
-    judge = _build_judge(prov, cfg, to_model=to)
+    judge = _build_judge(prov, cfg, to_model=to, from_model=from_model)
 
     results = []
     skipped: list[str] = []
@@ -1332,7 +1351,7 @@ def report(
         f"[dim]provider={prov} from={_rich_escape(from_)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
     )
     _preflight_or_fail(adapter, prov)
-    judge = _build_judge(prov, cfg, to_model=to)
+    judge = _build_judge(prov, cfg, to_model=to, from_model=from_)
 
     results: list[DiffResult] = []
     skipped: list[str] = []

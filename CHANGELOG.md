@@ -52,6 +52,11 @@ key first.
   and exited `1` — again publishing "detected a behavioral regression", over byte-identical
   traces, while the report written moments earlier said `**UNCHANGED (1)**`. Unencodable
   characters are now escaped for display only; the artifact keeps its real bytes.
+- **The semantic judge is now checked against BOTH compared models, not just the candidate.**
+  `[M]` It compared only against `--to`, so a judge equal to the *baseline* never triggered the
+  independence note — and that is exactly what `mp init` shipped, writing `gpt-4o-mini` as both
+  the app's model and the judge. A new user's first `check` had the judge reading its own output
+  as the reference, silently. The scaffolded config now says so at the point of editing.
 - **The coverage disclosure no longer contradicts the verdict printed above it.** `[M]` In a
   run whose only finding was a tool-call regression, the footer stated three things that were
   all false of it: that the tool-trajectory channel was inert, that the scenario "called no
