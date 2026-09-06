@@ -25,6 +25,42 @@ MODEL_PATTERNS = [
     re.compile(rf"\bo[{_O_SERIES_DIGITS}](?:-[\w.\-]*)?\b"),
     re.compile(r"\bclaude-[\w.\-]+\b"),
     re.compile(r"\bgemini-[\w.\-]+\b"),
+    # ---------------------------------------------------------------- MP-195, cross-vendor
+    # `[M] 2026-09-06` Until these existed, `mp scan` was OpenAI/Anthropic/Google-shaped, and
+    # cross-vendor is wedge item 3. A directory whose `app.py` named `llama-3.3-70b-versatile`,
+    # `qwen/qwen3-32b` and `openai/gpt-oss-20b` scanned to `No model identifiers found.`,
+    # exit 0 -- and appending a single line `M = "gpt-4o-mini"` to THAT SAME FILE produced a
+    # populated table. The same file was visible or invisible depending only on whose ids it
+    # held. `scan` is the first command of README's "real flow, on your own app", so a Groq or
+    # Together shop met a confident empty result rather than a hint that we did not cover them.
+    # These are also the exact ids README itself advertises (`llama-3.3-70b-versatile` at the
+    # cross-vendor table, `qwen/qwen3.8-27b` in a copy-pasteable example).
+    #
+    # `[M]` Measured over the same 6,228 third-party files under `site-packages` that MP-135
+    # used, so the false-positive claim is comparable to the one that narrowed the o-series:
+    #
+    #     llama      5 matches / 2 distinct  -> llama-3.1-8b-instruct,
+    #                                           llama-3.2-90b-vision-instruct-maas
+    #     meta-llama 0                       qwen/     1 -> qwen/qwen3
+    #     qwen<n>    2 -> qwen3, qwen3-4b    gpt-oss   0        mistral 0
+    #     deepseek   6 / 3 distinct          -> INCLUDED `deepseek-ai`, a FALSE POSITIVE:
+    #                                           it is the HuggingFace ORG, not a model.
+    #
+    # So `deepseek-` enumerates its real families instead of taking any suffix -- the same
+    # shape as `_O_SERIES_DIGITS` above, and for the same reason. Re-measured after narrowing:
+    # 3 matches / 2 distinct, both real, `deepseek-ai` gone, nothing else lost.
+    #
+    # `[M]` Case-insensitivity was measured, not assumed: `(?i)` on llama/qwen/mistral added
+    # **zero** new matches across those 6,228 files, so it is free here -- and it is needed,
+    # because HuggingFace writes `meta-llama/Llama-3.3-70B-Instruct` with a capital L while
+    # Groq writes the same family lowercase.
+    re.compile(r"(?i)\bllama-[0-9][\w.\-]*\b"),
+    re.compile(r"(?i)\bmeta-llama/[\w.\-]+\b"),
+    re.compile(r"(?i)\bqwen/[\w.\-]+\b"),
+    re.compile(r"(?i)\bqwen[0-9][\w.\-]*\b"),
+    re.compile(r"(?i)\b(?:openai/)?gpt-oss-[\w.\-]+\b"),
+    re.compile(r"(?i)\bmi[sx]tral-[\w.\-]+\b"),
+    re.compile(r"(?i)\bdeepseek-(?:r[0-9]|v[0-9]|chat|coder|reasoner)[\w.\-]*\b"),
 ]
 
 DEFAULT_EXTS = {".py", ".env", ".yaml", ".yml", ".json", ".toml", ".js", ".ts"}
@@ -74,7 +110,12 @@ def _iter_files(root: Path, exts: set[str]) -> Iterable[Path]:
         ]
         for name in filenames:
             p = here / name
-            if p.suffix.lower() in exts or p.name == ".env":
+            # MP-195. `.env` was matched by exact name, so `.env.example` -- the file a repo
+            # commits precisely BECAUSE it is the readable record of which model it uses --
+            # was invisible, along with `.env.local`, `.env.sample` and every other variant.
+            # `Path(".env.example").suffix` is `.example`, so the extension test cannot see
+            # them either.
+            if p.suffix.lower() in exts or p.name.startswith(".env"):
                 yield p
 
 
@@ -85,14 +126,49 @@ def scan_repo(root: str | Path = ".", exts: set[str] | None = None) -> list[dict
     hits: list[dict] = []
     for f in _iter_files(root, exts):
         try:
-            text = f.read_text(errors="ignore")
+            # MP-190's class, in the one site its sweep missed: `errors="ignore"` without
+            # `encoding=` matched neither `read_text()` nor `read_text(encoding=` in that
+            # commit's grep, so its claim that the two sites it fixed were "the ONLY two
+            # text-I/O sites in modelpin/ without an explicit encoding" was wrong. Here the
+            # consequence is a silent MISS rather than a wrong verdict: on a cp1252 machine a
+            # UTF-8 source file decodes to mojibake and its model ids stop matching.
+            text = f.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         for i, line in enumerate(text.splitlines(), start=1):
-            for pat in MODEL_PATTERNS:
-                for m in pat.findall(line):
-                    hits.append({"model": m, "file": str(f.relative_to(root)), "line": i})
+            for model in _models_in(line):
+                hits.append({"model": model, "file": str(f.relative_to(root)), "line": i})
     return hits
+
+
+def _models_in(line: str) -> list[str]:
+    """Every model id on one line, with substring matches of a longer id dropped.
+
+    MP-195. The vendor-prefixed patterns overlap the bare ones by construction -- `qwen/` and
+    `qwen<n>` both fire on ``qwen/qwen3-32b`` -- so without this the fix for scan's BLINDNESS
+    would have shipped a new case of scan's NOISE (MP-10): `[M] 2026-09-06` a file naming four
+    models reported five rows, listing `qwen3-32b` beside the `qwen/qwen3-32b` it is part of.
+
+    Containment, not de-duplication by string: two genuinely different ids on one line must
+    both survive, and they do -- only a span strictly inside another span is dropped. The
+    longest match wins because a vendor-qualified id is the one the user can actually pass to
+    `--to`; the bare tail is an artifact of our patterns, not something they wrote.
+    """
+    spans: list[tuple[int, int, str]] = []
+    for pat in MODEL_PATTERNS:
+        for m in pat.finditer(line):
+            spans.append((m.start(), m.end(), m.group(0)))
+    out: list[str] = []
+    seen: set[str] = set()
+    for start, end, text in spans:
+        contained = any(
+            (o_start <= start and end <= o_end) and (o_end - o_start) > (end - start)
+            for o_start, o_end, _ in spans
+        )
+        if not contained and text not in seen:
+            seen.add(text)
+            out.append(text)
+    return out
 
 
 def models_used(root: str | Path = ".") -> set[str]:

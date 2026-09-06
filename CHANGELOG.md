@@ -26,6 +26,17 @@ key first.
   natural slip on this file — loaded as the *default* provider, `openai`, at 5 runs. A config
   written to get a free offline check billed your own key for five paid replays per scenario.
 
+### Added
+- **`mp scan` now sees Llama, Qwen, Mistral, DeepSeek and `gpt-oss` ids, and reads `.env.example`.**
+  `[M]` It was OpenAI/Anthropic/Google-shaped: a repo naming `llama-3.3-70b-versatile`,
+  `qwen/qwen3-32b` and `openai/gpt-oss-20b` scanned to `No model identifiers found.`, exit 0 —
+  while appending one `gpt-4o-mini` line to that same file produced a populated table. `scan` is
+  the first command of the README's "real flow, on your own app", and cross-vendor coverage is
+  the point of the tool, so a Groq or Together shop met a confident empty result. `[M]` The new
+  patterns were measured over the same 6,228 third-party files used to narrow the o-series: the
+  only false positive was `deepseek-ai`, a HuggingFace org rather than a model, and the shipped
+  pattern enumerates DeepSeek's real families to exclude it.
+
 ### Fixed
 - **Scenarios in a subdirectory were silently skipped.** `[M]` `scenarios/auth/nested.json`
   holding a real refusal regression produced `OK 1 scenario(s) unchanged`, exit 0 — a green
