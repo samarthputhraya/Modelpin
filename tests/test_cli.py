@@ -9,7 +9,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from modelpin.cli import _report_basename, app
+from modelpin.cli import EXIT_SETUP_FAILED, _report_basename, app
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
 from modelpin import cli
 from modelpin.models import ToolCall, Trace
@@ -155,7 +155,7 @@ def test_check_rejects_unknown_match_mode():
             CONFIG,
         ],
     )
-    assert r.exit_code == 1
+    assert r.exit_code == EXIT_SETUP_FAILED
     assert "match" in r.output.lower()
 
 
@@ -406,7 +406,7 @@ def test_report_skips_failing_scenario_and_still_publishes(tmp_path, monkeypatch
     assert all(r["scenario_id"] != "angry_customer" for r in sidecar["results"])
 
 
-def test_report_all_scenarios_failing_exits_one(tmp_path, monkeypatch):
+def test_report_all_scenarios_failing_exits_setup_failed(tmp_path, monkeypatch):
     def _always_fail(scenario, model_id, adapter, runs=5):
         raise ProviderError("simulated total failure")
 
@@ -433,7 +433,7 @@ def test_report_all_scenarios_failing_exits_one(tmp_path, monkeypatch):
             str(tmp_path / "reports"),
         ],
     )
-    assert r.exit_code == 1
+    assert r.exit_code == EXIT_SETUP_FAILED
     assert "nothing to report" in r.output.lower()
 
 
@@ -465,7 +465,7 @@ def test_report_missing_suite_fails_clearly(tmp_path):
             CONFIG,
         ],
     )
-    assert r.exit_code == 1
+    assert r.exit_code == EXIT_SETUP_FAILED
     assert "scenarios" in r.output.lower()
 
 

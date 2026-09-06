@@ -171,11 +171,27 @@ runs:
         MP_TO: ${{ inputs.to }}
         MP_CODE: ${{ steps.check.outputs.code }}
       run: |
+        # Every branch here asserts something about a real person's model migration, in
+        # public, on their PR. It must never assert a measurement that was not made.
+        #
         # Exit 3 means we could NOT measure, which is not the same claim as "it regressed".
         # Saying "regression" there would put a false statement in the PR. See ADR-0018.
+        #
+        # Exit 4 means we never produced a verdict AT ALL -- missing key, bad flag, unreadable
+        # config. [M] 2026-09-06 this used to be exit 1 and fell to the `else` below, so a
+        # contributor who had not yet added OPENAI_API_KEY to repository secrets was told, in
+        # a GitHub error annotation, that Modelpin had detected a behavioral regression in
+        # their migration. No replay ran; nothing was compared. See ADR-0035.
+        #
+        # The final `else` reports the code instead of guessing at it: a code we do not
+        # recognise is exactly the case where inventing a meaning is most likely to be wrong.
         if [ "$MP_CODE" = "3" ]; then
           echo "::error::Modelpin could not measure at least one scenario migrating to '$MP_TO' - it is NOT cleared. See the PR comment / report."
-        else
+        elif [ "$MP_CODE" = "4" ]; then
+          echo "::error::Modelpin could not RUN for '$MP_TO' - a setup or configuration problem (often a missing API-key secret). No verdict was produced and nothing was measured. See this step's log for the error."
+        elif [ "$MP_CODE" = "1" ]; then
           echo "::error::Modelpin detected a behavioral regression migrating to '$MP_TO'. See the PR comment / report."
+        else
+          echo "::error::Modelpin exited with an unexpected code $MP_CODE migrating to '$MP_TO'. This is not a verdict. See this step's log."
         fi
         exit 1

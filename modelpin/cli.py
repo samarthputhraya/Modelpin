@@ -80,6 +80,20 @@ MIN_RUNS = 2
 #: from 1 (a real regression) so a caller can tell "it broke" from "we could not tell", and
 #: distinct from 2, which Click already returns for a usage error. See ADR-0018.
 EXIT_UNMEASURED = 3
+#: Exit code when Modelpin produced NO VERDICT AT ALL: a setup, configuration or environment
+#: failure. Everything that reaches `_fail`. See ADR-0035.
+#:
+#: `[M] 2026-09-06` These used to exit **1**, the code `check --help` documents as "at least one
+#: real regression (the CI gate)" and `action.yml:167-181` publishes as
+#: `::error::Modelpin detected a behavioral regression`. So a contributor who forgot to add
+#: `OPENAI_API_KEY` to repository secrets got a GitHub annotation asserting that their model
+#: migration regressed -- with no replay run and no scenario compared. Reproduced:
+#: `mp baseline` with no key exported, and `mp check --match nonsense`, both EXIT=1.
+#:
+#: Distinct from 3 on purpose. Exit 3 is an ABSTENTION from a run that really happened
+#: (ADR-0018); this is the absence of a run. Collapsing them would make "not cleared"
+#: ambiguous between "we looked and could not tell" and "we never looked".
+EXIT_SETUP_FAILED = 4
 #: Below this, the permutation test is underpowered — warn but proceed. Derived from the
 #: config default so the number a user is warned about and the number they get by default
 #: can never disagree; three copies of it drifting apart is exactly what MP-03 was.
@@ -209,7 +223,11 @@ def _fail(message: str) -> NoReturn:
     intentional markup.
     """
     console.print(f"[red]error:[/] {_rich_escape(message)}")
-    raise typer.Exit(code=1)
+    # ADR-0035. `EXIT_SETUP_FAILED`, not 1: every one of these call sites is a setup,
+    # configuration or environment failure -- surveyed, all 28 -- and none is a measurement.
+    # Exiting 1 made `action.yml` publish "Modelpin detected a behavioral regression" over a
+    # run that never happened.
+    raise typer.Exit(code=EXIT_SETUP_FAILED)
 
 
 def _adapter(provider: str, fixtures: Optional[str]) -> ProviderAdapter:
@@ -950,8 +968,16 @@ def check(
     3 = the run could not answer -- a scenario that WAS compared could not be measured, OR
     the provider rejected a scenario, OR nothing could be compared at all (no usable
     baseline; every scenario skipped or rejected). 3 is deliberately not 1: "we could not
-    tell" is a different claim from "it broke". A configuration error is neither: no
-    scenarios found exits 1, and a bad flag exits 2, which is Click's usage code.
+    tell" is a different claim from "it broke". 4 = Modelpin never produced a verdict at all:
+    a missing key, an unusable flag, an unreadable config, no scenarios. 2 is Click's own
+    usage code and we do not emit it.
+
+    `[M] 2026-09-06` The previous two sentences here read *"A configuration error is neither:
+    no scenarios found exits 1, and a bad flag exits 2, which is Click's usage code."* **Both
+    halves were false.** `_fail` exited 1 across all 28 of its call sites, so a missing
+    `OPENAI_API_KEY` and `--match nonsense` both returned the CI-gate code -- which
+    `action.yml` publishes as "Modelpin detected a behavioral regression". ADR-0035 gives
+    setup failure its own code so that this docstring can be true.
 
     A scenario with no recorded baseline is the deliberate exception: it is named in the
     report, on the console and in the archive, and it removes the affirmative clearance, but

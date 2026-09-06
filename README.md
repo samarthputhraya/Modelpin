@@ -73,9 +73,11 @@ dated copy under `.modelpin/runs/` that the next run will not overwrite, for cit
 | `invoice_parse` | `changed_minor` | `"Total: $5"` → `"Total: 5"` breaks the scenario's assertion, but nothing refused and no tool moved |
 
 `modelpin check` exits **1** only on a real `regression` — that's the CI gate, and it is why
-the demo exits 1. It also exits **3** when a scenario it compared could not be measured, when the
+the demo exits 1. It exits **3** when a scenario it compared could not be measured, when the
 provider rejected one, or when nothing could be compared at all — a different claim from "it
-broke". A scenario with no recorded baseline is named in the report and costs the run its
+broke". It exits **4** when it never produced a verdict at all: a missing API key, an unusable
+flag, an unreadable config, no scenarios found. Nothing was measured, so nothing is claimed.
+A scenario with no recorded baseline is named in the report and costs the run its
 clearance, but does not by itself fail the build.
 
 Then edit `traces.json`, re-run, and watch the verdict move: the answer is computed from the
@@ -527,8 +529,8 @@ trials" claim is withdrawn — those 8 could not have fired, so the honest score
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **796 tests passing** (+4 `xfail` pinning the open
-MP-05 scenario-id collision and the MP-165 trajectory residual, so 800 collected), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **805 tests passing** (+4 `xfail` pinning the open
+MP-05 scenario-id collision and the MP-165 trajectory residual, so 809 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 
