@@ -89,7 +89,7 @@ above is for. Omit `judge_model` to keep the run structural and free.
 
 | Output | Description |
 |---|---|
-| `verdict-exit-code` | `0` = no regression, `1` = regression detected, `3` = the run could not answer: a compared scenario was unmeasurable, the provider rejected one, or nothing could be compared. A scenario with no recorded baseline is disclosed in the report and costs the run its clearance, but does not by itself change the exit code. |
+| `verdict-exit-code` | `0` = no regression. `1` = a real regression was detected — the CI gate. `3` = the run could not answer: a compared scenario was unmeasurable, the provider rejected one, or nothing could be compared. `4` = the run never happened: a setup, configuration or environment failure (often a missing API-key secret), so no verdict exists and nothing is claimed about the model. A scenario with no recorded baseline is disclosed in the report and costs the run its clearance, but does not by itself change the exit code. |
 | `report-path` | Path to the rendered Markdown report. |
 
 ## Notes

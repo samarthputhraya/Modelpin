@@ -1076,3 +1076,20 @@ def test_the_readmes_test_count_is_the_real_one():
         "This exact number was 42 short for several releases before MP-81 caught it, and "
         "3 too high in the flattering direction before MP-112 caught it."
     )
+
+    # `[M] 2026-09-06` It went wrong a THIRD way, and this guard was blind to that one too.
+    # The README states the total in prose as well -- "so N collected" -- and an edit that
+    # updated the passing count left `777 collected` standing beside `782 passing + 4
+    # xfail`, which do not sum to it. The arithmetic above still held, because it recomputes
+    # the total instead of reading the one the README actually publishes. A number a reader
+    # can see is a claim, whether or not another assertion happens to cover its inputs.
+    stated_total = re.search(r"so (\d+) collected", text)
+    assert stated_total, (
+        "README.md no longer states the collected total. It is published prose and it drifted "
+        "once already; keep it stated so it can be checked."
+    )
+    assert int(stated_total.group(1)) == collected, (
+        f"README.md says {stated_total.group(1)} collected; pytest collects {collected}. "
+        "`[M] 2026-09-06` this exact line read `777 collected` beside `782 tests passing` "
+        "after an edit updated one number and not the other."
+    )

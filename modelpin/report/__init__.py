@@ -624,7 +624,11 @@ def render_cli(
     unchanged = _b[DiffVerdict.unchanged]
     unmeasured = _b[DiffVerdict.insufficient_evidence]
     lines = [
-        f"[bold]Modelpin[/]: {from_model} -> {to_model}  "
+        # MP-174. Model ids are user-supplied (`--to`/`--from`/`--model`) and reach a rich
+        # console, exactly like the scenario ids escaped throughout this function. An id
+        # containing `[/]` raised `MarkupError` on the FIRST line of the summary, after the
+        # report had already been written -- so CI published the artifact and then failed.
+        f"[bold]Modelpin[/]: {escape(from_model)} -> {escape(to_model)}  "
         f"[dim]({len(results)} scenario(s) x{runs} runs)[/]",
         "",
     ]
@@ -700,7 +704,7 @@ def render_cli(
             lines.append(f"{ok_mark} [dim]{len(unchanged)} scenario(s) unchanged[/]")
     if regs or minors:
         lines.append("")
-        lines.append(f"[yellow]-> Pin to[/] [bold]{from_model}[/] until resolved.")
+        lines.append(f"[yellow]-> Pin to[/] [bold]{escape(from_model)}[/] until resolved.")
         # ADR-0032, the interim it requires. `[M] 2026-08-29` the dogfood flagged 6 of 12
         # scenarios at confidence 1.00 -- all 6 confirmed TRUE positives by an independent
         # oracle -- printed "Pin to ... until resolved", and EXITED 0, because a violated
@@ -1034,17 +1038,24 @@ def _report_settings(meta: ReportMeta, n_scenarios: int) -> list[str]:
         "",
         "| Setting | Value |",
         "|---|---|",
-        f"| Suite | `{meta.suite_id}` v{meta.suite_version} (`{meta.suite_hash}`) |",
+        # MP-174. Every VALUE here is user-supplied -- model ids come from `--to`/`--from`,
+        # the suite fields from the caller's manifest -- and a raw `|` in any of them adds a
+        # cell and breaks the row. `[M] 2026-09-06`: with `--to 'm2|evil'` the two model rows
+        # carried 4 pipes where every other row carried 3, corrupting the settings table of
+        # the PUBLIC Report, which is an ADR-0009 surface. `_cell` on all of them rather than
+        # on the two that were reported: the next id to arrive here is as untrusted as these.
+        f"| Suite | `{_cell(meta.suite_id)}` v{_cell(meta.suite_version)} "
+        f"(`{_cell(meta.suite_hash)}`) |",
         f"| Scenarios | {n_scenarios} |",
-        f"| Candidate model | `{meta.candidate_model}` |",
-        f"| Reference model | `{meta.reference_model}` |",
-        f"| Provider | `{meta.provider}` |",
+        f"| Candidate model | `{_cell(meta.candidate_model)}` |",
+        f"| Reference model | `{_cell(meta.reference_model)}` |",
+        f"| Provider | `{_cell(meta.provider)}` |",
         f"| Runs per scenario | {meta.runs} |",
-        f"| Tool-call match mode | `{meta.match_mode}` |",
-        f"| Semantic judge | `{meta.judge_model}` |",
+        f"| Tool-call match mode | `{_cell(meta.match_mode)}` |",
+        f"| Semantic judge | `{_cell(meta.judge_model)}` |",
         f"| Decision thresholds | {thresholds} |",
-        f"| Engine version | modelpin {meta.modelpin_version} |",
-        f"| Generated | {meta.date_iso} |",
+        f"| Engine version | modelpin {_cell(meta.modelpin_version)} |",
+        f"| Generated | {_cell(meta.date_iso)} |",
     ]
 
 

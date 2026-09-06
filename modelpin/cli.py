@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import json
 import shlex
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Sequence, Set as AbstractSet
-from typing import NoReturn, Optional
+from typing import IO, Any, NoReturn, Optional, cast
 
 import typer
 from rich.box import ASCII as ASCII_BOX
@@ -79,6 +80,20 @@ MIN_RUNS = 2
 #: from 1 (a real regression) so a caller can tell "it broke" from "we could not tell", and
 #: distinct from 2, which Click already returns for a usage error. See ADR-0018.
 EXIT_UNMEASURED = 3
+#: Exit code when Modelpin produced NO VERDICT AT ALL: a setup, configuration or environment
+#: failure. Everything that reaches `_fail`. See ADR-0035.
+#:
+#: `[M] 2026-09-06` These used to exit **1**, the code `check --help` documents as "at least one
+#: real regression (the CI gate)" and `action.yml:167-181` publishes as
+#: `::error::Modelpin detected a behavioral regression`. So a contributor who forgot to add
+#: `OPENAI_API_KEY` to repository secrets got a GitHub annotation asserting that their model
+#: migration regressed -- with no replay run and no scenario compared. Reproduced:
+#: `mp baseline` with no key exported, and `mp check --match nonsense`, both EXIT=1.
+#:
+#: Distinct from 3 on purpose. Exit 3 is an ABSTENTION from a run that really happened
+#: (ADR-0018); this is the absence of a run. Collapsing them would make "not cleared"
+#: ambiguous between "we looked and could not tell" and "we never looked".
+EXIT_SETUP_FAILED = 4
 #: Below this, the permutation test is underpowered — warn but proceed. Derived from the
 #: config default so the number a user is warned about and the number they get by default
 #: can never disagree; three copies of it drifting apart is exactly what MP-03 was.
@@ -93,7 +108,69 @@ app = typer.Typer(
     add_completion=False,
     rich_markup_mode=None,  # plain Click help: ASCII-only, never crashes on cp1252
 )
-console = Console()
+
+
+class _EncodingSafeStdout:
+    """``sys.stdout``, resolved at write time, that can never raise ``UnicodeEncodeError``.
+
+    MP-191. The console is not allowed to decide the exit code. `cli.py` documents ``1`` as
+    "at least one real regression (the CI gate)" and ``action.yml:167-181`` turns any
+    non-zero, non-3 code into ``::error::Modelpin detected a behavioral regression`` -- so an
+    id outside the console's codepage used to post a false regression claim on someone's PR
+    over a migration that did not regress. `[M] 2026-09-06`, reproduced end to end over
+    BYTE-IDENTICAL traces: exit 1, while the report written moments earlier said
+    ``**UNCHANGED (1)**``.
+
+    `[M]` PR #73 did not cause this, it UNCOVERED it: before ``utf-8-sig`` the same fixtures
+    file died earlier, at *read*. MP-190 fixed text going INTO the engine; this is the same
+    class coming OUT of it, and the two are one defect seen from both ends.
+
+    `[M]` The blast radius is also wider than one line. rich clears its buffer *before*
+    writing it, so when the write raised, the un-written text stayed queued and re-raised on
+    the NEXT print: one unencodable id poisoned every subsequent line, including lines that
+    were pure ASCII. Reproduced in `tests/test_console_safety.py` -- an ASCII control failed
+    only when it ran after an unencodable print.
+
+    Three properties, in the order they matter:
+
+    1. **It never raises.** Degrade the text, print it, keep the verdict's own exit code.
+    2. **It degrades only when it must.** The stream is asked whether it can take the text
+       before anything is rewritten, so a modern UTF-8 terminal -- almost every user -- keeps
+       ids verbatim. Sanitising unconditionally would mangle output for everyone to protect a
+       minority, and is guarded against by a test.
+    3. **It resolves ``sys.stdout`` per write** rather than capturing it at import. Typer's
+       ``CliRunner`` and pytest's capture both replace the stream after this module loads; a
+       captured handle would silently write past them.
+
+    ``backslashreplace``, not ``replace``: ``\\u554f\\u3044`` still identifies WHICH scenario
+    regressed, where ``?????`` does not. This is a diagnostic tool -- a degraded id the user
+    can look up beats a row of question marks.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        # Deliberately not a stored handle: see property 3 above. AttributeError propagates,
+        # which is what lets rich's `getattr(file, "rich_proxied_file", file)` fall back.
+        return getattr(sys.stdout, name)
+
+    def write(self, text: str) -> int:
+        stream = sys.stdout
+        encoding = getattr(stream, "encoding", None)
+        if encoding:
+            try:
+                text.encode(encoding)
+            except UnicodeEncodeError:
+                text = text.encode(encoding, "backslashreplace").decode(encoding, "replace")
+        return stream.write(text)
+
+    def flush(self) -> None:
+        sys.stdout.flush()
+
+
+# `cast`, not `# type: ignore`: this IS a deliberate duck-typed proxy, and saying so in
+# the type system is more honest than suppressing the complaint. rich only ever calls
+# `.write()`, `.flush()` and stream predicates on it, all of which are provided or
+# forwarded -- the full `IO[str]` protocol is not implemented and is not needed.
+console = Console(file=cast(IO[str], _EncodingSafeStdout()))
 
 _SAMPLE_SCENARIO = """{
   "id": "greeting",
@@ -146,7 +223,11 @@ def _fail(message: str) -> NoReturn:
     intentional markup.
     """
     console.print(f"[red]error:[/] {_rich_escape(message)}")
-    raise typer.Exit(code=1)
+    # ADR-0035. `EXIT_SETUP_FAILED`, not 1: every one of these call sites is a setup,
+    # configuration or environment failure -- surveyed, all 28 -- and none is a measurement.
+    # Exiting 1 made `action.yml` publish "Modelpin detected a behavioral regression" over a
+    # run that never happened.
+    raise typer.Exit(code=EXIT_SETUP_FAILED)
 
 
 def _adapter(provider: str, fixtures: Optional[str]) -> ProviderAdapter:
@@ -825,14 +906,14 @@ def baseline(
     prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
     plan = _replay_plan(len(scenarios), src_dir, n, prov, judge_model=None)
-    console.print(f"[dim]provider={prov} model={from_model} runs={n} | {plan}[/]")
+    console.print(f"[dim]provider={prov} model={_rich_escape(from_model)} runs={n} | {plan}[/]")
     _preflight_or_fail(adapter, prov)
     traces = _guard_replay(
         prov, lambda: {s.id: replay(s, from_model, adapter, runs=n) for s in scenarios}
     )
     path = save_baseline(traces, from_model, store_dir)
     console.print(
-        f"[green]Baseline recorded[/] for [bold]{from_model}[/]: "
+        f"[green]Baseline recorded[/] for [bold]{_rich_escape(from_model)}[/]: "
         f"{len(scenarios)} scenario(s) x{n} runs -> {path}"
     )
 
@@ -887,8 +968,16 @@ def check(
     3 = the run could not answer -- a scenario that WAS compared could not be measured, OR
     the provider rejected a scenario, OR nothing could be compared at all (no usable
     baseline; every scenario skipped or rejected). 3 is deliberately not 1: "we could not
-    tell" is a different claim from "it broke". A configuration error is neither: no
-    scenarios found exits 1, and a bad flag exits 2, which is Click's usage code.
+    tell" is a different claim from "it broke". 4 = Modelpin never produced a verdict at all:
+    a missing key, an unusable flag, an unreadable config, no scenarios. 2 is Click's own
+    usage code and we do not emit it.
+
+    `[M] 2026-09-06` The previous two sentences here read *"A configuration error is neither:
+    no scenarios found exits 1, and a bad flag exits 2, which is Click's usage code."* **Both
+    halves were false.** `_fail` exited 1 across all 28 of its call sites, so a missing
+    `OPENAI_API_KEY` and `--match nonsense` both returned the CI-gate code -- which
+    `action.yml` publishes as "Modelpin detected a behavioral regression". ADR-0035 gives
+    setup failure its own code so that this docstring can be true.
 
     A scenario with no recorded baseline is the deliberate exception: it is named in the
     report, on the console and in the archive, and it removes the affirmative clearance, but
@@ -955,7 +1044,7 @@ def check(
         # every console string through this path; `report/render_cli` already escapes them.
         detail = ", ".join(f"{_rich_escape(sid)}={k}" for sid, k in sorted(uneven.items()))
         console.print(
-            f"[yellow]warning:[/] the baseline for '{from_model}' holds different numbers of "
+            f"[yellow]warning:[/] the baseline for '{_rich_escape(from_model)}' holds different numbers of "
             f"recorded runs per scenario ({detail}), so statistical power differs between "
             f"them and some may be unable to report a regression at all. Re-record with "
             f"`modelpin baseline --runs {RECOMMENDED_RUNS}` for uniform coverage."
@@ -972,7 +1061,7 @@ def check(
     ref_runs = sum(len(t) for t in (base.get(s.id) or [] for s in scenarios))
     plan = _replay_plan(billable, src_dir, n, prov, cfg.judge_model, ref_runs=ref_runs)
     console.print(
-        f"[dim]provider={prov} from={from_model} to={to} runs={n} match={mode} | {plan}[/]"
+        f"[dim]provider={prov} from={_rich_escape(from_model)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
     )
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to)
@@ -1233,7 +1322,9 @@ def report(
     # suite. The JUDGE axis is not -- `check` reads its reference side off disk, so its judge
     # figure tracks the stored baseline's depth (ADR-0026). User's own key (ADR-0008).
     plan = _replay_plan(len(scenarios), suite_dir, n, prov, cfg.judge_model, sides=2)
-    console.print(f"[dim]provider={prov} from={from_} to={to} runs={n} match={mode} | {plan}[/]")
+    console.print(
+        f"[dim]provider={prov} from={_rich_escape(from_)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
+    )
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to)
 

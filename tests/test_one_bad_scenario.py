@@ -24,6 +24,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
+from modelpin.cli import EXIT_SETUP_FAILED
 from typer.testing import CliRunner
 
 import modelpin.cli as cli
@@ -165,7 +167,7 @@ def test_an_unimplemented_adapter_is_still_a_hard_failure(tmp_path, monkeypatch)
 
     monkeypatch.setattr(cli, "replay", fake_replay)
     r = runner.invoke(cli.app, ["check", "--to", DEMO_TO, "--from", DEMO_FROM, *_common(store)])
-    assert r.exit_code == 1
+    assert r.exit_code == EXIT_SETUP_FAILED
     assert "isn't implemented yet" in r.output
 
 
