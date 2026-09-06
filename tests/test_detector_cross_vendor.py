@@ -214,3 +214,55 @@ def test_the_skip_is_bound_to_the_store_name_not_typed(tmp_path) -> None:
     from modelpin.storage import STORE_DIRNAME
 
     assert STORE_DIRNAME in SKIP_DIRS
+
+
+# --- MP-201: a model id inside a URL is a link, not a dependency --------------------------
+
+
+def test_a_model_id_inside_a_url_is_not_a_dependency(tmp_path) -> None:
+    """`[M] 2026-09-07`, found by scanning a REAL repo (`faceanchor`) rather than a fixture.
+
+    All **28** of its hits were fabricated, and all 28 came from URLs inside scraped SerpAPI
+    evidence JSON -- a percent-encoded Thai news slug, an article headline slug, and base64
+    PNG data in a filename. Zero of them were models; the repo does not call an LLM at all.
+    """
+    (tmp_path / "evidence.json").write_text(
+        '{"link": "https://example.com/news/gpt-6-astra-its-latest-ai-model-launched"}\n',
+        encoding="utf-8",
+    )
+    assert models_used(tmp_path) == set()
+
+
+def test_base64_data_in_a_url_is_not_a_model(tmp_path) -> None:
+    """`o4-AuaAAAAAElFTkSuQmCC.png` -- MP-135's class (`o3XPaKcS`) through a different door.
+
+    Narrowing the o-series digits cannot help here: `o4` IS a real model and `-Aua...` is a
+    legal suffix shape. Only the surrounding context separates them.
+    """
+    (tmp_path / "raw.json").write_text(
+        '{"thumb": "https://serpapi.com/images/o4-AuaAAAAAElFTkSuQmCC.png"}\n', encoding="utf-8"
+    )
+    assert models_used(tmp_path) == set()
+
+
+def test_an_asset_filename_is_not_a_model(tmp_path) -> None:
+    (tmp_path / "app.py").write_text('ICON = "gpt-4o-mini.png"\n', encoding="utf-8")
+    assert models_used(tmp_path) == set()
+
+
+def test_a_real_id_on_a_line_that_also_holds_a_url_still_counts(tmp_path) -> None:
+    """Control, and the one that would catch an over-broad guard: dropping the whole LINE
+    rather than the matches inside the URL would lose real ids from ordinary config files."""
+    (tmp_path / "app.py").write_text(
+        'MODEL = "gpt-4o-mini"  # docs: https://example.com/models/gpt-9-imaginary\n',
+        encoding="utf-8",
+    )
+    assert models_used(tmp_path) == {"gpt-4o-mini"}
+
+
+def test_a_bare_id_next_to_a_url_on_another_line_still_counts(tmp_path) -> None:
+    (tmp_path / "app.py").write_text(
+        'DOCS = "https://example.com/gpt-9-imaginary"\nMODEL = "claude-sonnet-4-6"\n',
+        encoding="utf-8",
+    )
+    assert models_used(tmp_path) == {"claude-sonnet-4-6"}

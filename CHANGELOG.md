@@ -38,6 +38,11 @@ key first.
   pattern enumerates DeepSeek's real families to exclude it.
 
 ### Fixed
+- **`mp scan` no longer invents model ids out of URLs and asset filenames.** `[M]` On a real
+  repo that does not call an LLM at all, **28 of 28 hits were fabricated** — a percent-encoded
+  news slug, an article headline, and base64 PNG data — all from URLs inside scraped JSON. The
+  correct answer was zero. Measured across four real repos before shipping: those 28 dropped to
+  0 with **zero true positives lost** elsewhere.
 - **`mp scan` no longer reports Modelpin's own `.modelpin/` store as your dependencies.** `[M]`
   On a real repo it was **61 of 76 hits — 80% of the table** — the recorded traces of a previous
   run, in the directory the Action docs tell you to commit.

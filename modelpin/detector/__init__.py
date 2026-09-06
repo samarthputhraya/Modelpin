@@ -65,6 +65,28 @@ MODEL_PATTERNS = [
     re.compile(r"(?i)\bdeepseek-(?:r[0-9]|v[0-9]|chat|coder|reasoner)[\w.\-]*\b"),
 ]
 
+#: A URL anywhere on the line. MP-201: a model id INSIDE a URL is a link, not a dependency.
+#:
+#: `[M] 2026-09-07`, found by scanning a real repo (`faceanchor`) rather than a fixture. All
+#: **28** of its hits were fabricated, and all 28 came from URLs in scraped SerpAPI evidence:
+#:
+#:     gpt-56-sol                                          <- a percent-encoded Thai news slug
+#:     gpt-6-astra-its-latest-ai-modelthe-model-is-launch  <- an article headline slug
+#:     o4-AuaAAAAAElFTkSuQmCC.png                          <- base64 PNG data in a filename
+#:
+#: The third is MP-135's exact class (`o3XPaKcS`, a random cache token) arriving through a
+#: different door: narrowing the o-series digits could not help, because `o4` is a real model
+#: and `-Aua...` is a legal suffix. Only the CONTEXT distinguishes them.
+#:
+#: `[M]` Measured before shipping, over four real repos: faceanchor 28 hits -> 0, and
+#: **zero true positives lost** in VoiceRAG (31), kavach (16) or aegis (2), which kept 100%.
+#: Re-measured over the 6,228 `site-packages` files: no change.
+_URL_ON_LINE = re.compile(r"(?:https?://|www\.)\S+", re.I)
+
+#: A match that ends in an asset extension is a filename, not a model id.
+_ASSET_SUFFIX = re.compile(r"\.(?:png|jpe?g|gif|svg|webp|ico|bmp|mp4|pdf|css|html?)$", re.I)
+
+
 DEFAULT_EXTS = {".py", ".env", ".yaml", ".yml", ".json", ".toml", ".js", ".ts"}
 #: Directory names never worth scanning, matched at or below the scan root. `.venv`/`venv`
 #: stay for the case a virtualenv has no `pyvenv.cfg` (a stale or hand-made one), but they
@@ -176,9 +198,19 @@ def _models_in(line: str) -> list[str]:
     longest match wins because a vendor-qualified id is the one the user can actually pass to
     `--to`; the bare tail is an artifact of our patterns, not something they wrote.
     """
+    urls = [(u.start(), u.end()) for u in _URL_ON_LINE.finditer(line)]
     spans: list[tuple[int, int, str]] = []
     for pat in MODEL_PATTERNS:
         for m in pat.finditer(line):
+            # MP-201. A model id inside a URL is a link, not a dependency, and an asset
+            # filename is not a model. Both are FABRICATIONS -- the north-star failure in the
+            # first command a stranger runs -- and neither can be excluded by narrowing the
+            # patterns, because `o4-...` and `gpt-6-...` are legal shapes for a real id. Only
+            # the surrounding context separates them.
+            if any(us <= m.start() and m.end() <= ue for us, ue in urls):
+                continue
+            if _ASSET_SUFFIX.search(m.group(0)):
+                continue
             spans.append((m.start(), m.end(), m.group(0)))
     out: list[str] = []
     seen: set[str] = set()
