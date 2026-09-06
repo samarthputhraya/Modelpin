@@ -64,6 +64,13 @@ key first.
   content change". It fires when a scenario omits `tools` while its recorded traces carry them.
   The scenario is still not credited with coverage — that conservatism is deliberate and
   unchanged — but the disclosure now says what actually happened.
+- **Provider error text is no longer silently truncated.** `[M]` It was cut at 300 characters
+  and closed with punctuation, so the result read as a complete sentence while the remedy —
+  which providers put at the *end* — was gone, with nothing saying anything had been removed.
+  Both ends now survive, with a visible `[... N chars elided ...]` marker between them.
+- **An unwritable baseline store now gives an error, not a traceback and a stray `.tmp`.**
+  `[M]` `save_baseline`'s atomic write had no failure path: the `OSError` escaped uncaught and
+  the half-written temp file was left in the directory the docs tell you to commit.
 - **A model id containing markup or a `|` no longer corrupts output.** `[M]` `--to 'm2[/]'`
   raised `MarkupError`; `--to 'm2|evil'` added a cell to the published Report's settings
   table and broke the row.

@@ -22,7 +22,7 @@ import time
 from typing import Any
 
 from modelpin.models import IncompleteReason, Scenario, ToolCall, Trace
-from modelpin.providers._common import looks_like_refusal, scrub_secrets
+from modelpin.providers._common import elide, looks_like_refusal, scrub_secrets
 from modelpin.providers.base import ProviderAdapter, ProviderError
 
 MAX_TOOL_TURNS = 6
@@ -165,7 +165,7 @@ def _explain_api_error(
         return f"{base}: model not found — check the id [{name} 404]."
     if code == 429:
         return f"{base}: rate limit or quota exceeded [{name} 429]."
-    detail = scrub_secrets(str(getattr(exc, "message", None) or exc))[:300]
+    detail = elide(scrub_secrets(str(getattr(exc, "message", None) or exc)))
     suffix = f" {code}" if code else ""
     return f"{base} [{name}{suffix}: {detail}]."
 

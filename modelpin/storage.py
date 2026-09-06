@@ -48,8 +48,27 @@ def save_baseline(
         },
     }
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    # MP-197. The atomic write needs a failure path of its own. An `OSError` here -- a
+    # read-only store, a full disk, a permission change between `mkdir` and `replace` --
+    # used to escape as an unhandled traceback AND leave the half-written `.tmp` behind, so
+    # the next run met a stray file the user had no reason to expect and no message
+    # explaining it. `[M] 2026-09-06` reproduced against an unwritable baseline path.
+    #
+    # The cleanup is best-effort and deliberately swallows its own error: if the store is
+    # unwritable, deleting from it may fail too, and a cleanup failure must not replace the
+    # real diagnosis with a less useful one.
+    try:
+        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as exc:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise BaselineError(
+            f"could not write the baseline to {path}: {exc}. "
+            "Check the directory exists and is writable, then re-run `modelpin baseline`."
+        ) from exc
     return path
 
 

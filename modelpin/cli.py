@@ -936,7 +936,13 @@ def baseline(
     traces = _guard_replay(
         prov, lambda: {s.id: replay(s, from_model, adapter, runs=n) for s in scenarios}
     )
-    path = save_baseline(traces, from_model, store_dir)
+    # MP-197. A store that cannot be written is a setup failure, not a traceback. `_fail`
+    # gives it the friendly message and EXIT_SETUP_FAILED (ADR-0035), which is right: nothing
+    # was measured, so nothing is claimed.
+    try:
+        path = save_baseline(traces, from_model, store_dir)
+    except BaselineError as exc:
+        _fail(str(exc))
     console.print(
         f"[green]Baseline recorded[/] for [bold]{_rich_escape(from_model)}[/]: "
         f"{len(scenarios)} scenario(s) x{n} runs -> {path}"
