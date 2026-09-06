@@ -26,6 +26,17 @@ key first.
   natural slip on this file — loaded as the *default* provider, `openai`, at 5 runs. A config
   written to get a free offline check billed your own key for five paid replays per scenario.
 
+### Packaging
+- **Version bumped to `0.3.0`.** `[M]` `pyproject.toml` still read `0.2.1` — a version already
+  tagged and published — while this release carries a breaking exit-code change. Nothing in the
+  suite compared the two, so the gate stayed green while the repo was un-releasable. A test now
+  fails if the declared version matches an existing tag.
+- **The sdist ships `actions/`.** `[M]` An sdist installed exactly as `CONTRIBUTING.md`
+  instructs failed 3 of its own tests, from two missing directories. `actions/` — the Action's
+  published output-contract docs — is now grafted. `.github/` deliberately stays out (it is a
+  hidden path, which the sdist invariant forbids); the two repo-hygiene tests that read it now
+  skip outside a checkout.
+
 ### Added
 - **`mp scan` now sees Llama, Qwen, Mistral, DeepSeek and `gpt-oss` ids, and reads `.env.example`.**
   `[M]` It was OpenAI/Anthropic/Google-shaped: a repo naming `llama-3.3-70b-versatile`,
@@ -79,6 +90,11 @@ key first.
 - **An unwritable baseline store now gives an error, not a traceback and a stray `.tmp`.**
   `[M]` `save_baseline`'s atomic write had no failure path: the `OSError` escaped uncaught and
   the half-written temp file was left in the directory the docs tell you to commit.
+- **The PR comment no longer says "could not measure" on a run that exits 0.** `[M]` `check
+  --help` binds that phrase to exit **3**, so a PR could get a green check beside a comment
+  whose headline described a different exit code. The refusal to give an affirmative green
+  header is unchanged and correct; the headline now says the narrower true thing — *only a
+  refusal could have failed this run* — matching the wording the published Report already used.
 - **A model id containing markup or a `|` no longer corrupts output.** `[M]` `--to 'm2[/]'`
   raised `MarkupError`; `--to 'm2|evil'` added a cell to the published Report's settings
   table and broke the row.

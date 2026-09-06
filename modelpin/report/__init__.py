@@ -485,17 +485,31 @@ def render_pr_comment(
         header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
     elif minors:
         header = f"⚠️ **Modelpin: minor changes — `{from_model}` → `{to_model}`**"
-    elif (underpowered and len(underpowered) >= len(results)) or (
-        census is not None and not census.hard_content_channels
-    ):
+    elif underpowered and len(underpowered) >= len(results):
         # (`rejected` is handled in the `partially measured` branch below: a run that
         # measured SOMETHING and lost a scenario is partial, not blind.)
         # A green check over a run that could not have gone red is the worst header we ship.
-        # MP-138 adds the second way to get there: every CI-failing channel that reads the
-        # model's CONTENT was inert, so no answer -- however wrong -- could have gone red.
-        # MP-116 fixed this exact contradiction for blind runs; shipping it again for inert
-        # channels would be the same defect with a new cause.
+        # MP-116 fixed this exact contradiction for blind runs.
         header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
+    elif census is not None and not census.hard_content_channels:
+        # MP-138's way of getting there: every CI-failing channel that reads the model's
+        # CONTENT was inert, so no answer -- however wrong -- could have gone red. The
+        # refusal to give a green check is unchanged and correct.
+        #
+        # MP-202: the WORDING is what changed. This branch used to reuse "could not measure",
+        # and `check --help` binds that exact phrase to EXIT 3 -- while this run exits **0**,
+        # because the scenarios were compared and nothing regressed. `[M] 2026-09-06` a PR
+        # therefore got a green check next to a comment headed "could not measure", and a
+        # reader who knows the documented contract cannot reconcile the two.
+        #
+        # The published Report has said the narrower, true thing here since MP-140 --
+        # "Incomplete: only a refusal would have registered as a regression" -- and that
+        # wording already survived a claims review that REJECTED a broader first draft. The
+        # PR comment now matches it, so the two surfaces stop describing one run two ways.
+        header = (
+            f"❔ **Modelpin: only a refusal could have failed this run — "
+            f"`{from_model}` → `{to_model}`**"
+        )
     elif underpowered or rejected or skipped:
         # MP-160 joins `skipped` for the same reason MP-148 joined `rejected`: a scenario
         # that was never compared makes the suite partial, whatever the compared ones said.

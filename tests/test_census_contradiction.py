@@ -119,3 +119,58 @@ def test_a_suite_with_no_tools_anywhere_still_reads_as_inert() -> None:
     """The other MP-159 branch: nobody asked for the channel."""
     census = _census(blind_scenarios=("s",))
     assert any("no scenario declares `tools`" in e for e in census.inert), census.inert
+
+
+# --- MP-202: the PR comment must not reuse exit 3's phrase on an exit 0 run ---------------
+
+
+def test_the_pr_comment_does_not_say_could_not_measure_on_a_run_that_exits_zero() -> None:
+    """`[M] 2026-09-06`, reproduced end to end offline.
+
+    A one-scenario suite with no tools, no assertions and no judge, on byte-identical traces:
+    the process exits **0** while `.modelpin/last-report.md` is headed
+    `❔ **Modelpin: could not measure**`. `check --help` binds that exact phrase to **exit 3**
+    ("the run could not answer"), so a PR gets a green check next to a comment whose headline
+    describes a different exit code.
+
+    The refusal to give an affirmative green header is correct and unchanged -- a run where
+    only a refusal could have failed the build must not read as a clearance. What changed is
+    that the sentence now says the narrower thing that is true, matching the wording the
+    PUBLISHED Report has used since MP-140 and which already survived a claims review.
+    """
+    from modelpin.models import DiffResult, DiffVerdict
+    from modelpin.report import render_pr_comment
+
+    # A scenario that WAS compared and came back unchanged -- so the run exits 0. Without a
+    # result the empty-suite branch fires instead, which is a different (and correct) case.
+    compared = DiffResult(
+        scenario_id="s",
+        from_model="m1",
+        to_model="m2",
+        verdict=DiffVerdict.unchanged,
+        confidence=0.9,
+        explanation="",
+    )
+    md = render_pr_comment([compared], "m1", "m2", 5, "fake", census=_census(compared=1))
+    headline = md.splitlines()[0]
+    assert "could not measure" not in headline, headline
+    assert "refusal" in headline, headline
+    assert "no behavioral change" not in headline, headline
+
+
+def test_the_genuine_abstain_case_still_says_could_not_measure() -> None:
+    """Control. The phrase must keep its meaning where it IS the right one -- a run whose
+    scenarios were all compared at a power that could not reach ALPHA."""
+    from modelpin.models import DiffResult, DiffVerdict
+    from modelpin.report import render_pr_comment
+
+    r = DiffResult(
+        scenario_id="s",
+        from_model="m1",
+        to_model="m2",
+        verdict=DiffVerdict.unchanged,
+        confidence=0.5,
+        explanation="",
+    )
+    md = render_pr_comment([r], "m1", "m2", 2, "fake", underpowered=["s"])
+    assert "could not measure" in md.splitlines()[0], md.splitlines()[0]

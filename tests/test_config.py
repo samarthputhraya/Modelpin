@@ -50,6 +50,12 @@ def test_the_default_runs_can_actually_reach_significance():
 
 
 def test_no_shipped_file_hardcodes_a_runs_value_that_disagrees():
+    # `.github/` is deliberately absent from the sdist (it is a dot-directory and
+    # `test_sdist_excludes_private_directories` forbids those). This is a REPO-HYGIENE
+    # check, meaningless in an installed distribution, so it skips there rather than
+    # failing. `[M] 2026-09-07`: it was one of 3 tests failing inside an unpacked sdist.
+    if not (Path(__file__).resolve().parents[1] / ".github").is_dir():
+        pytest.skip(".github/ not present (unpacked sdist); repo-hygiene check only")
     """MP-03 was one number living in FIVE places and drifting apart.
 
     Python sites interpolate `DEFAULT_RUNS`; the YAML files cannot, so they are pinned
