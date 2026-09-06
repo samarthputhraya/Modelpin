@@ -733,6 +733,12 @@ def _channel_census(
         declared_unused_tools=tuple(
             s.id for s in scenarios if s.input.get("tools") and s.id not in tool_active
         ),
+        # MP-194. The mirror: runs that CALLED a tool the scenario never declared. Read only
+        # by the disclosure wording, and only to stop it saying "called no tool" about a
+        # scenario whose traces show a call -- the clearance itself is unchanged.
+        undeclared_tool_calls=tuple(
+            s.id for s in scenarios if not s.input.get("tools") and s.id in tool_active
+        ),
         # MP-141. Read the fields the ENGINE reads, not the presence of an `Assertion`
         # object. `[M]` `diff/__init__.py` consults only `must_contain` / `must_not_contain`
         # (`structural.py::violates_text_assertions`). MP-147 deleted the two fields that

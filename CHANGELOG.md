@@ -52,6 +52,13 @@ key first.
   and exited `1` — again publishing "detected a behavioral regression", over byte-identical
   traces, while the report written moments earlier said `**UNCHANGED (1)**`. Unencodable
   characters are now escaped for display only; the artifact keeps its real bytes.
+- **The coverage disclosure no longer contradicts the verdict printed above it.** `[M]` In a
+  run whose only finding was a tool-call regression, the footer stated three things that were
+  all false of it: that the tool-trajectory channel was inert, that the scenario "called no
+  tool" (its baseline called one in 5 of 5 runs), and that "no CI-failing channel could see a
+  content change". It fires when a scenario omits `tools` while its recorded traces carry them.
+  The scenario is still not credited with coverage — that conservatism is deliberate and
+  unchanged — but the disclosure now says what actually happened.
 - **A model id containing markup or a `|` no longer corrupts output.** `[M]` `--to 'm2[/]'`
   raised `MarkupError`; `--to 'm2|evil'` added a cell to the published Report's settings
   table and broke the row.
