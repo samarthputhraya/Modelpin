@@ -9,7 +9,7 @@ that stream is cp1252, and a scenario or model id outside Latin-1 raises `Unicod
 "at least one real regression (the CI gate)", while `action.yml` turns any non-zero, non-3
 code into `::error::Modelpin detected a behavioral regression`. So a display failure posts a
 false regression claim on someone's PR, over a migration that did not regress. `[M] 2026-09-06`
-reproduced end to end by bug-reproducer on `2ef82d5`, over byte-identical traces.
+reproduced end to end on `2ef82d5`, over byte-identical traces.
 
 `[M]` PR #73 did not cause this -- it UNCOVERED it. Before `utf-8-sig`, the same fixtures file
 died earlier, at *read*. MP-190 fixed text going INTO the engine; nothing fixed text coming
@@ -38,7 +38,8 @@ from pathlib import Path
 import pytest
 
 import modelpin.cli as cli
-from modelpin.report import render_pr_comment
+from modelpin.diff import ALPHA, MIN_REFUSAL_DELTA, MIN_SEMANTIC_DELTA, MIN_TOOL_TVD
+from modelpin.report import ReportMeta, render_report_md
 
 
 #: A scenario id that cp1252 cannot represent at all. Japanese rather than an accented Latin
@@ -118,14 +119,52 @@ def test_a_model_id_containing_markup_does_not_raise(monkeypatch) -> None:
     assert "m2[/]" in stream.buffer.getvalue().decode("utf-8")  # type: ignore[attr-defined]
 
 
-def test_a_pipe_in_a_model_id_does_not_break_the_markdown_table() -> None:
-    """The published Report's settings table is an ADR-0009 surface; a raw `|` splits a row."""
-    md = render_pr_comment([], "m1|evil", "m2|evil", 5, "fake")
-    for line in md.splitlines():
-        if line.startswith("|") and "evil" in line:
-            assert line.count("|") - line.count("\\|") <= 8, (
-                "A model id containing `|` added cells to a Markdown table row: " + line
-            )
+def _settings_rows(md: str) -> list[str]:
+    """The `| Setting | Value |` rows of a rendered Report."""
+    return [ln for ln in md.splitlines() if ln.startswith("| ") and ln.count("|") >= 3]
+
+
+def test_a_pipe_in_a_model_id_does_not_break_the_report_settings_table() -> None:
+    """The published Report's settings table is an ADR-0009 surface; a raw `|` splits a row.
+
+    `[M] 2026-09-06` with `--to 'm2|evil'` the two model rows carried FOUR pipes where every
+    other settings row carried three -- the row gains a cell and the table breaks for every
+    reader of the published Report.
+
+    Asserted against `render_report_md`, not `render_pr_comment`: an earlier version of this
+    test used the PR comment, which renders no settings table at all, so its assertion sat
+    inside a `for` that never ran. A guard that cannot fail is worse than no guard.
+    """
+    meta = ReportMeta(
+        suite_id="s",
+        suite_version="1",
+        suite_hash="h",
+        suite_path="p",
+        candidate_model="m2|evil",
+        reference_model="m1|evil",
+        provider="fake",
+        runs=5,
+        judge_model="disabled",
+        match_mode="strict",
+        modelpin_version="0.2.1",
+        diff_thresholds={
+            "alpha": ALPHA,
+            "min_tool_tvd": MIN_TOOL_TVD,
+            "min_refusal_delta": MIN_REFUSAL_DELTA,
+            "min_semantic_delta": MIN_SEMANTIC_DELTA,
+        },
+        date_iso="2026-09-06",
+        reproduce_cmd="x",
+        scenario_ids=["a"],
+    )
+    rows = _settings_rows(render_report_md([], meta))
+    evil = [r for r in rows if "evil" in r]
+    assert evil, "the settings table no longer names the models; this guard measures nothing"
+    for row in evil:
+        assert row.count("|") - row.count("\\|") == 3, (
+            "A model id containing `|` added a cell to the published Report's settings "
+            "table: " + row
+        )
 
 
 # --------------------------------------------------------------------------- end to end
