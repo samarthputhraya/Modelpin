@@ -179,3 +179,38 @@ def test_scan_reports_a_line_number_that_points_at_the_id(tmp_path) -> None:
     (tmp_path / "app.py").write_text('a = 1\nb = 2\nM = "qwen/qwen3-32b"\n', encoding="utf-8")
     hits = [h for h in scan_repo(tmp_path) if h["model"] == "qwen/qwen3-32b"]
     assert hits and hits[0]["line"] == 3, hits
+
+
+# --- MP-200: our own output is not the user's dependency ---------------------------------
+
+
+def test_modelpins_own_store_is_not_scanned(tmp_path) -> None:
+    """`[M] 2026-09-06`, found by scanning a REAL repo rather than a fixture.
+
+    On `kavach`, `scan` returned **76 hits, 61 of them (80%) from `.modelpin/baseline-*.json`**
+    -- the recorded traces of a previous Modelpin run. `actions/README.md` tells users to
+    `git add` that directory, so it is present in exactly the repos this command is aimed at,
+    and the table a user reads was four-fifths our own artifacts.
+
+    This is MP-134/MP-135's class one directory over: *"scan reported 23 distinct models and
+    only 2 were the user's own code"*. Reporting our own output back as their dependencies is
+    the same defect wearing our own name.
+    """
+    from modelpin.storage import STORE_DIRNAME
+
+    store = tmp_path / STORE_DIRNAME
+    store.mkdir()
+    (store / "baseline-openai_gpt-oss-120b.json").write_text(
+        '{"model_id": "openai/gpt-oss-120b", "scenarios": {}}', encoding="utf-8"
+    )
+    (tmp_path / "app.py").write_text('MINE = "gpt-4o-mini"\n', encoding="utf-8")
+
+    assert models_used(tmp_path) == {"gpt-4o-mini"}
+
+
+def test_the_skip_is_bound_to_the_store_name_not_typed(tmp_path) -> None:
+    """Renaming the store must not silently re-open this."""
+    from modelpin.detector import SKIP_DIRS
+    from modelpin.storage import STORE_DIRNAME
+
+    assert STORE_DIRNAME in SKIP_DIRS

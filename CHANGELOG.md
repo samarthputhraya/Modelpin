@@ -38,6 +38,9 @@ key first.
   pattern enumerates DeepSeek's real families to exclude it.
 
 ### Fixed
+- **`mp scan` no longer reports Modelpin's own `.modelpin/` store as your dependencies.** `[M]`
+  On a real repo it was **61 of 76 hits — 80% of the table** — the recorded traces of a previous
+  run, in the directory the Action docs tell you to commit.
 - **Scenarios in a subdirectory were silently skipped.** `[M]` `scenarios/auth/nested.json`
   holding a real refusal regression produced `OK 1 scenario(s) unchanged`, exit 0 — a green
   tick over a regression, caused by nothing but putting scenarios in folders. Directories

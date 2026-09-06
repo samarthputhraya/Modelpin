@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Iterable
 
+from modelpin.storage import STORE_DIRNAME
+
 #: The o-series numbers that actually exist. `[M] 2026-08-29` the pattern was `o[0-9]`,
 #: which matched **`o2`** at `rich/_emoji_codes.py:3381`, whose content is `"o2": "\U0001f17e"`
 #: -- an emoji shortcode, and `o2` is not an OpenAI model at all. Enumerating the real
@@ -67,7 +69,27 @@ DEFAULT_EXTS = {".py", ".env", ".yaml", ".yml", ".json", ".toml", ".js", ".ts"}
 #: Directory names never worth scanning, matched at or below the scan root. `.venv`/`venv`
 #: stay for the case a virtualenv has no `pyvenv.cfg` (a stale or hand-made one), but they
 #: are no longer what CARRIES the venv rule -- see `_is_virtualenv`.
-SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "dist", "build"}
+SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    "dist",
+    "build",
+    # MP-200. Modelpin's OWN store. `[M] 2026-09-06`, found by scanning a real repo
+    # (`kavach`): **61 of 76 hits -- 80% of the table -- came from `.modelpin/baseline-*.json`**,
+    # the recorded traces of a previous run. `actions/README.md` tells users to `git add` that
+    # directory, so it is present in exactly the repos this command is aimed at.
+    #
+    # This is MP-134/MP-135's class one directory over: "scan reported 23 distinct models and
+    # only 2 were the user's own code". Reporting our own artifacts back to the user as their
+    # dependencies is the same defect wearing our own output.
+    #
+    # Bound to `STORE_DIRNAME` rather than typed, so renaming the store cannot silently
+    # re-open this.
+    STORE_DIRNAME,
+}
 #: Skipped wherever it appears. A dependency's source is not the user's model choice, and
 #: `[M] 2026-08-29` on a real app it was most of the answer: `modelpin scan` reported 23
 #: distinct "models" and only 2 were the user's own code -- the rest were Modelpin's own
