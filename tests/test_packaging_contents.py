@@ -412,3 +412,66 @@ def test_the_shipped_test_suite_can_actually_be_collected(unpacked_sdist: Path) 
             f"who runs `pip download --no-binary :all: modelpin` and unpacks it gets this:\n"
             f"{tail}"
         )
+
+
+def test_the_version_is_not_one_that_was_already_published() -> None:
+    """`pyproject.toml`'s version must not equal a tag that already exists.
+
+    `[M] 2026-09-07`, found by a packaging audit. This branch carried a documented BREAKING
+    change (exit code 4, ADR-0035) while `pyproject.toml` still said `0.2.1` -- the version
+    already tagged `v0.2.1` and published to PyPI. A `python -m build && twine upload` would
+    have been rejected by PyPI, or worse, shipped a breaking change under a version number
+    semver had already spent on a non-breaking release.
+
+    Nothing in the suite compared the two, so the whole gate stayed green while the repo was
+    un-releasable. It is the cheapest possible check and it belongs beside the other
+    packaging invariants.
+    """
+    import subprocess
+    import tomllib
+
+    repo = Path(__file__).resolve().parents[1]
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "tag"], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError) as exc:  # pragma: no cover - env-specific
+        pytest.skip(f"git unavailable: {exc}")
+    if proc.returncode != 0:  # pragma: no cover - unpacked sdist has no git
+        pytest.skip("not a git checkout")
+
+    tags = {t.strip().lstrip("v") for t in proc.stdout.splitlines() if t.strip()}
+    version = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "version"
+    ]
+    assert version not in tags, (
+        f"pyproject.toml says {version!r}, but tag v{version} already exists -- that version "
+        "is published. Bump it before building, or PyPI will reject the upload and any "
+        "breaking change in it will have been filed under a spent version number."
+    )
+
+
+def test_the_sdist_ships_the_actions_docs_its_own_tests_read() -> None:
+    """`[M] 2026-09-07` `MANIFEST.in` grafted `examples`, `docs`, `tests` and `scripts` but
+    neither `.github/` nor `actions/`, so an sdist installed exactly as `CONTRIBUTING.md`
+    instructs failed 3 of its own tests. `action.yml` was `include`d; the `actions/` directory
+    holding the Action's published docs was not.
+
+    Asserted against `MANIFEST.in` rather than by building, because building is slow and this
+    is the declaration that was wrong. `test_sdist_is_a_runnable_checkout` (which really does
+    unpack and collect) remains the end-to-end guard.
+    """
+    manifest = (Path(__file__).resolve().parents[1] / "MANIFEST.in").read_text(encoding="utf-8")
+    assert "graft actions" in manifest, (
+        "MANIFEST.in does not graft actions/, so the sdist omits the Action's published "
+        "documentation and the bundled test suite fails on a state the repo's own checkout "
+        "can never reproduce."
+    )
+    # `.github/` is deliberately NOT grafted, and this asserts the decision rather than
+    # leaving it to be re-litigated: it is a dot-directory, and
+    # `test_sdist_excludes_private_directories` forbids every hidden path from a published
+    # distribution. The two tests that read it skip when it is absent instead.
+    assert "graft .github" not in manifest, (
+        "MANIFEST.in grafts .github/, which `test_sdist_excludes_private_directories` "
+        "forbids -- every hidden path is treated as a leak into a published artifact."
+    )

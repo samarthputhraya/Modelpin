@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Iterable
 
+from modelpin.storage import STORE_DIRNAME
+
 #: The o-series numbers that actually exist. `[M] 2026-08-29` the pattern was `o[0-9]`,
 #: which matched **`o2`** at `rich/_emoji_codes.py:3381`, whose content is `"o2": "\U0001f17e"`
 #: -- an emoji shortcode, and `o2` is not an OpenAI model at all. Enumerating the real
@@ -25,13 +27,91 @@ MODEL_PATTERNS = [
     re.compile(rf"\bo[{_O_SERIES_DIGITS}](?:-[\w.\-]*)?\b"),
     re.compile(r"\bclaude-[\w.\-]+\b"),
     re.compile(r"\bgemini-[\w.\-]+\b"),
+    # ---------------------------------------------------------------- MP-195, cross-vendor
+    # `[M] 2026-09-06` Until these existed, `mp scan` was OpenAI/Anthropic/Google-shaped, and
+    # cross-vendor is wedge item 3. A directory whose `app.py` named `llama-3.3-70b-versatile`,
+    # `qwen/qwen3-32b` and `openai/gpt-oss-20b` scanned to `No model identifiers found.`,
+    # exit 0 -- and appending a single line `M = "gpt-4o-mini"` to THAT SAME FILE produced a
+    # populated table. The same file was visible or invisible depending only on whose ids it
+    # held. `scan` is the first command of README's "real flow, on your own app", so a Groq or
+    # Together shop met a confident empty result rather than a hint that we did not cover them.
+    # These are also the exact ids README itself advertises (`llama-3.3-70b-versatile` at the
+    # cross-vendor table, `qwen/qwen3.8-27b` in a copy-pasteable example).
+    #
+    # `[M]` Measured over the same 6,228 third-party files under `site-packages` that MP-135
+    # used, so the false-positive claim is comparable to the one that narrowed the o-series:
+    #
+    #     llama      5 matches / 2 distinct  -> llama-3.1-8b-instruct,
+    #                                           llama-3.2-90b-vision-instruct-maas
+    #     meta-llama 0                       qwen/     1 -> qwen/qwen3
+    #     qwen<n>    2 -> qwen3, qwen3-4b    gpt-oss   0        mistral 0
+    #     deepseek   6 / 3 distinct          -> INCLUDED `deepseek-ai`, a FALSE POSITIVE:
+    #                                           it is the HuggingFace ORG, not a model.
+    #
+    # So `deepseek-` enumerates its real families instead of taking any suffix -- the same
+    # shape as `_O_SERIES_DIGITS` above, and for the same reason. Re-measured after narrowing:
+    # 3 matches / 2 distinct, both real, `deepseek-ai` gone, nothing else lost.
+    #
+    # `[M]` Case-insensitivity was measured, not assumed: `(?i)` on llama/qwen/mistral added
+    # **zero** new matches across those 6,228 files, so it is free here -- and it is needed,
+    # because HuggingFace writes `meta-llama/Llama-3.3-70B-Instruct` with a capital L while
+    # Groq writes the same family lowercase.
+    re.compile(r"(?i)\bllama-[0-9][\w.\-]*\b"),
+    re.compile(r"(?i)\bmeta-llama/[\w.\-]+\b"),
+    re.compile(r"(?i)\bqwen/[\w.\-]+\b"),
+    re.compile(r"(?i)\bqwen[0-9][\w.\-]*\b"),
+    re.compile(r"(?i)\b(?:openai/)?gpt-oss-[\w.\-]+\b"),
+    re.compile(r"(?i)\bmi[sx]tral-[\w.\-]+\b"),
+    re.compile(r"(?i)\bdeepseek-(?:r[0-9]|v[0-9]|chat|coder|reasoner)[\w.\-]*\b"),
 ]
+
+#: A URL anywhere on the line. MP-201: a model id INSIDE a URL is a link, not a dependency.
+#:
+#: `[M] 2026-09-07`, found by scanning a real repo (`faceanchor`) rather than a fixture. All
+#: **28** of its hits were fabricated, and all 28 came from URLs in scraped SerpAPI evidence:
+#:
+#:     gpt-56-sol                                          <- a percent-encoded Thai news slug
+#:     gpt-6-astra-its-latest-ai-modelthe-model-is-launch  <- an article headline slug
+#:     o4-AuaAAAAAElFTkSuQmCC.png                          <- base64 PNG data in a filename
+#:
+#: The third is MP-135's exact class (`o3XPaKcS`, a random cache token) arriving through a
+#: different door: narrowing the o-series digits could not help, because `o4` is a real model
+#: and `-Aua...` is a legal suffix. Only the CONTEXT distinguishes them.
+#:
+#: `[M]` Measured before shipping, over four real repos: faceanchor 28 hits -> 0, and
+#: **zero true positives lost** in VoiceRAG (31), kavach (16) or aegis (2), which kept 100%.
+#: Re-measured over the 6,228 `site-packages` files: no change.
+_URL_ON_LINE = re.compile(r"(?:https?://|www\.)\S+", re.I)
+
+#: A match that ends in an asset extension is a filename, not a model id.
+_ASSET_SUFFIX = re.compile(r"\.(?:png|jpe?g|gif|svg|webp|ico|bmp|mp4|pdf|css|html?)$", re.I)
+
 
 DEFAULT_EXTS = {".py", ".env", ".yaml", ".yml", ".json", ".toml", ".js", ".ts"}
 #: Directory names never worth scanning, matched at or below the scan root. `.venv`/`venv`
 #: stay for the case a virtualenv has no `pyvenv.cfg` (a stale or hand-made one), but they
 #: are no longer what CARRIES the venv rule -- see `_is_virtualenv`.
-SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "dist", "build"}
+SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    "dist",
+    "build",
+    # MP-200. Modelpin's OWN store. `[M] 2026-09-06`, found by scanning a real repo
+    # (`kavach`): **61 of 76 hits -- 80% of the table -- came from `.modelpin/baseline-*.json`**,
+    # the recorded traces of a previous run. `actions/README.md` tells users to `git add` that
+    # directory, so it is present in exactly the repos this command is aimed at.
+    #
+    # This is MP-134/MP-135's class one directory over: "scan reported 23 distinct models and
+    # only 2 were the user's own code". Reporting our own artifacts back to the user as their
+    # dependencies is the same defect wearing our own output.
+    #
+    # Bound to `STORE_DIRNAME` rather than typed, so renaming the store cannot silently
+    # re-open this.
+    STORE_DIRNAME,
+}
 #: Skipped wherever it appears. A dependency's source is not the user's model choice, and
 #: `[M] 2026-08-29` on a real app it was most of the answer: `modelpin scan` reported 23
 #: distinct "models" and only 2 were the user's own code -- the rest were Modelpin's own
@@ -74,7 +154,12 @@ def _iter_files(root: Path, exts: set[str]) -> Iterable[Path]:
         ]
         for name in filenames:
             p = here / name
-            if p.suffix.lower() in exts or p.name == ".env":
+            # MP-195. `.env` was matched by exact name, so `.env.example` -- the file a repo
+            # commits precisely BECAUSE it is the readable record of which model it uses --
+            # was invisible, along with `.env.local`, `.env.sample` and every other variant.
+            # `Path(".env.example").suffix` is `.example`, so the extension test cannot see
+            # them either.
+            if p.suffix.lower() in exts or p.name.startswith(".env"):
                 yield p
 
 
@@ -85,14 +170,59 @@ def scan_repo(root: str | Path = ".", exts: set[str] | None = None) -> list[dict
     hits: list[dict] = []
     for f in _iter_files(root, exts):
         try:
-            text = f.read_text(errors="ignore")
+            # MP-190's class, in the one site its sweep missed: `errors="ignore"` without
+            # `encoding=` matched neither `read_text()` nor `read_text(encoding=` in that
+            # commit's grep, so its claim that the two sites it fixed were "the ONLY two
+            # text-I/O sites in modelpin/ without an explicit encoding" was wrong. Here the
+            # consequence is a silent MISS rather than a wrong verdict: on a cp1252 machine a
+            # UTF-8 source file decodes to mojibake and its model ids stop matching.
+            text = f.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         for i, line in enumerate(text.splitlines(), start=1):
-            for pat in MODEL_PATTERNS:
-                for m in pat.findall(line):
-                    hits.append({"model": m, "file": str(f.relative_to(root)), "line": i})
+            for model in _models_in(line):
+                hits.append({"model": model, "file": str(f.relative_to(root)), "line": i})
     return hits
+
+
+def _models_in(line: str) -> list[str]:
+    """Every model id on one line, with substring matches of a longer id dropped.
+
+    MP-195. The vendor-prefixed patterns overlap the bare ones by construction -- `qwen/` and
+    `qwen<n>` both fire on ``qwen/qwen3-32b`` -- so without this the fix for scan's BLINDNESS
+    would have shipped a new case of scan's NOISE (MP-10): `[M] 2026-09-06` a file naming four
+    models reported five rows, listing `qwen3-32b` beside the `qwen/qwen3-32b` it is part of.
+
+    Containment, not de-duplication by string: two genuinely different ids on one line must
+    both survive, and they do -- only a span strictly inside another span is dropped. The
+    longest match wins because a vendor-qualified id is the one the user can actually pass to
+    `--to`; the bare tail is an artifact of our patterns, not something they wrote.
+    """
+    urls = [(u.start(), u.end()) for u in _URL_ON_LINE.finditer(line)]
+    spans: list[tuple[int, int, str]] = []
+    for pat in MODEL_PATTERNS:
+        for m in pat.finditer(line):
+            # MP-201. A model id inside a URL is a link, not a dependency, and an asset
+            # filename is not a model. Both are FABRICATIONS -- the north-star failure in the
+            # first command a stranger runs -- and neither can be excluded by narrowing the
+            # patterns, because `o4-...` and `gpt-6-...` are legal shapes for a real id. Only
+            # the surrounding context separates them.
+            if any(us <= m.start() and m.end() <= ue for us, ue in urls):
+                continue
+            if _ASSET_SUFFIX.search(m.group(0)):
+                continue
+            spans.append((m.start(), m.end(), m.group(0)))
+    out: list[str] = []
+    seen: set[str] = set()
+    for start, end, text in spans:
+        contained = any(
+            (o_start <= start and end <= o_end) and (o_end - o_start) > (end - start)
+            for o_start, o_end, _ in spans
+        )
+        if not contained and text not in seen:
+            seen.add(text)
+            out.append(text)
+    return out
 
 
 def models_used(root: str | Path = ".") -> set[str]:

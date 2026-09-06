@@ -17,6 +17,24 @@ graft tests
 # scripts/fp_measurement.py. Enforced by test_packaging_contents.py, which now runs
 # `pytest --collect-only` INSIDE the unpacked sdist -- a name list cannot see this.
 graft scripts
+# MP-203: `action.yml` (the root manifest) was `include`d but `actions/` -- which holds the
+# Action's own detailed docs, `actions/README.md` -- was not, and `.github/` was absent
+# entirely. [M] 2026-09-07: an sdist installed exactly as CONTRIBUTING.md instructs failed
+# **3** tests, from TWO missing directories:
+#   .github/  -> test_config.py, test_first_run_cost.py  (2 tests)
+#   actions/  -> test_exit_code_contract.py             (1 test)
+# The repo's own suite can never catch this: it runs inside the git checkout, where both
+# directories always exist. Only `pytest` INSIDE an unpacked sdist occupies that state --
+# which is why `test_packaging_contents.py` runs one.
+#
+# Only `actions/` is grafted. `.github/` is deliberately NOT: it is a dot-directory, and
+# `test_sdist_excludes_private_directories` forbids every hidden path from a distribution
+# that, unlike the repo, is published. The two tests that read it are REPO-HYGIENE checks
+# ("does the dogfood workflow point at the right config") which are meaningless in an
+# installed sdist, so they skip when it is absent rather than being paid for in shipped
+# bytes. `actions/README.md` is different in kind -- published documentation of the Action's
+# own output contract, which the sdist claims to be a complete checkout of.
+graft actions
 include data/models.json
 include CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md
 include action.yml

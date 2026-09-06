@@ -26,7 +26,37 @@ key first.
   natural slip on this file — loaded as the *default* provider, `openai`, at 5 runs. A config
   written to get a free offline check billed your own key for five paid replays per scenario.
 
+### Packaging
+- **Version bumped to `0.3.0`.** `[M]` `pyproject.toml` still read `0.2.1` — a version already
+  tagged and published — while this release carries a breaking exit-code change. Nothing in the
+  suite compared the two, so the gate stayed green while the repo was un-releasable. A test now
+  fails if the declared version matches an existing tag.
+- **The sdist ships `actions/`.** `[M]` An sdist installed exactly as `CONTRIBUTING.md`
+  instructs failed 3 of its own tests, from two missing directories. `actions/` — the Action's
+  published output-contract docs — is now grafted. `.github/` deliberately stays out (it is a
+  hidden path, which the sdist invariant forbids); the two repo-hygiene tests that read it now
+  skip outside a checkout.
+
+### Added
+- **`mp scan` now sees Llama, Qwen, Mistral, DeepSeek and `gpt-oss` ids, and reads `.env.example`.**
+  `[M]` It was OpenAI/Anthropic/Google-shaped: a repo naming `llama-3.3-70b-versatile`,
+  `qwen/qwen3-32b` and `openai/gpt-oss-20b` scanned to `No model identifiers found.`, exit 0 —
+  while appending one `gpt-4o-mini` line to that same file produced a populated table. `scan` is
+  the first command of the README's "real flow, on your own app", and cross-vendor coverage is
+  the point of the tool, so a Groq or Together shop met a confident empty result. `[M]` The new
+  patterns were measured over the same 6,228 third-party files used to narrow the o-series: the
+  only false positive was `deepseek-ai`, a HuggingFace org rather than a model, and the shipped
+  pattern enumerates DeepSeek's real families to exclude it.
+
 ### Fixed
+- **`mp scan` no longer invents model ids out of URLs and asset filenames.** `[M]` On a real
+  repo that does not call an LLM at all, **28 of 28 hits were fabricated** — a percent-encoded
+  news slug, an article headline, and base64 PNG data — all from URLs inside scraped JSON. The
+  correct answer was zero. Measured across four real repos before shipping: those 28 dropped to
+  0 with **zero true positives lost** elsewhere.
+- **`mp scan` no longer reports Modelpin's own `.modelpin/` store as your dependencies.** `[M]`
+  On a real repo it was **61 of 76 hits — 80% of the table** — the recorded traces of a previous
+  run, in the directory the Action docs tell you to commit.
 - **Scenarios in a subdirectory were silently skipped.** `[M]` `scenarios/auth/nested.json`
   holding a real refusal regression produced `OK 1 scenario(s) unchanged`, exit 0 — a green
   tick over a regression, caused by nothing but putting scenarios in folders. Directories
@@ -41,6 +71,30 @@ key first.
   and exited `1` — again publishing "detected a behavioral regression", over byte-identical
   traces, while the report written moments earlier said `**UNCHANGED (1)**`. Unencodable
   characters are now escaped for display only; the artifact keeps its real bytes.
+- **The semantic judge is now checked against BOTH compared models, not just the candidate.**
+  `[M]` It compared only against `--to`, so a judge equal to the *baseline* never triggered the
+  independence note — and that is exactly what `mp init` shipped, writing `gpt-4o-mini` as both
+  the app's model and the judge. A new user's first `check` had the judge reading its own output
+  as the reference, silently. The scaffolded config now says so at the point of editing.
+- **The coverage disclosure no longer contradicts the verdict printed above it.** `[M]` In a
+  run whose only finding was a tool-call regression, the footer stated three things that were
+  all false of it: that the tool-trajectory channel was inert, that the scenario "called no
+  tool" (its baseline called one in 5 of 5 runs), and that "no CI-failing channel could see a
+  content change". It fires when a scenario omits `tools` while its recorded traces carry them.
+  The scenario is still not credited with coverage — that conservatism is deliberate and
+  unchanged — but the disclosure now says what actually happened.
+- **Provider error text is no longer silently truncated.** `[M]` It was cut at 300 characters
+  and closed with punctuation, so the result read as a complete sentence while the remedy —
+  which providers put at the *end* — was gone, with nothing saying anything had been removed.
+  Both ends now survive, with a visible `[... N chars elided ...]` marker between them.
+- **An unwritable baseline store now gives an error, not a traceback and a stray `.tmp`.**
+  `[M]` `save_baseline`'s atomic write had no failure path: the `OSError` escaped uncaught and
+  the half-written temp file was left in the directory the docs tell you to commit.
+- **The PR comment no longer says "could not measure" on a run that exits 0.** `[M]` `check
+  --help` binds that phrase to exit **3**, so a PR could get a green check beside a comment
+  whose headline described a different exit code. The refusal to give an affirmative green
+  header is unchanged and correct; the headline now says the narrower true thing — *only a
+  refusal could have failed this run* — matching the wording the published Report already used.
 - **A model id containing markup or a `|` no longer corrupts output.** `[M]` `--to 'm2[/]'`
   raised `MarkupError`; `--to 'm2|evil'` added a cell to the published Report's settings
   table and broke the row.

@@ -97,6 +97,12 @@ def test_repo_root_holds_no_tracked_modelpin_yaml() -> None:
 
 
 def test_dogfood_config_exists_and_the_workflow_points_at_it() -> None:
+    # `.github/` is deliberately absent from the sdist (it is a dot-directory and
+    # `test_sdist_excludes_private_directories` forbids those). This is a REPO-HYGIENE
+    # check, meaningless in an installed distribution, so it skips there rather than
+    # failing. `[M] 2026-09-07`: it was one of 3 tests failing inside an unpacked sdist.
+    if not (Path(__file__).resolve().parents[1] / ".github").is_dir():
+        pytest.skip(".github/ not present (unpacked sdist); repo-hygiene check only")
     """Moving the config must not quietly disable the self-check that justified it."""
     assert DOGFOOD_CONFIG.is_file(), f"{DOGFOOD_CONFIG} is missing; the dogfood run has no config"
     wf = yaml.safe_load(DOGFOOD_WORKFLOW.read_text(encoding="utf-8"))

@@ -153,6 +153,29 @@ class ChannelCensus:
     #: already followed, and following it is what turned "NOT cleared on content" into
     #: "looks safe to adopt" over a total content inversion.
     declared_unused_tools: tuple[str, ...] = ()
+    #: MP-194. The mirror of `declared_unused_tools`: compared scenarios whose RECORDED RUNS
+    #: called a tool that the scenario does not declare.
+    #:
+    #: `[M] 2026-09-06` This state is why the disclosure could print three false statements
+    #: directly beneath the verdict that contradicted them. With a scenario that omits `tools`
+    #: while its traces carry `tool_calls`, one run produced:
+    #:
+    #:     REGRESSION refund_gbp: tool-call behavior changed: ['escalate'] -> [] (0.99)
+    #:     coverage: inert this run -- tool trajectory + arguments (no scenario declares
+    #:     `tools`); ...; 1 of 1 scenario(s) called no tool, so no CI-failing channel could
+    #:     see a content change in them (refund_gbp)
+    #:
+    #: The tool channel is what fired; the baseline called `escalate` in 5 of 5 runs; and a
+    #: CI-failing channel had just seen the change. `_tool_live` requires BOTH a declaration
+    #: and a call, while the diff engine requires neither and reads tool calls straight off
+    #: the traces -- so the census and the verdict answered the same question two ways.
+    #:
+    #: The conjunction itself is NOT the bug and is deliberately left alone: an FP review
+    #: blocked testing `tool_active` alone precisely because it would GRANT clearances the
+    #: previous version withheld, and the conjunction is what keeps the blind set a superset
+    #: for every input. Conservatism is correct. Stating a falsehood to achieve it is not.
+    #: So these ids stay uncleared, and the disclosure stops claiming they called no tool.
+    undeclared_tool_calls: tuple[str, ...] = ()
 
     @property
     def hard_content_channels(self) -> list[str]:
@@ -178,13 +201,26 @@ class ChannelCensus:
             # MP-159. Two ways to be dead, and they take different remedies, so the
             # disclosure must not collapse them: nobody asked for the channel, or somebody
             # asked and no model ever called the tool.
-            why = (
-                f"{len(self.declared_unused_tools)} scenario(s) declare `tools` but no run "
-                f"called one"
-                if self.declared_unused_tools
-                else "no scenario declares `tools`"
-            )
-            out.append(f"tool trajectory + arguments ({why})")
+            #
+            # MP-194 adds a THIRD, and it is not a way of being dead at all: runs that called
+            # a tool the scenario never declared. `[M] 2026-09-06` calling that channel
+            # "inert" put a false statement directly above a `REGRESSION ... tool-call
+            # behavior changed` that the channel had just produced. The scenarios stay
+            # uncleared -- see `undeclared_tool_calls` for why that conservatism is right --
+            # but the word "inert" is retired for this case, because it is simply untrue.
+            if not self.undeclared_tool_calls:
+                why = (
+                    f"{len(self.declared_unused_tools)} scenario(s) declare `tools` but no "
+                    f"run called one"
+                    if self.declared_unused_tools
+                    else "no scenario declares `tools`"
+                )
+                out.append(f"tool trajectory + arguments ({why})")
+            # MP-194. When runs DID call an undeclared tool, the channel is simply not inert,
+            # so it is omitted from a list of inert channels rather than described inside one.
+            # What actually happened -- it fired, and we do not credit it as coverage -- is
+            # said once, by the per-scenario clause in `_census_note`. Saying it in both
+            # places was the first version of this fix and it read as two different findings.
         if not self.judge_enabled:
             out.append(f"semantic judge ({self.judge_off_reason})")
         if not self.assertions_declared:
@@ -274,11 +310,26 @@ def _census_note(census: Optional[ChannelCensus]) -> str | None:
     # -- 3 of 14 DECLARE them, and since MP-159 only the ones that CALL one count -- and has
     # no way to learn the other 11 or more were content-blind.
     if census.blind_scenarios and census.compared:
-        parts.append(
-            f"{len(census.blind_scenarios)} of {census.compared} scenario(s) called no "
-            f"tool, so no CI-failing channel could see a content change in them "
-            f"({', '.join(census.blind_scenarios)})"
-        )
+        # MP-194. Split by WHY a scenario is uncleared, because one sentence cannot be true
+        # of both. `[M] 2026-09-06` "called no tool, so no CI-failing channel could see a
+        # content change in them" was printed for a scenario whose baseline called `escalate`
+        # in 5 of 5 runs, three lines under the `REGRESSION ... tool-call behavior changed`
+        # that channel had just produced. Neither clause was true of it.
+        undeclared = set(census.undeclared_tool_calls)
+        silent = [s for s in census.blind_scenarios if s not in undeclared]
+        fired = [s for s in census.blind_scenarios if s in undeclared]
+        if silent:
+            parts.append(
+                f"{len(silent)} of {census.compared} scenario(s) called no "
+                f"tool, so no CI-failing channel could see a content change in them "
+                f"({', '.join(silent)})"
+            )
+        if fired:
+            parts.append(
+                f"{len(fired)} of {census.compared} scenario(s) called a tool they do not "
+                f"declare, so their tool comparison ran but is not credited as coverage "
+                f"({', '.join(fired)})"
+            )
     if not parts:
         return None
     return "coverage: " + "; ".join(parts)
@@ -434,17 +485,31 @@ def render_pr_comment(
         header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
     elif minors:
         header = f"⚠️ **Modelpin: minor changes — `{from_model}` → `{to_model}`**"
-    elif (underpowered and len(underpowered) >= len(results)) or (
-        census is not None and not census.hard_content_channels
-    ):
+    elif underpowered and len(underpowered) >= len(results):
         # (`rejected` is handled in the `partially measured` branch below: a run that
         # measured SOMETHING and lost a scenario is partial, not blind.)
         # A green check over a run that could not have gone red is the worst header we ship.
-        # MP-138 adds the second way to get there: every CI-failing channel that reads the
-        # model's CONTENT was inert, so no answer -- however wrong -- could have gone red.
-        # MP-116 fixed this exact contradiction for blind runs; shipping it again for inert
-        # channels would be the same defect with a new cause.
+        # MP-116 fixed this exact contradiction for blind runs.
         header = f"❔ **Modelpin: could not measure — `{from_model}` → `{to_model}`**"
+    elif census is not None and not census.hard_content_channels:
+        # MP-138's way of getting there: every CI-failing channel that reads the model's
+        # CONTENT was inert, so no answer -- however wrong -- could have gone red. The
+        # refusal to give a green check is unchanged and correct.
+        #
+        # MP-202: the WORDING is what changed. This branch used to reuse "could not measure",
+        # and `check --help` binds that exact phrase to EXIT 3 -- while this run exits **0**,
+        # because the scenarios were compared and nothing regressed. `[M] 2026-09-06` a PR
+        # therefore got a green check next to a comment headed "could not measure", and a
+        # reader who knows the documented contract cannot reconcile the two.
+        #
+        # The published Report has said the narrower, true thing here since MP-140 --
+        # "Incomplete: only a refusal would have registered as a regression" -- and that
+        # wording already survived a claims review that REJECTED a broader first draft. The
+        # PR comment now matches it, so the two surfaces stop describing one run two ways.
+        header = (
+            f"❔ **Modelpin: only a refusal could have failed this run — "
+            f"`{from_model}` → `{to_model}`**"
+        )
     elif underpowered or rejected or skipped:
         # MP-160 joins `skipped` for the same reason MP-148 joined `rejected`: a scenario
         # that was never compared makes the suite partial, whatever the compared ones said.

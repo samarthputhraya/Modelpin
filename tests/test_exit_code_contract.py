@@ -163,5 +163,8 @@ def test_action_yml_never_calls_a_setup_failure_a_regression() -> None:
 def test_the_public_docs_state_the_fourth_code(doc: str) -> None:
     """A contract the user is told is 0/1/3 while the tool emits 4 is a documentation defect
     of exactly the kind this repo files rows about."""
-    text = (REPO / doc).read_text(encoding="utf-8")
+    path = REPO / doc
+    if not path.exists():  # pragma: no cover - a distribution without the docs tree
+        pytest.skip(f"{doc} not present in this checkout")
+    text = path.read_text(encoding="utf-8")
     assert re.search(r"\*\*4\*\*|`4`", text), f"{doc} does not document exit code 4"

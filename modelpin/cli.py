@@ -192,6 +192,10 @@ providers:
   - openai                 # uses YOUR OPENAI_API_KEY from the environment
 runs: {DEFAULT_RUNS}                    # N replays per scenario; below 4 the tool signal cannot fire
 judge_model: gpt-4o-mini   # semantic LLM-judge (optional; extra calls). Remove to disable.
+#                          # MP-196: pick a judge that is NEITHER model you are comparing.
+#                          # A model reading its own output is not an independent reading of
+#                          # it, and this line ships equal to `models:` above -- so if you
+#                          # keep gpt-4o-mini as your app's model, change this one.
 # judge_provider: groq    # only needed when the judge model id does not name its own
 #                         # vendor: gpt-* and gemini-* do, qwen/qwen3.8-27b does not.
 """
@@ -324,7 +328,12 @@ def _replay_plan(
     return plan
 
 
-def _build_judge(provider: str, cfg: ModelpinConfig, to_model: str | None = None):
+def _build_judge(
+    provider: str,
+    cfg: ModelpinConfig,
+    to_model: str | None = None,
+    from_model: str | None = None,
+):
     """Construct + preflight the semantic LLM-judge if configured. Returns None when no
     judge_model is set or the run is offline (fake), so the diff stays purely structural."""
     if not cfg.judge_model or provider == "fake":
@@ -347,12 +356,22 @@ def _build_judge(provider: str, cfg: ModelpinConfig, to_model: str | None = None
     except (ProviderError, ImportError) as exc:
         _fail(f"semantic judge ({cfg.judge_model!r}): {exc}")
     console.print(f"[dim]semantic judge: {cfg.judge_model} on {host}[/]")
-    if cfg.judge_model == to_model:
+    # MP-196. BOTH sides, not just the candidate. `[M] 2026-09-06` this compared against
+    # `to_model` alone, so a judge equal to the BASELINE never triggered it -- and that is
+    # precisely the state `mp init` shipped, since the scaffold wrote `models: [gpt-4o-mini]`
+    # and `judge_model: gpt-4o-mini`. A brand-new user's first `check` therefore had a judge
+    # reading its own output as the reference, silently.
+    #
+    # The baseline side is not the milder case. A judge grading its own output as the
+    # REFERENCE biases toward calling the pair equivalent, which is a false NEGATIVE -- the
+    # failure the semantic channel exists to prevent, in the run where the user trusts it most.
+    if cfg.judge_model in {m for m in (to_model, from_model) if m}:
         # Not an error -- it can be a deliberate, cheap choice -- but a model judging its own
         # output is not an independent reading of it, and the north-star metric is the FP
         # RATE of what we publish. Say so once, at the point of choosing.
+        side = "being checked" if cfg.judge_model == to_model else "it is compared against"
         console.print(
-            "[yellow]note:[/] the judge model is the model being checked, so the semantic "
+            f"[yellow]note:[/] the judge model is the model {side}, so the semantic "
             "channel is not an independent reading. Prefer a different judge model."
         )
     return judge
@@ -733,6 +752,12 @@ def _channel_census(
         declared_unused_tools=tuple(
             s.id for s in scenarios if s.input.get("tools") and s.id not in tool_active
         ),
+        # MP-194. The mirror: runs that CALLED a tool the scenario never declared. Read only
+        # by the disclosure wording, and only to stop it saying "called no tool" about a
+        # scenario whose traces show a call -- the clearance itself is unchanged.
+        undeclared_tool_calls=tuple(
+            s.id for s in scenarios if not s.input.get("tools") and s.id in tool_active
+        ),
         # MP-141. Read the fields the ENGINE reads, not the presence of an `Assertion`
         # object. `[M]` `diff/__init__.py` consults only `must_contain` / `must_not_contain`
         # (`structural.py::violates_text_assertions`). MP-147 deleted the two fields that
@@ -911,7 +936,13 @@ def baseline(
     traces = _guard_replay(
         prov, lambda: {s.id: replay(s, from_model, adapter, runs=n) for s in scenarios}
     )
-    path = save_baseline(traces, from_model, store_dir)
+    # MP-197. A store that cannot be written is a setup failure, not a traceback. `_fail`
+    # gives it the friendly message and EXIT_SETUP_FAILED (ADR-0035), which is right: nothing
+    # was measured, so nothing is claimed.
+    try:
+        path = save_baseline(traces, from_model, store_dir)
+    except BaselineError as exc:
+        _fail(str(exc))
     console.print(
         f"[green]Baseline recorded[/] for [bold]{_rich_escape(from_model)}[/]: "
         f"{len(scenarios)} scenario(s) x{n} runs -> {path}"
@@ -1064,7 +1095,7 @@ def check(
         f"[dim]provider={prov} from={_rich_escape(from_model)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
     )
     _preflight_or_fail(adapter, prov)
-    judge = _build_judge(prov, cfg, to_model=to)
+    judge = _build_judge(prov, cfg, to_model=to, from_model=from_model)
 
     results = []
     skipped: list[str] = []
@@ -1326,7 +1357,7 @@ def report(
         f"[dim]provider={prov} from={_rich_escape(from_)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
     )
     _preflight_or_fail(adapter, prov)
-    judge = _build_judge(prov, cfg, to_model=to)
+    judge = _build_judge(prov, cfg, to_model=to, from_model=from_)
 
     results: list[DiffResult] = []
     skipped: list[str] = []

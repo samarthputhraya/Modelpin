@@ -67,13 +67,20 @@ def test_failed_save_leaves_prior_baseline_intact(tmp_path, monkeypatch):
         raise OSError("disk full")
 
     monkeypatch.setattr(os, "replace", _boom)
-    with pytest.raises(OSError):
+    # MP-197. `BaselineError`, not the raw `OSError` this asserted before: an unwritable store
+    # used to reach the user as an unhandled traceback. The typed error is what lets `baseline`
+    # print a message and exit EXIT_SETUP_FAILED. The property this test exists for -- the
+    # PRIOR baseline survives a failed write -- is unchanged and still asserted below.
+    with pytest.raises(BaselineError, match="could not write the baseline"):
         save_baseline(_traces(), "gpt-4o-mini", tmp_path)
     monkeypatch.setattr(os, "replace", real_replace)
 
     # the original baseline is still loadable and uncorrupted
     loaded = load_baseline("gpt-4o-mini", tmp_path)
     assert len(loaded["s1"]) == 3
+    # MP-197. And the failed write leaves nothing behind in the directory the docs tell the
+    # user to `git add`.
+    assert not list(tmp_path.rglob("*.tmp"))
 
 
 def test_model_id_with_slashes_is_sanitized(tmp_path):
