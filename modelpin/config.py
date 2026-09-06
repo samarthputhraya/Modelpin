@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import difflib
+
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 DEFAULT_CONFIG_FILE = "modelpin.yaml"
 
@@ -43,6 +45,14 @@ class ConfigError(Exception):
 
 
 class ModelpinConfig(BaseModel):
+    # MP-198. `extra="forbid"`, so a misspelled key is an ERROR rather than a silent
+    # discard. pydantic v2 defaults to `extra="ignore"`, which meant `provider:` for
+    # `providers:` loaded as the DEFAULT provider -- `openai`, a paid one, at 5 runs.
+    # The forward-compat cost is real and accepted: a config carrying a key from a newer
+    # Modelpin now fails loudly on an older one. For a file that decides whose key gets
+    # spent, failing loudly is the correct direction to be wrong in.
+    model_config = ConfigDict(extra="forbid")
+
     models: list[str] = Field(default_factory=list)
     scenarios_dir: str = "scenarios"
     providers: list[str] = Field(default_factory=lambda: [DEFAULT_PROVIDER])
@@ -73,4 +83,40 @@ def load_config(path: str | Path = DEFAULT_CONFIG_FILE) -> ModelpinConfig:
     try:
         return ModelpinConfig(**data)
     except ValidationError as exc:
+        unknown = [
+            str(e["loc"][0])
+            for e in exc.errors()
+            if e.get("type") == "extra_forbidden" and e["loc"]
+        ]
+        if unknown:
+            raise ConfigError(f"{p}: {_unknown_key_message(unknown)}") from exc
         raise ConfigError(f"{p} has invalid settings: {exc}") from exc
+
+
+def _unknown_key_message(unknown: list[str]) -> str:
+    """Name the unknown key and, when it is a near miss, the one that was probably meant.
+
+    MP-198. Until this existed, `ModelpinConfig` was a plain `BaseModel`, so pydantic v2's
+    default ``extra="ignore"`` discarded every misspelled key in silence. `[M] 2026-09-06`
+    ``provider: [fake]`` + ``run: 1`` -- singular, the most natural slip on this file --
+    loaded as ``providers=['openai']``, ``runs=5``: a config written to get a free offline
+    check billed the user's own key for **five** paid replays per scenario. The BYO-key
+    guardrail (ADR-0008) failing in the direction that spends their money.
+
+    The nearest-match hint is not decoration. Every field here that a user can plausibly
+    mistype is a singular/plural pair, so a bare "unknown key 'provider'" makes the reader
+    hunt for a difference they cannot see -- the two words look identical at a glance, which
+    is exactly why the typo happens.
+    """
+    known = sorted(ModelpinConfig.model_fields)
+    parts = []
+    for key in unknown:
+        near = difflib.get_close_matches(key, known, n=1, cutoff=0.7)
+        parts.append(f"{key!r} (did you mean {near[0]!r}?)" if near else repr(key))
+    label = "unknown setting" if len(parts) == 1 else "unknown settings"
+    return (
+        f"{label} {', '.join(parts)}. Modelpin refuses to guess here rather than silently "
+        f"falling back to its defaults -- the default provider is {DEFAULT_PROVIDER!r} at "
+        f"{DEFAULT_RUNS} runs, so a discarded key can spend your API key on a run you "
+        f"thought was offline. Known settings: {', '.join(known)}."
+    )

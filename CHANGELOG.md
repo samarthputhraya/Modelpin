@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Five ways the tool could report something it had not measured, or discard something you had
+written, are closed. Three of them ended in a confident verdict; two of them spent your API
+key first.
+
+### Changed
+- **BREAKING (exit codes): a setup failure now exits `4`, not `1`.** `[M]` Every one of the
+  28 places the CLI reports a configuration, credential or usage problem exited `1` — the
+  code `check --help` documents as *"at least one real regression (the CI gate)"* and the
+  GitHub Action publishes as `::error::Modelpin detected a behavioral regression`. So a
+  contributor who had not yet added `OPENAI_API_KEY` to repository secrets received a public
+  annotation on their pull request stating that their model migration had regressed, with no
+  replay run and nothing compared. Exit `1` now means only what it always claimed to mean.
+  `0`, `1` and `3` are unchanged; `4` is new. A caller treating any non-zero code as
+  "regression" will now see `4` where it saw `1` — it was already reporting missing keys as
+  regressions, but it was doing so because of us. See ADR-0035.
+- **An unknown key in `modelpin.yaml` is now an error naming the key and its nearest match.**
+  `[M]` It was silently discarded, so `provider:` for `providers:` — singular, the most
+  natural slip on this file — loaded as the *default* provider, `openai`, at 5 runs. A config
+  written to get a free offline check billed your own key for five paid replays per scenario.
+
+### Fixed
+- **Scenarios in a subdirectory were silently skipped.** `[M]` `scenarios/auth/nested.json`
+  holding a real refusal regression produced `OK 1 scenario(s) unchanged`, exit 0 — a green
+  tick over a regression, caused by nothing but putting scenarios in folders. Directories
+  named `results`, `__pycache__` and anything dot-prefixed are still skipped, so run output
+  kept beside your scenarios is not read as a scenario.
+- **Two scenario files sharing an `id` are now rejected, naming both files.** `[M]` One
+  recording was silently overwritten — after both had been replayed and paid for — while the
+  console still reported the full scenario count and the PR comment published
+  `**REGRESSIONS (3)**` for two distinct regressions, listing one of them twice.
+- **A non-ASCII scenario or model id no longer crashes the CLI on a non-UTF-8 console.**
+  `[M]` On a stock Windows console it raised `UnicodeEncodeError` while printing the summary
+  and exited `1` — again publishing "detected a behavioral regression", over byte-identical
+  traces, while the report written moments earlier said `**UNCHANGED (1)**`. Unencodable
+  characters are now escaped for display only; the artifact keeps its real bytes.
+- **A model id containing markup or a `|` no longer corrupts output.** `[M]` `--to 'm2[/]'`
+  raised `MarkupError`; `--to 'm2|evil'` added a cell to the published Report's settings
+  table and broke the row.
+
 ## [0.2.1] - 2026-09-02
 
 Two ways a run could report `looks safe to adopt` over something it never measured are
