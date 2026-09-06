@@ -57,7 +57,14 @@ class FakeProvider(ProviderAdapter):
     def from_fixtures(cls, path: str | Path) -> "FakeProvider":
         """Build a provider from a JSON array of Trace objects (one template per
         scenario_id + model_id). Lets `modelpin baseline`/`modelpin check` run fully offline."""
-        records = json.loads(Path(path).read_text())
+        # `utf-8-sig` and never the platform default: `[M] 2026-09-06` (MP-190) a stock
+        # Windows console decoded a UTF-8 fixtures file as cp1252, so a euro sign became
+        # mojibake BEFORE the diff ran. Recorded on Linux/CI and checked on Windows that
+        # manufactured `MINOR ... confidence 1.00` over BYTE-IDENTICAL traces; recorded and
+        # checked both on Windows it hid a real assertion break behind "looks safe to
+        # adopt". A verdict must never depend on the reader's codepage. `-sig` also strips
+        # the BOM PowerShell's `>` redirection writes by default.
+        records = json.loads(Path(path).read_text(encoding="utf-8-sig"))
         canned: dict[tuple[str, str], Trace] = {}
         for record in records:
             trace = Trace(**record)
