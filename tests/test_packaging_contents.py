@@ -475,3 +475,34 @@ def test_the_sdist_ships_the_actions_docs_its_own_tests_read() -> None:
         "MANIFEST.in grafts .github/, which `test_sdist_excludes_private_directories` "
         "forbids -- every hidden path is treated as a leak into a published artifact."
     )
+
+
+def test_the_reported_version_matches_pyproject() -> None:
+    """`modelpin version` must not disagree with `pyproject.toml`.
+
+    `[M] 2026-09-07` `modelpin/__init__.py` hardcoded `__version__`, so bumping the project
+    moved one copy and not the other: `pyproject.toml` and the installed dist metadata said
+    `0.3.0` while `modelpin version` printed `0.2.1` -- the command a user runs to tell us what
+    they have, and the string a bug report quotes.
+
+    A packaging audit hours earlier had reported every source agreeing. It did, because they
+    were all stale together; nothing compared them to `pyproject.toml`, so the agreement was
+    not evidence of anything.
+
+    This is the MP-03 shape -- one number with more than one copy -- which this project has
+    already paid for once with the scaffolded `runs:` default.
+    """
+    import tomllib
+
+    import modelpin
+
+    repo = Path(__file__).resolve().parents[1]
+    declared = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "version"
+    ]
+    assert modelpin.__version__ == declared, (
+        f"modelpin.__version__ is {modelpin.__version__!r} but pyproject.toml declares "
+        f"{declared!r}. `modelpin version` is what a bug report quotes; it must not be stale. "
+        "If this fails after a bump, reinstall the editable package rather than editing a "
+        "second copy of the number."
+    )
