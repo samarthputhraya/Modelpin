@@ -284,7 +284,7 @@ def _replay_plan(
     provider: str,
     judge_model: Optional[str],
     sides: int = 1,
-    ref_runs: Optional[int] = None,
+    ref_runs: Optional[int | Sequence[int]] = None,
 ) -> str:
     """Describe the size of the run that is ABOUT to happen, for the pre-spend line.
 
