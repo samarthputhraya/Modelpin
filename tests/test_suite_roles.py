@@ -220,6 +220,26 @@ EXPECTED_MEMBERS: dict[tuple[str, str], frozenset[str]] = {
             "triage_ticket_json",
         }
     ),
+    # MP-207: the channel-exposure set, pre-registered in ADR-0038. Same role and the same
+    # no-edit-after-scoring rule as fp-suite, and deliberately NOT a copy of it: these
+    # scenarios exist because [M] 0 of 710 same-model-null trials ever moved the tool or
+    # assertion channel, so the bound covered neither.
+    ("fp-suite-v2", "score"): frozenset(
+        {
+            "anchor_mandatory_lookup_fixed_format",
+            "calc_tool_or_mental_math",
+            "citation_style_underspecified",
+            "docsearch_or_general_knowledge",
+            "grammar_tool_or_direct_fix",
+            "optional_availability_before_booking",
+            "optional_notify_after_status_update",
+            "optional_part_stock_second_lookup",
+            "plaintext_answer_bold_optional",
+            "sql_answer_fence_unspecified",
+            "total_currency_code_or_symbol",
+            "verify_or_trust_pasted_status",
+        }
+    ),
 }
 
 #: Derived, so the path -> role pin and the membership pin cannot drift apart.

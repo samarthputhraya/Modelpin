@@ -1,0 +1,105 @@
+{
+  "id": "optional_availability_before_booking",
+  "name": "Booking agent whose availability check is offered as optional, not required",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the booking assistant for the Marlow Guesthouse, a six-room B&B. Use create_booking to make a reservation. check_availability is also there if you want to confirm a room is free first. Confirm the result to the guest in one sentence."
+      },
+      {
+        "role": "user",
+        "content": "Hi - I'd like the garden double for two nights, checking in 14 October 2026 and out on the 16th, under Priya Raman, priya.raman@example.com."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "check_availability",
+          "description": "Check whether a room type is free for a date range.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "room": {
+                "type": "string",
+                "description": "The room type, e.g. garden_double."
+              },
+              "check_in": {
+                "type": "string",
+                "description": "Arrival date in YYYY-MM-DD form."
+              },
+              "check_out": {
+                "type": "string",
+                "description": "Departure date in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "room",
+              "check_in",
+              "check_out"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "create_booking",
+          "description": "Create a reservation for a named guest.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "room": {
+                "type": "string",
+                "description": "The room type, e.g. garden_double."
+              },
+              "check_in": {
+                "type": "string",
+                "description": "Arrival date in YYYY-MM-DD form."
+              },
+              "check_out": {
+                "type": "string",
+                "description": "Departure date in YYYY-MM-DD form."
+              },
+              "guest_name": {
+                "type": "string",
+                "description": "The guest's full name as they gave it."
+              },
+              "email": {
+                "type": "string",
+                "description": "The guest's email address."
+              }
+            },
+            "required": [
+              "room",
+              "check_in",
+              "check_out",
+              "guest_name",
+              "email"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "check_availability": {
+        "room": "garden_double",
+        "check_in": "2026-10-14",
+        "check_out": "2026-10-16",
+        "available": true,
+        "nightly_rate_gbp": 95
+      },
+      "create_booking": {
+        "status": "confirmed",
+        "booking_ref": "MG-1180",
+        "room": "garden_double",
+        "check_in": "2026-10-14",
+        "check_out": "2026-10-16",
+        "total_gbp": 190
+      }
+    },
+    "temperature": 1.0
+  }
+}
