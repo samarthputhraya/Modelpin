@@ -28,8 +28,10 @@ This file records how we measure it and the results.
   measured runs the observed rate is far worse — **0 of 8** scored on the held-out suite,
   **1 of 6** on the independent-candidate calibration run, and **0 of 6** on the self-judge run
   (see the corrections at the end of *Semantic-judge calibration*) — **1 scored trial in 20
-  attempted, 5.0% pooled**, which is the only planning figure this document supports and the
-  one the `arg_*` projection below uses. *An earlier version of this sentence counted two runs
+  attempted, 5.0% pooled**, which was the only planning figure this document supported before
+  2026-09-07 and the one the `arg_*` projection below used. `[M]` The run of record then scored
+  **82 of 710 (11.5%)** — see Results; the projection is preserved unedited with its correction
+  attached. *An earlier version of this sentence counted two runs
   and pooled 1-of-14; it omitted the self-judge run, the only one of the three that would drag
   the figure down.* A run large enough to move a floor would need N≈10,
   which is where the floors start to bind at all (N=9/11/12, ADR-0002). The exclusion is
@@ -57,10 +59,12 @@ This file records how we measure it and the results.
   false alarms over every trial that reached a verdict (scored + could-not-fire) — what a user
   running the same check sees. Abstentions and provider errors are printed beside both and
   folded into neither. Each carries its one-sided 95% Clopper-Pearson upper bound.
-- **Pre-registered.** The surfaces, models, repeat counts, exclusions and the rule that every
-  flagged trial is published with its traces were written down before the first trial of the
-  2026-09-07 run (`examples/fp-suite/README.md`), and no repeat was added or dropped after a
-  number was seen.
+- **Pre-registered, for the surfaces it covers.** The `fp-suite` surfaces' scenarios, models,
+  repeat counts, exclusions and the publish-every-flag rule were committed in
+  `examples/fp-suite/README.md` at `b504730` (10:35:35Z), before their first trial (10:36:08Z).
+  The two earlier surfaces (`examples/suite` continuity and `arg_*`, both started 10:15Z at
+  `5fa1d48`) predate that document and are pre-registered only by the configuration their
+  artifact headers record. No repeat was added or dropped after a number was seen.
 
 Harness: [`scripts/fp_measurement.py`](../scripts/fp_measurement.py). BYO-key; reproducible;
 `--out` records every trial with its traces as it completes, `--resume` continues a cut run,
@@ -84,15 +88,17 @@ python scripts/fp_aggregate.py reports/fp-runs/2026-09-07/*.jsonl     # the tabl
 
 **Headline (run of record 2026-09-07, live, judged, same model vs itself, five surfaces): 0 false alarms in 82 scored trials, 710 trials reached a verdict — one-sided 95% upper bound 3.6% of scored trials, 0.4% of trials that reached a verdict.**
 
-`[M]` 710 same-model comparisons at the shipped defaults (`runs: 5`, `--match strict`, semantic judge on), 5 artifacts, 3 candidate models across two vendors, 2,071,848/447,798 replay tokens. Every trial, with the traces its verdict was computed over, is in [`reports/fp-runs/2026-09-07/`](../reports/fp-runs/2026-09-07/) and the tables below are regenerated from those files by a test, so this page cannot drift from the run. Three of the five surfaces are where a false positive is actually possible:
+`[M]` 710 same-model comparisons at the shipped defaults (`runs: 5`, `--match strict`, semantic judge on), 5 artifacts, 3 candidate models across two vendors, 2,071,848/447,798 replay tokens. Every trial, with the traces its verdict was computed over, is in [`reports/fp-runs/2026-09-07/`](../reports/fp-runs/2026-09-07/) and the tables below are regenerated from those files by a test, so this page cannot drift from the run. Two of the five surfaces are where a false positive is actually possible, and a third is a
+cross-vendor sanity arm:
 
-- **`examples/fp-suite/`** — twelve scenarios modelled on long-tail apps, every one at **temperature 1.0**, the API's default (`gpt-4.1-mini` (judge `gpt-4o-mini`): 0/23 (upper bound 12.2%) of scored, 0/240 (upper bound 1.2%) of reached; `gpt-4o-mini` (judge `gpt-4.1-mini`): 0/28 (upper bound 10.1%) of scored, 0/240 (upper bound 1.2%) of reached; `openai/gpt-oss-20b` (judge `gpt-4o-mini`): 0/1 (upper bound 95.0%) of scored, 0/12 (upper bound 22.1%) of reached). This is the number the promise rests on.
-- **`examples/calibration/arg_*`** — the seven tool-argument scenarios at 0.7, 30 repeats (`gpt-4.1-mini`: 0/30 (upper bound 9.5%) of scored, 0/210 (upper bound 1.4%) of reached). The closest any null trial came to firing was `p = 0.087`.
+- **`examples/fp-suite/`** — twelve scenarios modelled on long-tail apps, every one at **temperature 1.0**, the API's default (`gpt-4.1-mini` (judge `gpt-4o-mini`): 0/23 (upper bound 12.2%) of scored, 0/240 (upper bound 1.2%) of reached; `gpt-4o-mini` (judge `gpt-4.1-mini`): 0/28 (upper bound 10.1%) of scored, 0/240 (upper bound 1.2%) of reached). These twelve supply 52 of the 82 scored trials; this is the number the promise rests on.
+- **`examples/calibration/arg_*`** — the seven tool-argument scenarios at 0.7, 30 repeats (`gpt-4.1-mini`: 0/30 (upper bound 9.5%) of scored, 0/210 (upper bound 1.4%) of reached). The closest any `arg_*` null came to firing was `p = 0.087` (`arg_freetext_note#5`); run-wide the closest was `p = 0.083` — `summarize_standup_notes#18` on `gpt-4o-mini`, on the fp-suite surface — against `ALPHA = 0.05`.
+- **Groq sanity arm** — the same twelve scenarios, one repeat, on `openai/gpt-oss-20b` (judge `gpt-4o-mini`): 12 trials, **1 scored**, 0 false alarms, own upper bound **95.0%**. It exists to show the harness runs against a second vendor; it constrains nothing. `[M]` Removing it moves the pooled bounds 3.6% → 3.6% (3.59 → 3.63) and 0.42% → 0.43%, and the detection bound from 84.0% to 78.7% (31/34).
 - **`examples/suite/`** — the original held-out eight at temperature 0, re-run for continuity: 0 of 8 could fire, exactly as in 2026-08. It still measures nothing about false positives, and is kept so the previous run of record stays comparable.
 
-**How to read the bound.** Zero flags in 82 scored trials means the true conditional rate is below 3.6% with 95% confidence, and zero in 710 that reached a verdict means the rate a user sees on these shapes is below 0.4%; neither is a zero, and every point figure on this page sits beside its bound. The conditional denominator is small by design: a trial in which every channel returned `p = 1.00` could not have fired and is excluded (above), and `[M]` on prose scenarios that is most of them — 628 of 710 here. The scored count was predicted before the run, not discovered after it.
+**How to read the bound.** Zero flags in 82 scored trials means the true conditional rate is below 3.6% with 95% confidence, and zero in 710 that reached a verdict means the rate a user sees on these shapes is below 0.4%; neither is a zero, and every point figure on this page sits beside its bound. The conditional denominator is small by design: a trial in which every channel returned `p = 1.00` could not have fired and is excluded (above), and `[M]` on prose scenarios that is most of them — 628 of 710 here. So the 0.4% is reported for completeness and is not the number to quote: it is what a user running these same checks would have seen, and 628 of its 710 trials could not have failed. The conditional 3.6% is the number that constrains the engine. That the four schema-constrained `arg_*` shapes would not score was predicted before the run (`examples/calibration/results/README-arg-gate-fp.md`: "the model varied on three of seven shapes"), and they did not.
 
-**What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios; repeats buy resolution on them, never coverage of a twenty-eighth. Two candidate models and one open-weight model on a free tier are three models. Every judge here is an OpenAI model. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
+**What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios, and `[M]` **13 of them carried the bound**: 14 contributed no scored trial (four `arg_*` shapes, `classify_review_sentiment`, `format_markdown_table`, and all eight of the held-out suite), and two shapes — `summarize_standup_notes` (19) and `arg_numeric_rounding` (16) — supply 35 of the 82. Over distinct shapes the bound is **20.6%** (`upper_bound_95(0, 13)`). `[M]` Of the 82 scored trials, **51 could only have fired on the semantic channel, 30 on the advisory argument gate and 1 on refusal — 0 on the tool-call trajectory and 0 on format/assertion**: the structural floors saw no exposure here. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. Every judge here is an OpenAI model. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
 
 > **Corrected 2026-08-23 (MP-75).** The previous run of record's headline read *"0 false alarms in 8
 > scored trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
@@ -107,7 +113,8 @@ python scripts/fp_aggregate.py reports/fp-runs/2026-09-07/*.jsonl     # the tabl
 Read as `0/8`, that was an *observation, not a rate*: the exact one-sided 95% upper bound on
 0/8 is **~31%**, consistent with a true false-positive rate anywhere from 0% to about a third.
 Read as `0/0` — which is what it actually was — the bound is **unbounded**. Either way it is
-reported as a fraction and never as "0%"; the harness prints the upper bound itself.
+reported as a fraction with its bound beside it, never as a bare rate; the generated tables
+below print `0/n = 0.0%` only where the bound sits in the same cell.
 
 It was also measured on the wrong surface to be reassuring: all 8 held-out scenarios run at
 temperature 0, and identical distributions short-circuit to `p=1.0` without the statistic
@@ -128,22 +135,38 @@ format_contact_json  order_status        refund_request       summarize_ticket
                           => 0 SCORED trials: none could have fired (MP-75)
 ```
 
-**Detection: `[M]` 43 of 46 injected perturbations were flagged.**
+**Detection: `[M]` 43 of 46 injected perturbations were flagged — 46 perturbed replays of 22 distinct perturbations, which is the smaller number to read.**
 
-One perturbation per scenario — a replacement system prompt that keeps the task and changes one
-policy — replayed as the candidate against the unperturbed baseline, once per surface. `[M]` The 95%
-one-sided *lower* bound on the true rate at 43/46 is **84.0%**: `1 - upper_bound_95(3, 46)`,
-the harness's own exact Clopper-Pearson helper in [`scripts/fp_measurement.py`](../scripts/fp_measurement.py).
+One perturbation per scenario that has one — a replacement system prompt that keeps the task and
+changes one policy — replayed as the candidate against the unperturbed baseline, once per surface:
+the 12 `fp-suite` prompts on all three models, the 7 `arg_*` on one, and 3 of the 8 held-out
+scenarios on one (3 + 7 + 12 + 12 + 12 = 46). `[M]` The 95% one-sided *lower* bound the harness
+prints at 43/46 is **84.0%**: `1 - upper_bound_95(3, 46)`, its own exact Clopper-Pearson helper in
+[`scripts/fp_measurement.py`](../scripts/fp_measurement.py). **That interval counts one perturbation
+up to three times**, the defect `tests/test_report_claims.py` names for the Drift Map, so it is not
+the number to quote. Over **distinct perturbations** the honest readings are `[M]` **19/22 → 68.4%**
+(a miss on any surface counts against the perturbation) and **21/22 → 80.2%** (detected on at least
+one surface). These are measurements of the engine on a scenario-model pair, never a statement
+about a model: a miss on `gpt-4o-mini` is a miss by Modelpin, and the per-model rows in the block
+below must not be read as a ranking.
 The 3 that read `unchanged` (`decline_pii` on `gpt-4o-mini`, `summarize_standup_notes` on `gpt-4.1-mini`, `triage_ticket_json` on `gpt-4o-mini`) are scored MISSED and never excluded: a
 miss means either the engine failed to see a real change or the candidate ignored the injected
-instruction, and this arm cannot tell those apart. Two flags need a label the harness cannot supply and the traces do: on `arg_numeric_rounding` the
-candidate resisted the pounds instruction (every stored payload is still kilograms) and the advisory
-argument gate fired on 4- versus 5-decimal rounding jitter at `p = 0.048` — the same mode the `arg_*`
-section below prices as a false positive; and the earlier `decline_pii` miss on the held-out suite is
-the model resisting a leak instruction (it still declined), which is scored against detection all the
-same. These are synthetic, deliberately extreme system-prompt replacements, one run each, and the
+instruction, and this arm cannot tell those apart. `[M]` The traces distinguish two shapes of miss, and neither is excluded. On `decline_pii` the model
+still declined on all 5 runs — an instruction the candidate did not follow, which this arm cannot tell
+from a blind engine, so it counts as a miss. On `triage_ticket_json` (`gpt-4o-mini`) and
+`summarize_standup_notes` (`gpt-4.1-mini`) the judge returned `semantic_score = 0.0` — it *did*
+separate the sides (5 of 5 candidate runs `other`/`low` against 5 of 5 baseline `bug`/`high`; 5 of 5
+summaries with the blockers dropped) — yet the verdict was `unchanged` at `p = 0.083` and `p = 0.500`,
+because the judge also scored 2 and 4 of the 5 **baseline** runs non-equivalent to the modal baseline
+output, which for free text is an arbitrary run. That is the structural asymmetry
+`examples/fp-suite/README.md` pre-registered as a trap, realised as a **false negative**: a noisy
+baseline side raises the permutation p and hides a real change. It is an engine limitation, it is
+counted against detection, and it is unfixed (tracked as MP-206). One flag needs the opposite label:
+on `arg_numeric_rounding` the candidate resisted the pounds instruction (every stored payload is still
+kilograms) and the advisory argument gate fired on 4- versus 5-decimal rounding jitter at `p = 0.048`
+— the same mode the `arg_*` section below prices as a false positive. These are synthetic, deliberately extreme system-prompt replacements, one run each, and the
 interval treats them as exchangeable trials, which by construction they are not. Detection is
-demonstrated on twenty-two perturbations across five surfaces, **not characterised**.
+demonstrated on twenty-two distinct perturbations across five surfaces, **not characterised**.
 
 That is what the harness prints, verbatim and unadjusted:
 
@@ -286,7 +309,7 @@ Replay tokens in/out 2,071,848/447,798 across 5 artifact(s); 3711 judge calls im
 
 | Evidence | Pairs | Scored (could have fired) | Result |
 |---|---|---|---|
-| **Run of record 2026-09-07** (five surfaces above; artifacts in `reports/fp-runs/2026-09-07/`) | 710 | **82** | **0/82**, upper bound 3.6%; 0/710 of trials reached, upper bound 0.4% |
+| **Run of record 2026-09-07** (five surfaces above; artifacts in `reports/fp-runs/2026-09-07/`) | 710 trials over 27 shapes, 13 of which scored | **82** | **0/82**, upper bound 3.6%; 0/710 of trials reached, upper bound 0.4% |
 | Live judged held-out suite (gpt-4o-mini vs itself, N=5, judge on) | 8 | **0** | n/a — no trial could fire; was published as `0/8` |
 | Synthetic noisy-but-equivalent pairs (golden test) | 4 | **0** | n/a — `[M]` all four return `unchanged` at confidence 1.0000; was published as `0/4` |
 | Real same-model split-half (captured gpt-4o-mini + gpt-3.5-turbo traces) | 6 | **not re-scored** | `0/6` on the pre-MP-75 accounting — treat as unaudited |
@@ -311,14 +334,17 @@ cross-vendor judge fired and found two genuinely different models behaviorally e
 this suite — i.e. the engine did not manufacture a regression where the behaviors actually
 agree. (The run also surfaced + fixed two Gemini-3.x tool-loop bugs.)
 
-**Phase-0 DoD: detection demonstrated (43/46, lower bound 84.0%) but not characterised; the
-false-positive rate is MEASURED as a bound — 0/82 of scored trials (upper bound 3.6%), 0/710 of trials
-that reached a verdict (upper bound 0.4%) — on the 2026-09-07 run of record.** It is a bound, not a
-zero, and it is a bound on twenty-seven scenario shapes and three models under the shipped defaults;
-the previous claim of *"a measured 0% false-positive rate"* stays withdrawn (2026-08-23) because
-that is not what any run can show. Establishing it took a live run over `examples/fp-suite/` and
+**Phase-0 DoD: detection demonstrated (43 of 46 replays, 22 distinct perturbations, lower bound
+68.4% over distinct) but not characterised; the false-positive rate is not established — it is now
+*bounded*: 0 of 82 scored trials, upper bound 3.6%, on the 2026-09-07 run of record.** A zero-event
+run bounds a rate; it does not establish one. The bound covers 13 scenario shapes and two OpenAI
+models under the shipped defaults, on the semantic and argument channels only; the previous claim
+of *"a measured 0% false-positive rate"* stays withdrawn (2026-08-23) because that is not what any
+run can show. Bounding it took a live run over `examples/fp-suite/` and
 `examples/calibration/arg_*.json` — surfaces at temperature > 0, where false positives are actually
-possible. Those sets exist; so, now, does the run.
+possible. Establishing a rate still needs what the limitations section names: ≥30 labelled pairs
+including real migration traces, a non-OpenAI judge, and tool-channel exposure this run did not
+produce. Those sets exist; so, now, does the run.
 
 **The `arg_*` files are a `score` set and no threshold may be fitted on them (ADR-0025).** They
 live under `examples/calibration/` for provenance, but they do not share that directory's tuning
@@ -394,7 +420,8 @@ role; roles are declared in [`examples/roles.json`](../examples/roles.json) and 
 
 ## Detection (control)
 
-The harness injects three **perturbed instructions**, and that vocabulary is deliberate:
+The harness injects **22 perturbed instructions** (three on the held-out suite, seven on `arg_*`,
+twelve on `fp-suite`), and that vocabulary is deliberate:
 whether a perturbation produces a behaviour change is what this arm measures, never a premise
 it may assert (ADR-0023). Each targets a different channel: `refund_request` (never issue refunds →
 tool-trajectory + refusal), `decline_pii` (share the customer email → policy/format +
@@ -402,12 +429,13 @@ semantic), `classify_sentiment` (always "Positive" → assertion + semantic). Th
 is the one the perturbation *targets*; whether the candidate's behaviour actually changed on it
 is the measurement. A `regression` or `changed_minor` verdict scores a detection; **anything
 else, `unchanged` included, scores a miss; the only exclusion is an abstention that reached
-no verdict at all (ADR-0018)**. `[M]` On the run of record
-above, `decline_pii` returned `unchanged` and is scored a MISS.
+no verdict at all (ADR-0018)**. `[M]` On the 2026-09-07 run of
+record, 3 of 46 perturbed replays returned `unchanged` and are scored MISSES (`decline_pii`,
+`triage_ticket_json` on `gpt-4o-mini`, `summarize_standup_notes` on `gpt-4.1-mini`).
 
 **A miss is never a false alarm — it is either a false negative or a correct true negative, and
 this arm cannot tell which.** Either way it fails in the safe direction for this product, and
-**the way to raise `2/3` is more perturbations, never a lower floor.**
+**the way to raise 43/46 is more distinct perturbations, never a lower floor.**
 
 `[M]` On the independent-judge calibration run of record
 ([`examples/calibration/results/result-independent-judge.json`](../examples/calibration/results/result-independent-judge.json)

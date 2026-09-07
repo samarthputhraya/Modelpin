@@ -42,15 +42,21 @@ key first.
   skip outside a checkout.
 
 ### Added
-- **The false-positive rate of record is measured.** `[M]` 710 same-model comparisons at the
-  shipped defaults on 2026-09-07: **0 false alarms in 82 scored trials** and in 710 trials that
-  reached a verdict — one-sided 95% upper bounds **3.6%** and **0.4%** — across five
-  surfaces and three models on two vendors, with the semantic judge on. Detection on the same
-  surfaces: **43 of 46** injected perturbations flagged (lower bound **84.0%**). Until this
-  release the document the README pointed to for this number read *"0 false alarms in 0 scored
-  trials"*: every scenario set ran at temperature 0, where a false positive is impossible. Every
-  trial and its traces are committed under `reports/fp-runs/2026-09-07/`, and a test regenerates the
-  published tables from them. Bound, not zero; see `docs/fp-measurement.md` for what it does not say.
+- **The false-positive rate of record is bounded for the first time.** `[M]` 710 same-model
+  comparisons at the shipped defaults on 2026-09-07: **0 false alarms in 82 scored trials**
+  (one-sided 95% upper bound **3.6%**), and 0 in the 710 that reached a verdict (upper bound
+  **0.4%**, reported for completeness — 628 of those 710 could not have fired at any threshold)
+  — on two OpenAI models plus a 12-trial single-repeat sanity arm on Groq that constrains
+  nothing, with the semantic judge on. The bound is carried by 13 of 27 scenario shapes on the
+  semantic and argument channels; the tool-call and assertion channels saw no exposure. Detection
+  on the same surfaces: **43 of 46** perturbed replays flagged (**19 of 22** distinct perturbations
+  on every surface). Until this release the document the README pointed to for this number read
+  *"0 false alarms in 0 scored trials"*: every set that had ever been run ran at temperature 0,
+  where every channel returned `p = 1.00` and no trial could fire (the seven `arg_*` scenarios at
+  0.7 had existed since MP-54 but had never been run under the shipped engine). Every trial and
+  its traces are committed under `reports/fp-runs/2026-09-07/`, and a test regenerates the
+  published block from them. Bound, not zero; see `docs/fp-measurement.md` for what it does not
+  say — including a measured false negative in the semantic channel, tracked as MP-206.
 - **`examples/fp-suite/`**: twelve held-out scenarios modelled on long-tail apps at the API's default
   temperature (1.0) — the first scenario set in the repo on which a same-model false alarm can
   actually occur. Role `score`; reviewed before its first run; never edited after.
