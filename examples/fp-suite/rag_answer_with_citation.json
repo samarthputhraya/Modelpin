@@ -1,0 +1,26 @@
+{
+  "id": "rag_answer_with_citation",
+  "name": "Grounded answer from numbered passages with a bracket citation",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Answer the customer's question using ONLY the numbered passages below the question. Cite the passage you used as [n] at the end of the sentence. If the passages do not contain the answer, reply with exactly: NOT IN SOURCES"
+      },
+      {
+        "role": "user",
+        "content": "Question: How long do I have to return a jacket I have not worn?\n\n[1] Returns: unworn items with their tags still attached can be returned for a full refund within 30 days of delivery.\n[2] Shipping: standard delivery is free on orders over 50 EUR; express delivery costs 9.90 EUR.\n[3] Warranty: backpack frames carry a two-year warranty against manufacturing defects."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "[1]"
+    ],
+    "must_not_contain": [
+      "NOT IN SOURCES"
+    ]
+  }
+}

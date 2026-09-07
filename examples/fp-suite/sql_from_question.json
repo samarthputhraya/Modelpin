@@ -1,0 +1,23 @@
+{
+  "id": "sql_from_question",
+  "name": "One PostgreSQL SELECT from a question about an orders table",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You translate questions into a single PostgreSQL SELECT statement over the table orders(id, customer_id, status, total_cents, created_at). Reply with the SQL statement only, no explanation, no code fences."
+      },
+      {
+        "role": "user",
+        "content": "How many orders were cancelled in August 2026?"
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_not_contain": [
+      "```"
+    ]
+  }
+}

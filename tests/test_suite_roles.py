@@ -202,6 +202,24 @@ EXPECTED_MEMBERS: dict[tuple[str, str], frozenset[str]] = {
             "tool_missing_param",
         }
     ),
+    # MP-205: the false-positive suite of record, temperature 1.0, pre-registered in ADR-0036.
+    # A scenario here can never be fitted on or edited after scoring; moving one needs an ADR.
+    ("fp-suite", "score"): frozenset(
+        {
+            "agent_missing_param_ask",
+            "agent_reschedule_two_step",
+            "borderline_medication_question",
+            "classify_review_sentiment",
+            "extract_invoice_fields",
+            "format_markdown_table",
+            "rag_answer_with_citation",
+            "rewrite_email_polite",
+            "sql_from_question",
+            "summarize_standup_notes",
+            "support_order_status",
+            "triage_ticket_json",
+        }
+    ),
 }
 
 #: Derived, so the path -> role pin and the membership pin cannot drift apart.

@@ -1,0 +1,86 @@
+{
+  "id": "agent_reschedule_two_step",
+  "name": "Two-step agent: look an appointment up, then reschedule it",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the scheduling assistant for a dermatology clinic. To reschedule an appointment: first call get_appointment with the booking reference, then call reschedule_appointment with the new date the patient asked for. Never reschedule without looking the appointment up first. After the tools succeed, confirm the new date to the patient in one sentence."
+      },
+      {
+        "role": "user",
+        "content": "I need to move my appointment BK-3306 to 22 September 2026, morning if possible."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_appointment",
+          "description": "Look up an existing appointment.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "booking_ref": {
+                "type": "string",
+                "description": "The booking reference exactly as the patient gave it, e.g. BK-3306."
+              }
+            },
+            "required": [
+              "booking_ref"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "reschedule_appointment",
+          "description": "Move an existing appointment to a new date.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "booking_ref": {
+                "type": "string",
+                "description": "The booking reference."
+              },
+              "new_date": {
+                "type": "string",
+                "description": "The requested new date in YYYY-MM-DD form."
+              },
+              "preference": {
+                "type": "string",
+                "description": "Time-of-day preference, if the patient stated one. Optional."
+              }
+            },
+            "required": [
+              "booking_ref",
+              "new_date"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_appointment": {
+        "booking_ref": "BK-3306",
+        "patient": "R. Alvarez",
+        "current_date": "2026-09-15",
+        "clinic": "Dermatology"
+      },
+      "reschedule_appointment": {
+        "status": "rescheduled",
+        "booking_ref": "BK-3306",
+        "new_date": "2026-09-22",
+        "slot": "09:30"
+      }
+    },
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "22"
+    ]
+  }
+}
