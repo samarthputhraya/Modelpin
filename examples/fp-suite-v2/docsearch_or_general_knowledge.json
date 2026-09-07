@@ -1,0 +1,47 @@
+{
+  "id": "docsearch_or_general_knowledge",
+  "name": "A product-docs search tool, asked a question that is general knowledge",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the in-product assistant for Tessellate, a small analytics SaaS. You can search the Tessellate documentation with search_docs. Answer the user in at most three sentences."
+      },
+      {
+        "role": "user",
+        "content": "Quick one while I'm looking at your latency dashboard: what is the difference between p50 and p95?"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "search_docs",
+          "description": "Search the Tessellate product documentation and return the most relevant passages.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "The search query."
+              }
+            },
+            "required": [
+              "query"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "search_docs": {
+        "passages": [
+          "Latency dashboard: each chart shows p50 and p95 over the selected window. p50 is the median request latency; half of requests were faster. p95 is the latency below which 95% of requests completed, so it tracks the slow tail.",
+          "Percentiles are computed per five-minute bucket and are not averaged across buckets."
+        ]
+      }
+    },
+    "temperature": 1.0
+  }
+}

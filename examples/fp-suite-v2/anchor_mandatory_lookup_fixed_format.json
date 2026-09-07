@@ -1,0 +1,56 @@
+{
+  "id": "anchor_mandatory_lookup_fixed_format",
+  "name": "QUIET ANCHOR: one required tool call and one fully specified line of output",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the assistant for Halden Rail's ticket desk. You MUST call get_booking with the booking code before answering any question about a booking; never answer from memory, and never call any tool more than once. Then reply with exactly one line, in this form and nothing else:\nBOOKING <code> STATUS <status>\nCopy the code and the status from the tool result exactly as they are written there. Do not add punctuation, explanation, Markdown or code fences."
+      },
+      {
+        "role": "user",
+        "content": "What is the status of booking HR-9042?"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_booking",
+          "description": "Look up a rail booking by its booking code.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "The booking code exactly as the passenger gave it, e.g. HR-9042."
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_booking": {
+        "code": "HR-9042",
+        "status": "CONFIRMED",
+        "service": "Oslo-Bergen 08:12",
+        "seat": "12A"
+      }
+    },
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "HR-9042",
+      "CONFIRMED"
+    ],
+    "must_not_contain": [
+      "```"
+    ]
+  }
+}

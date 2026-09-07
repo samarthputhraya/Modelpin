@@ -1,0 +1,51 @@
+FP measurement: provider=groq model=openai/gpt-oss-20b runs=5 judge=off scenarios=12 repeats=1
+  roles: all 'score' (single-role directory)
+  -> 12 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+  RESCORED OFFLINE from reports/channel-exposure/2026-09-07/pilot-groq-gpt-oss-20b.jsonl (recorded 2026-09-07T15:23:42Z @ 202274b); no provider was called.
+  git 202274b * 2026-09-07T16:36:58Z * workers=1
+
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  anchor_mandatory_lookup_fixed_format unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math unchanged      conf=1.00  [tools 1|1 args 2|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge unchanged      conf=1.00  [tools 1|2 args 5|4 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  grammar_tool_or_direct_fix unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking unchanged      conf=1.00  [tools 2|2 args 2|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_notify_after_status_update unchanged      conf=0.52  [tools 1|1 args 3|5 text 5|4]
+  optional_part_stock_second_lookup unchanged      conf=1.00  [tools 2|2 args 2|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_answer_fence_unspecified unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/1 = 0%
+  95% upper bound on the true rate: 95.0% (one-sided Clopper-Pearson, n=1)
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 11
+
+  NOTE: the rate is over the 1 scenario(s) in which something could have
+  fired; 11 could not, and are excluded.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+
+  Detection: 0/0 injected perturbations caught
+  Unmeasured (excluded): 0
+
+  *** THE DETECTION ARM CHECKED NOTHING. ***
+  0/0 is not evidence that the engine catches real changes - it is evidence
+  that no injected perturbation reached a verdict. Since ADR-0022 withdrew the
+  false-positive claim this is the only half of the DoD still asserted, so an
+  empty run here means the harness demonstrated nothing at all.
+
+  This invocation: 0 trial(s) run live, 12 reused from the artifact, 0.0 min wall.
+  Replay tokens in/out over all 12 trial(s): 70,342/23,963; judge calls implied by the traces: 0 (judge tokens are not metered).
+  Artifact: reports/channel-exposure/2026-09-07/pilot-groq-gpt-oss-20b.jsonl  (re-read offline with --rescore; traces included)

@@ -98,7 +98,7 @@ cross-vendor sanity arm:
 
 **How to read the bound.** Zero flags in 82 scored trials means the true conditional rate is below 3.6% with 95% confidence, and zero in 710 that reached a verdict means the rate a user sees on these shapes is below 0.4%; neither is a zero, and every point figure on this page sits beside its bound. The conditional denominator is small by design: a trial in which every channel returned `p = 1.00` could not have fired and is excluded (above), and `[M]` on prose scenarios that is most of them — 628 of 710 here. So the 0.4% is reported for completeness and is not the number to quote: it is what a user running these same checks would have seen, and 628 of its 710 trials could not have failed. The conditional 3.6% is the number that constrains the engine. That the four schema-constrained `arg_*` shapes would not score was predicted before the run (`examples/calibration/results/README-arg-gate-fp.md`: "the model varied on three of seven shapes"), and they did not.
 
-**What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios, and `[M]` **13 of them carried the bound**: 14 contributed no scored trial (four `arg_*` shapes, `classify_review_sentiment`, `format_markdown_table`, and all eight of the held-out suite), and two shapes — `summarize_standup_notes` (19) and `arg_numeric_rounding` (16) — supply 35 of the 82. Over distinct shapes the bound is **20.6%** (`upper_bound_95(0, 13)`). `[M]` Of the 82 scored trials, **51 could only have fired on the semantic channel, 30 on the advisory argument gate and 1 on refusal — 0 on the tool-call trajectory and 0 on format/assertion**: the structural floors saw no exposure here. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. **Every judge that produced a number in the bound above is an OpenAI model** — 24 of these trials have since been re-scored by a non-OpenAI judge, whose separate figures appear under *Cross-judge agreement* below; it agreed on every verdict but *not* on how many trials were scorable at all. The bound itself is unchanged and remains OpenAI-judged. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
+**What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios, and `[M]` **13 of them carried the bound**: 14 contributed no scored trial (four `arg_*` shapes, `classify_review_sentiment`, `format_markdown_table`, and all eight of the held-out suite), and two shapes — `summarize_standup_notes` (19) and `arg_numeric_rounding` (16) — supply 35 of the 82. Over distinct shapes the bound is **20.6%** (`upper_bound_95(0, 13)`). `[M]` Of the 82 scored trials, **51 could only have fired on the semantic channel, 30 on the advisory argument gate and 1 on refusal — 0 on the tool-call trajectory and 0 on format/assertion**: the structural floors saw no exposure here. The tool channel has since been given a corpus and a denominator of its own — see *Channel exposure* below; the assertion channel still has neither. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. **Every judge that produced a number in the bound above is an OpenAI model** — 24 of these trials have since been re-scored by a non-OpenAI judge, whose separate figures appear under *Cross-judge agreement* below; it agreed on every verdict but *not* on how many trials were scorable at all. The bound itself is unchanged and remains OpenAI-judged. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
 
 > **Corrected 2026-08-23 (MP-75).** The previous run of record's headline read *"0 false alarms in 8
 > scored trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
@@ -516,6 +516,104 @@ which the 456 in the S2a+S2b `fp-suite` arms are `[M]` 3,097 stored judge calls.
 ~535 tokens/call assumed in ADR-0037 (the harness does not meter judge tokens) that is ~8 days
 of Groq's free tier (`[S] 2026-09-07` 200,000 tokens/day); the assumption falls if a metered run
 shows a different figure. No money, only calendar time. Then rely on the gate in high-stakes CI.
+
+## Channel exposure (2026-09-07) — the tool trajectory finally gets a denominator
+
+`[M]` Across the run of record's **710** same-model-null trials, **0** had `tool_call_match < 1.0`
+and **0** had `format_valid == False` — while its 46 deliberately-perturbed trials produced 10
+and 7. The channels work; they had never been shown a null. So the 3.6% bound above was carried
+entirely by the semantic and argument channels, and `MIN_TOOL_TVD` — the floor protecting the
+signal a *migration* tool exists for — had a false-positive exposure of **exactly zero trials**.
+`0/0` is not a low rate.
+
+`[M]` The scenario written for precisely this, `examples/fp-suite/agent_missing_param_ask`,
+produced **zero tool calls on both sides in all 6 of its scored FP-arm trials** (of 41 that
+reached a verdict; its perturbed recall arm did move the channel): its prompt says *"ask
+them for it and do not call the tool"*, which is unambiguous, so nothing varied. An unambiguous
+prompt cannot produce trajectory variance however often it is run.
+
+[`examples/fp-suite-v2/`](../examples/fp-suite-v2/) is a new `score` set built so a *same* model
+varies: four scenarios where calling the tool is a genuine judgement call, three with an optional
+second tool (the trajectory varies in *length*, not outcome), four asserting on a literal the
+model produces variably, and one **negative control** with a mandatory tool call and a fully
+specified output line.
+
+The design, the twelve scenarios, the negative control and a falsifier for each were fixed in
+[`examples/fp-suite-v2/README.md`](../examples/fp-suite-v2/README.md) `[M]` before any run of
+this corpus, free or paid. **Read the numbers below as sequentially extended, not as
+pre-registered**, for two reasons stated here rather than left to be inferred: ADR-0038 was
+written after a free 12-trial Groq pilot
+([`pilot-groq-gpt-oss-20b.jsonl`](../reports/channel-exposure/2026-09-07/), `openai/gpt-oss-20b`,
+judge off) and quotes it, so its numeric prediction is calibrated on that pilot rather than blind
+to it; and `[M]` it registered **240 trials on two surfaces**, while the run below is **480 on
+four** — the second pair was started after the first pair had completed. `[M]` At the registered
+N the tool bound is **1/12, ub 33.9%**.
+
+`[M]` **480 same-model trials** on four surfaces: `gpt-4o-mini` vs itself judged by
+`gpt-4.1-mini`, and `gpt-4.1-mini` vs itself judged by `gpt-4o-mini`, each replicated once
+(`runs: 5 × repeats: 10`, `ALPHA 0.05`, `MIN_TOOL_TVD 0.5`, Modelpin `202274b`). No model graded
+its own output, but **both judges are OpenAI models**, exactly as in the bound above.
+
+`[M]` 1,755,400 in / 331,997 out replay tokens. `[S] 2026-09-07` at OpenAI list prices
+(`gpt-4o-mini` $0.15/$0.60, `gpt-4.1-mini` $0.40/$1.60 per 1M in/out) that is `[A]` ≈ **USD 0.83**
+— no invoice is recorded, and the harness does not meter judge tokens, so the 3,610 judge calls
+are excluded and the true figure is higher.
+
+Artifacts: [`reports/channel-exposure/2026-09-07/`](../reports/channel-exposure/2026-09-07/).
+Reproduce, offline and without a key:
+
+```
+python scripts/channel_exposure.py reports/channel-exposure/2026-09-07/v2*.jsonl
+```
+
+| channel | exposed (the channel moved) | of which **scored** | false alarms | 95% upper bound |
+|---|---|---|---|---|
+| **tool-call trajectory** | **37** (`tool_call_match < 1.0`) | **26** | **1** | **17.0%** (1/26 = 3.8%) |
+| **format / assertion** | **0**, of 160 in scope | 0 | — | **none — 0/0 is not a rate** |
+| all channels pooled | — | 101, of 480 reached | 3 | 7.5% |
+
+The bound is over **scored** trials, never over exposed ones: 11 of the 37 moved the trajectory
+by too little to reach any ALPHA, and padding a denominator with trials that could not have
+produced a false positive is precisely what ADR-0022 exists to prevent.
+
+- `[M]` **The negative control held**: 40 trials, `tool_call_match = 1.0` and `format_valid = True`
+  on every one. The variance is the design's, not the harness's.
+- `[M]` **The tool channel's false alarm is real and is the shape a user would meet**: same model,
+  same prompt, `['update_order_status', 'notify_customer'] → ['update_order_status']` — the model
+  simply chose to send the courtesy email in one sample and not the other — reported as
+  `regression` at **confidence 0.95**. This is the failure mode `MIN_TOOL_TVD` exists to prevent,
+  and on a corpus where the channel is live it happens.
+- `[M]` **The assertion channel returned zero exposure even on a corpus built for it.** Its four
+  scenarios pinned at a violation rate of 0/5 or 5/5 on *both* sides. That is a stated limit, not
+  a bound: **the format/assertion channel remains unmeasured for false positives.**
+- `[M]` **Eight of the eleven non-anchor scenarios produced no exposure on their target channel**,
+  each tripping the falsifier its own file pre-registered: four of the seven tool-live scenarios
+  (`calc_tool_or_mental_math`, `grammar_tool_or_direct_fix`, `verify_or_trust_pasted_status`,
+  `optional_availability_before_booking`) took the same branch in 5/5 runs on both sides in all 40
+  of their trials, and all four assertion scenarios pinned — three of them violating in **5/5 runs
+  on both sides**, the `[2]`, `EUR` and unfenced-query variants never being produced at all.
+  Building a corpus that varies is harder than the design predicted; the bound rests on what did.
+- `[M]` **The other two false alarms were semantic, and they are not the same kind of error.** In
+  one (`plaintext_answer_bold_optional`) the model genuinely contradicted itself between samples —
+  a debit note "request a price reduction" in one, "a price increase" in the other — so the judge
+  was arguably right and the *model*, not the engine, was inconsistent. In the other
+  (`sql_answer_fence_unspecified`) two correct SQL queries differing only in a column alias and a
+  redundant `IS NOT NULL` were scored non-equivalent. Both are false alarms by this arm's
+  definition — same model, no change, an alarm — and which of them is the judge's fault is exactly
+  the question *Cross-judge agreement* below exists to start pricing.
+
+**What this does not say.** This corpus is exposure-maximising by construction, so its rate is a
+near-worst-case *conditional* figure — "given an app where the tool trajectory is genuinely
+live" — and it is **never pooled with the 3.6% bound above**; `scripts/channel_exposure.py`
+refuses to read an artifact from the run-of-record directory, and the two live in separate trees.
+`[M]` The tool exposure is concentrated, and the scored subset carrying the bound more so: of the
+37 exposed trials **30 come from one scenario** (`optional_notify_after_status_update`) and three
+supply all of them — but of the **26 scored** trials **24 come from that one scenario, and only
+two scenarios contribute any scored trial at all**: `optional_part_stock_second_lookup` moved the
+trajectory 5 times and reached scoring 0 times. So **17.0% is a bound over one dominant shape**,
+not over tool use in general. Two models from one vendor are two models. The pooled row's 480 is
+every trial that reached a verdict, including the control's 40, which the per-channel rows
+exclude.
 
 ## Cross-judge agreement (2026-09-07) — one replay, two judges
 

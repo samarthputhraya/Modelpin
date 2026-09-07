@@ -143,6 +143,25 @@
         "rewrite_email_polite",
         "sql_from_question"
       ]
+    },
+    {
+      "path": "fp-suite-v2",
+      "role": "score",
+      "why": "MP-207: the tool-trajectory and format/assertion channels, exposed to a same-model null for the first time. [M] 2026-09-07 over reports/fp-runs/2026-09-07/*.jsonl: of the 710 FP-arm trials in the run of record, ZERO had tool_call_match < 1.0 and ZERO had format_valid False -- while the 46 deliberately-perturbed recall trials produced 10 and 7 respectively. The channels work; they had simply never been shown a null, so MIN_TOOL_TVD had a measured false-positive exposure of exactly zero trials and the published 3.6% bound covered neither channel. [M] The scenario authored for precisely this in fp-suite, agent_missing_param_ask, produced zero tool calls on BOTH sides in all 6 of its scored FP-ARM trials (of 41 that reached a verdict; its perturbed recall arm did move the channel): its prompt says 'ask them for it and do not call the tool', which is unambiguous, so nothing varied. These twelve are built so a SAME model varies: four make calling the tool a genuine judgement call, three add a second tool that is optional given what the user already said (so the trajectory varies in LENGTH, not in outcome), four assert on a literal the model produces variably while staying correct, and anchor_mandatory_lookup_fixed_format is a NEGATIVE CONTROL -- mandatory tool, unambiguous format, so variance THERE means the run measured noise rather than design. score, never fit: a floor fitted on the only surface where a channel can fire and then scored on that same surface is unfalsifiable (ADR-0025). Pre-registered in ADR-0038.",
+      "scenarios": [
+        "anchor_mandatory_lookup_fixed_format",
+        "calc_tool_or_mental_math",
+        "citation_style_underspecified",
+        "docsearch_or_general_knowledge",
+        "grammar_tool_or_direct_fix",
+        "optional_availability_before_booking",
+        "optional_notify_after_status_update",
+        "optional_part_stock_second_lookup",
+        "plaintext_answer_bold_optional",
+        "sql_answer_fence_unspecified",
+        "total_currency_code_or_symbol",
+        "verify_or_trust_pasted_status"
+      ]
     }
   ]
 }

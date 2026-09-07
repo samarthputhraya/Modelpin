@@ -1,0 +1,44 @@
+{
+  "id": "calc_tool_or_mental_math",
+  "name": "A calculator tool is offered for arithmetic the model can also do in its head",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the assistant inside a freelance invoicing app. Answer the user's question directly and briefly. A calculator tool is available."
+      },
+      {
+        "role": "user",
+        "content": "My client in Berlin is paying me 1,850.00 EUR for this project. Today's rate is 1.0837 USD to 1 EUR. What is that in US dollars?"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "calculate",
+          "description": "Evaluate an arithmetic expression and return the result.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "The arithmetic expression to evaluate, e.g. '1850 * 1.0837'."
+              }
+            },
+            "required": [
+              "expression"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "calculate": {
+        "result": 2004.845
+      }
+    },
+    "temperature": 1.0
+  }
+}

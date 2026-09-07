@@ -1,0 +1,44 @@
+PER-CHANNEL FALSE-POSITIVE EXPOSURE — examples/fp-suite-v2 (MP-207, ADR-0038)
+  A same-model null on a corpus built so the TOOL TRAJECTORY and ASSERTION channels
+  can move. Not comparable with, and never pooled into, the fp-suite bound.
+
+  surface: v2a-fp-suite-v2-gpt-4o-mini.jsonl  model gpt-4o-mini vs itself, judge gpt-4.1-mini @ openai, runs 5 x repeats 10, git 202274b
+  surface: v2b-fp-suite-v2-gpt-4.1-mini.jsonl  model gpt-4.1-mini vs itself, judge gpt-4o-mini @ openai, runs 5 x repeats 10, git 202274b
+  surface: v2c-fp-suite-v2-gpt-4o-mini-rep2.jsonl  model gpt-4o-mini vs itself, judge gpt-4.1-mini @ openai, runs 5 x repeats 10, git 202274b
+  surface: v2d-fp-suite-v2-gpt-4.1-mini-rep2.jsonl  model gpt-4.1-mini vs itself, judge gpt-4o-mini @ openai, runs 5 x repeats 10, git 202274b
+
+  FP arm, all channels: 3/101 scored (480 reached a verdict); ub 7.5%
+
+  TOOL-CALL TRAJECTORY
+    exposed (tool_call_match < 1.0)      : 37 trial(s)
+    ...of which SCORED (could have fired): 26
+    false alarms, over the SCORED ones   : 1/26 = 3.8%, one-sided 95% upper bound 17.0%
+
+  FORMAT / ASSERTION
+    in scope (scenario declares assertions): 160 trial(s)
+    exposed (violation RATE differs)       : 0 trial(s)
+    ...of which SCORED                     : 0
+    false alarms, over the SCORED ones     : n/a — ZERO exposure, so there is no denominator and no bound
+
+  NEGATIVE CONTROL (anchor_mandatory_lookup_fixed_format): 40 trial(s), tool-exposed 0, assertion-exposed 0, flagged 0  -> HELD
+
+  FALSE ALARMS:
+    optional_notify_after_status_update#6  regression @ 0.952 [tool]
+      tool-call behavior changed: ['update_order_status', 'notify_customer'] -> ['update_order_status']
+    plaintext_answer_bold_optional#2       regression @ 0.976 [semantic]
+      semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%)
+    sql_answer_fence_unspecified#6         regression @ 0.976 [semantic]
+      semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%)
+
+  EXPOSURE BY SCENARIO (tool / assertion / trials):
+    optional_notify_after_status_update       30 /   0 /  40
+    optional_part_stock_second_lookup          5 /   0 /  40
+    docsearch_or_general_knowledge             2 /   0 /  40
+    citation_style_underspecified              0 /   0 /  40
+    calc_tool_or_mental_math                   0 /   0 /  40
+    grammar_tool_or_direct_fix                 0 /   0 /  40
+    optional_availability_before_booking       0 /   0 /  40
+    plaintext_answer_bold_optional             0 /   0 /  40
+    total_currency_code_or_symbol              0 /   0 /  40
+    sql_answer_fence_unspecified               0 /   0 /  40
+    verify_or_trust_pasted_status              0 /   0 /  40

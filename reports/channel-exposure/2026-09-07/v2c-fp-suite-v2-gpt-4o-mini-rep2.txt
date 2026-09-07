@@ -1,0 +1,159 @@
+FP measurement: provider=openai model=gpt-4o-mini runs=5 judge=gpt-4.1-mini scenarios=12 repeats=10
+  roles: all 'score' (single-role directory)
+  -> 120 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+  RESCORED OFFLINE from reports/channel-exposure/2026-09-07/v2c-fp-suite-v2-gpt-4o-mini-rep2.jsonl (recorded 2026-09-07T16:16:25Z @ 202274b); no provider was called.
+  git 202274b * 2026-09-07T16:36:55Z * workers=1
+
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  anchor_mandatory_lookup_fixed_format#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|4]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#1 unchanged      conf=1.00  [tools 1|1 args 3|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  grammar_tool_or_direct_fix#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_notify_after_status_update#1 unchanged      conf=0.50  [tools 2|2 args 2|3 text 4|4]
+  optional_part_stock_second_lookup#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_answer_fence_unspecified#1 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  total_currency_code_or_symbol#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|2]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#2 unchanged      conf=1.00  [tools 1|1 args 2|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  grammar_tool_or_direct_fix#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_notify_after_status_update#2 unchanged      conf=0.50  [tools 1|2 args 1|2 text 3|3]
+  optional_part_stock_second_lookup#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#2 unchanged      conf=0.10  [tools 1|1 args 1|1 text 5|5]
+  sql_answer_fence_unspecified#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|4]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|4]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#3 unchanged      conf=0.49  [tools 1|1 args 3|3 text 5|5]
+  grammar_tool_or_direct_fix#3 unchanged      conf=1.00  [tools 1|1 args 2|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#3 unchanged      conf=0.26  [tools 1|1 args 1|1 text 5|5]
+  optional_notify_after_status_update#3 unchanged      conf=0.44  [tools 2|1 args 3|1 text 4|4]
+  optional_part_stock_second_lookup#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#3 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  sql_answer_fence_unspecified#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|3]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#4 unchanged      conf=1.00  [tools 1|1 args 2|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  grammar_tool_or_direct_fix#4 unchanged      conf=0.17  [tools 1|1 args 3|1 text 5|5]
+  optional_availability_before_booking#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_notify_after_status_update#4 unchanged      conf=0.17  [tools 1|2 args 4|3 text 4|4]
+  optional_part_stock_second_lookup#4 unchanged      conf=1.00  [tools 2|1 args 2|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#4 unchanged      conf=0.26  [tools 1|1 args 1|1 text 5|5]
+  sql_answer_fence_unspecified#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|2]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#5 unchanged      conf=0.17  [tools 1|1 args 4|1 text 5|5]
+  grammar_tool_or_direct_fix#5 unchanged      conf=1.00  [tools 1|1 args 1|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#5 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  optional_notify_after_status_update#5 unchanged      conf=0.52  [tools 2|2 args 4|2 text 4|4]
+  optional_part_stock_second_lookup#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_answer_fence_unspecified#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#6 unchanged      conf=1.00  [tools 1|1 args 3|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  grammar_tool_or_direct_fix#6 unchanged      conf=1.00  [tools 1|1 args 2|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#6 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  optional_notify_after_status_update#6 unchanged      conf=0.44  [tools 2|1 args 3|1 text 4|2]
+  optional_part_stock_second_lookup#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_answer_fence_unspecified#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#7 unchanged      conf=0.36  [tools 1|1 args 3|2 text 5|5]
+  grammar_tool_or_direct_fix#7 unchanged      conf=1.00  [tools 1|1 args 2|2 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_notify_after_status_update#7 unchanged      conf=1.00  [tools 2|2 args 3|4 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  optional_part_stock_second_lookup#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_answer_fence_unspecified#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|2]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#8 unchanged      conf=0.71  [tools 1|1 args 3|4 text 5|5]
+  grammar_tool_or_direct_fix#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_notify_after_status_update#8 unchanged      conf=0.50  [tools 2|2 args 3|3 text 4|4]
+  optional_part_stock_second_lookup#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_answer_fence_unspecified#8 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  total_currency_code_or_symbol#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#9 unchanged      conf=0.29  [tools 1|1 args 2|3 text 5|5]
+  grammar_tool_or_direct_fix#9 unchanged      conf=0.44  [tools 1|1 args 1|2 text 5|5]
+  optional_availability_before_booking#9 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  optional_notify_after_status_update#9 unchanged      conf=1.00  [tools 2|2 args 2|3 text 2|5]  <-- p=1.00 everywhere; could not have fired
+  optional_part_stock_second_lookup#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  plaintext_answer_bold_optional#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_answer_fence_unspecified#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  anchor_mandatory_lookup_fixed_format#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  calc_tool_or_mental_math#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  citation_style_underspecified#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  docsearch_or_general_knowledge#10 unchanged      conf=0.21  [tools 1|1 args 2|3 text 5|5]
+  grammar_tool_or_direct_fix#10 unchanged      conf=1.00  [tools 1|1 args 2|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  optional_availability_before_booking#10 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  optional_notify_after_status_update#10 unchanged      conf=0.50  [tools 2|2 args 4|3 text 5|5]
+  optional_part_stock_second_lookup#10 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  plaintext_answer_bold_optional#10 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  sql_answer_fence_unspecified#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  total_currency_code_or_symbol#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  verify_or_trust_pasted_status#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/28 = 0%
+  95% upper bound on the true rate: 10.1% (one-sided Clopper-Pearson, n=28)
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 92
+
+  NOTE: the rate is over the 28 scenario(s) in which something could have
+  fired; 92 could not, and are excluded.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+
+  Detection: 0/0 injected perturbations caught
+  Unmeasured (excluded): 0
+
+  *** THE DETECTION ARM CHECKED NOTHING. ***
+  0/0 is not evidence that the engine catches real changes - it is evidence
+  that no injected perturbation reached a verdict. Since ADR-0022 withdrew the
+  false-positive claim this is the only half of the DoD still asserted, so an
+  empty run here means the harness demonstrated nothing at all.
+
+  This invocation: 0 trial(s) run live, 120 reused from the artifact, 0.0 min wall.
+  Replay tokens in/out over all 120 trial(s): 452,839/88,513; judge calls implied by the traces: 910 (judge tokens are not metered).
+  Artifact: reports/channel-exposure/2026-09-07/v2c-fp-suite-v2-gpt-4o-mini-rep2.jsonl  (re-read offline with --rescore; traces included)
