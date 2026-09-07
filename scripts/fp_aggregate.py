@@ -206,13 +206,13 @@ def summarise(paths: list[str]) -> dict:
 
 
 def render(summary: dict) -> list[str]:
-    out = ["## Surfaces", ""]
+    out = ["### Surfaces", ""]
     out.append(
-        "| surface | candidate (judge) | temp | runs x repeats | attempted | reached verdict | "
-        "SCORED | could not fire | abstained | errors | false alarms | conditional (of scored) | "
-        "unconditional (of reached) |"
+        "| surface | artifact | candidate (judge) | temp | runs x repeats | attempted | "
+        "reached verdict | SCORED | could not fire | abstained | errors | false alarms | "
+        "conditional (of scored) | unconditional (of reached) |"
     )
-    out.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    out.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     rows = summary["surfaces"] + [
         {**summary["pooled"], "surface": "**POOLED**", "model": "", "judge": ""}
     ]
@@ -222,13 +222,14 @@ def render(summary: dict) -> list[str]:
         who = f"`{cand}` ({judge or 'no judge'})" if cand else ""
         rr = f"{s['runs']} x {s['repeats']}" if "runs" in s else ""
         out.append(
-            f"| {s['surface']} | {who} | {s.get('temperature', '')} | {rr} | {s['attempted']} | "
+            f"| {s['surface']} | {s.get('artifact', '')} | {who} | {s.get('temperature', '')} | "
+            f"{rr} | {s['attempted']} | "
             f"{s['reached_verdict']} | **{s['scored']}** | {s['no_effect']} | {s['unmeasured']} | "
             f"{s['errors']} | **{s['false_positives']}** | "
             f"{_rate(s['false_positives'], s['scored'])} | "
             f"{_rate(s['false_positives'], s['reached_verdict'])} |"
         )
-    out += ["", "## Per scenario (FP arm)", ""]
+    out += ["", "### Per scenario (FP arm)", ""]
     out.append(
         "| surface | scenario | attempted | scored | false alarms | could not fire | abstained | errors |"
     )
@@ -238,7 +239,7 @@ def render(summary: dict) -> list[str]:
             f"| {c['surface']} | `{c['scenario']}` | {c['attempted']} | **{c['scored']}** | "
             f"{c['fp']} | {c['no_effect']} | {c['unmeasured']} | {c['errors']} |"
         )
-    out += ["", "## Flagged trials (every one, never excluded)", ""]
+    out += ["", "### Flagged trials (every one, never excluded)", ""]
     if not summary["flagged"]:
         out.append("(none)")
     for f in summary["flagged"]:
@@ -247,7 +248,7 @@ def render(summary: dict) -> list[str]:
             f"conf {f['confidence']:.2f} - {f['explanation']} - repertoire base {f['base_rep']} / "
             f"cand {f['cand_rep']}"
         )
-    out += ["", "## Detection (pooled across surfaces)", ""]
+    out += ["", "### Detection (pooled across surfaces)", ""]
     for s in summary["surfaces"]:
         for r in s["recall_rows"]:
             out.append(
@@ -259,7 +260,7 @@ def render(summary: dict) -> list[str]:
     out.append("```")
     out += [ln for ln in summary["pooled"]["recall_summary"] if ln.strip()]
     out.append("```")
-    out += ["", "## Cost", ""]
+    out += ["", "### Cost", ""]
     tin = sum(s["tokens_in"] for s in summary["surfaces"])
     tout = sum(s["tokens_out"] for s in summary["surfaces"])
     jc = sum(s["judge_calls"] for s in summary["surfaces"])
