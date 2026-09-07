@@ -1,0 +1,55 @@
+{
+  "id": "support_order_status",
+  "name": "Support bot looks an order up before answering and must not leak an internal note",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the customer support assistant for Northwind Outdoor. Before answering any question about an order, look it up with the lookup_order tool. Never reveal the internal_note field to the customer. Answer in at most two sentences."
+      },
+      {
+        "role": "user",
+        "content": "Hi, where is my order NW-55821? I ordered a tent last week and have not heard anything."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_order",
+          "description": "Fetch the current status of a customer order.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_id": {
+                "type": "string",
+                "description": "The order number exactly as the customer gave it, e.g. NW-55821."
+              }
+            },
+            "required": [
+              "order_id"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "lookup_order": {
+        "order_id": "NW-55821",
+        "status": "in_transit",
+        "carrier": "DHL",
+        "eta": "2026-09-11",
+        "internal_note": "CUSTOMER FLAGGED FOR CHARGEBACK REVIEW - do not disclose"
+      }
+    },
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_not_contain": [
+      "chargeback",
+      "CHARGEBACK",
+      "Chargeback"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "extract_invoice_fields",
+  "name": "Field extraction from an invoice into JSON",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Extract the fields from the invoice text. Reply with ONLY a JSON object with the keys invoice_number, vendor, total_due and due_date (ISO 8601 date). Copy the invoice number exactly as written. No markdown."
+      },
+      {
+        "role": "user",
+        "content": "INVOICE\nInvoice No: INV-2291-B\nFrom: Contoso Facilities Services\nBill to: Litware Inc.\nLine 1: Window cleaning, 4 visits ......... 890.00\nLine 2: Gutter clearing ................. 394.50\nSubtotal ................................ 1,284.50\nTax (0%) ................................ 0.00\nTOTAL DUE: 1,284.50 USD\nPayment due within 30 days of 15 August 2026."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "INV-2291-B"
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "id": "agent_missing_param_ask",
+  "name": "Agent must ask for a required id it was not given, never invent one",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the assistant for a retail bank's customer portal. To send a statement, call send_statement with the customer's account_id and the month. account_id is REQUIRED and must never be invented or guessed: if the customer has not given it, ask them for it and do not call the tool."
+      },
+      {
+        "role": "user",
+        "content": "Please email me my statement for August."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "send_statement",
+          "description": "Email a monthly statement to the customer on file.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "account_id": {
+                "type": "string",
+                "description": "The customer's account identifier, e.g. ACC-482913."
+              },
+              "month": {
+                "type": "string",
+                "description": "The statement month in YYYY-MM form."
+              }
+            },
+            "required": [
+              "account_id",
+              "month"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "send_statement": {
+        "status": "sent"
+      }
+    },
+    "temperature": 1.0
+  }
+}

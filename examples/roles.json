@@ -124,6 +124,25 @@
         "cite_in_range",
         "format_one_spoken_sentence"
       ]
+    },
+    {
+      "path": "fp-suite",
+      "role": "score",
+      "why": "MP-205. The false-positive suite of record: twelve scenarios modelled on the long-tail apps this project exists for (a support bot with a lookup tool, a JSON triage step, a classifier, an invoice extractor, a stand-up summariser, a RAG answer with a citation, a two-step scheduling agent, an agent that must ASK for a missing id, a borderline medication question, a Markdown table, an email rewrite, a text-to-SQL step), every one at temperature 1.0 -- the OpenAI API's default and therefore what a zero-config user's app actually runs at. [M] Every scenario set that existed before it runs at temperature 0 except arg_* (0.7, tools only) and the six fitted semantic files, so no set could exercise the semantic, refusal and assertion channels on a same-model null where the outputs actually VARY. Role score, pre-registered in ADR-0036 BEFORE its first run: no threshold may be fitted here, no assertion or prompt may be edited after a rate has been measured on it (a defect found later becomes a v2 suite row, as MP-186 did for voicerag-suite), and no scenario here may be moved to another role. Content-disjoint from every other set.",
+      "scenarios": [
+        "support_order_status",
+        "triage_ticket_json",
+        "classify_review_sentiment",
+        "extract_invoice_fields",
+        "summarize_standup_notes",
+        "rag_answer_with_citation",
+        "agent_reschedule_two_step",
+        "agent_missing_param_ask",
+        "borderline_medication_question",
+        "format_markdown_table",
+        "rewrite_email_polite",
+        "sql_from_question"
+      ]
     }
   ]
 }
