@@ -9,13 +9,12 @@ they are finished NO bound from this directory may be published.
 |---|---|---|---|
 | mp206-s0-suite-gpt-4o-mini-newengine.jsonl | 11 | 7 | 4 |
 | mp206-s1-arg-gpt-4.1-mini-newengine.jsonl | 217 | 210 | 7 |
-| mp206-s2a-newengine.jsonl | 252 | 245 | 7 |
+| mp206-s2a-newengine.jsonl | 252 | 246 | 6 |
 | mp206-s2b-newengine.jsonl | 252 | 252 | 0 |
-| mp206-s3-fp-suite-groq-gpt-oss-20b-newengine.jsonl | 23 | 2 | 21 |
+| mp206-s3-fp-suite-groq-gpt-oss-20b-newengine.jsonl | 24 | 3 | 21 |
 
 [M] Pooled over the 699 FP-arm trials that reached a verdict: **0 false alarms** under
 both engines. Scored trials fall 82 -> 39, so the CONDITIONAL bound moves 3.6% -> 7.4% while
 the UNCONDITIONAL bound is 0.42% -> 0.43%. ADR-0036's revisit trigger is written on the
 unconditional bound and does NOT fire. Detection on s2b: 12/12, where the old engine read
 11/12 — the two measured false negatives are caught.
-
