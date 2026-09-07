@@ -168,7 +168,12 @@ class TestArtifact:
         rec = fp.trial_record("fp:a#1", "a#1", _result("a#1"), base, cand, None, 1.5, True)
         assert rec["scenario_id"] == "a" and rec["arm"] == "fp"
         assert rec["tokens_in"] == 100 and rec["tokens_out"] == 30
-        assert rec["judge_calls"] == 1, "one candidate run differs from the modal text"
+        # `[M] 2026-09-07` ADR-0040: 5, not 1. Four candidate runs match a baseline run
+        # textually and cost nothing; the fifth ("okay") matches none, so it is compared
+        # against all five. The baseline side is free -- its runs are identical to each
+        # other. This is a BOUND now, not a count: the real judge stops at the first
+        # equivalence, which the traces cannot predict.
+        assert rec["judge_calls"] == 5, "the one differing candidate run costs a pool pass"
         assert "messages" not in rec["base_traces"][0], "the prompt is not the measurement"
         path = tmp_path / "a.jsonl"
         w = fp.ArtifactWriter(str(path))

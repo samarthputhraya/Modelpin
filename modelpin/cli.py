@@ -330,7 +330,36 @@ def _replay_plan(
         return plan  # canned traces, no network, nothing billed
     plan += f", >={replays} paid calls"
     if judge_model:
-        judged = (count * runs if ref_runs is None else ref_runs) + count * runs
+        # `[M] 2026-09-07` ADR-0040 changed the question the semantic channel asks. It used to
+        # be "is this run equivalent to the ONE modal baseline run", so the bound was simply
+        # `reference runs + candidate runs`. It is now "is this run equivalent to ANY baseline
+        # run", so each candidate run can cost up to `b` calls and each baseline run up to
+        # `b - 1` (leave-one-out). Left at the old formula this line UNDER-disclosed a paid
+        # axis by roughly `b`x -- the same ADR-0019 violation as overstating one, pointed the
+        # other way. `up to` is doing real work here: both short-circuits (identical text, and
+        # stopping at the first equivalence) usually bring the true number far below it.
+        # Per scenario: `b` reference runs (what was RECORDED, MP-72) and `runs` candidate
+        # runs. Each reference run is compared against the other b-1; each candidate run
+        # against all b. The two sides are NOT the same size, and using one for both is the
+        # MP-72 defect over again.
+        #
+        # `[M] 2026-09-07 FP review` The depths must be summed PER SCENARIO, never averaged
+        # first. `b*(b-1)` is convex, so Jensen makes an averaged bound an UNDER-statement on
+        # any uneven baseline -- a state `nonuniform_run_counts` exists precisely because the
+        # store supports. Measured on a first draft of this line: `[5,5,20]` disclosed 420
+        # against a true 570 (26% under), `[1,1,30]` disclosed 420 against 1030 (59% under).
+        # The pre-ADR-0040 formula was linear in the total and so was exact for any shape;
+        # losing that would be the ADR-0019 violation this clause exists to avoid.
+        # A SEQUENCE gives the exact bound for any shape, and `check` passes one. An int keeps
+        # the legacy meaning -- the TOTAL, assumed evenly spread -- and is exact only when the
+        # baseline is uniform, which is why the real call site does not use it.
+        if ref_runs is None:
+            depths = [runs] * count
+        elif isinstance(ref_runs, int):
+            depths = [ref_runs // max(count, 1)] * count
+        else:
+            depths = list(ref_runs)
+        judged = sum(b * max(b - 1, 0) + runs * b for b in depths)
         plan += f" + up to {judged} judge calls"
     return plan
 
@@ -1109,7 +1138,11 @@ def check(
     # bounds this run's replays, not a past run's recording. Counting the traces on disk
     # rather than assuming `n` of them is what keeps `up to N judge calls` a bound when a
     # 20-run baseline is checked at `--runs 5`. MP-72.
-    ref_runs = sum(len(t) for t in (base.get(s.id) or [] for s in scenarios))
+    # `[M] 2026-09-07 FP review` PER SCENARIO, not summed: under ADR-0040 the judge bound is
+    # convex in a scenario's recorded depth, so collapsing the depths to a total and spreading
+    # them evenly UNDER-states an uneven baseline by up to 59%. The list is available here; the
+    # sum was throwing away exactly the information the bound needs.
+    ref_runs = [len(base.get(s.id) or []) for s in scenarios if base.get(s.id)]
     plan = _replay_plan(billable, src_dir, n, prov, cfg.judge_model, ref_runs=ref_runs)
     console.print(
         f"[dim]provider={prov} from={_rich_escape(from_model)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"

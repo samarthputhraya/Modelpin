@@ -225,7 +225,13 @@ class TestReplayPlan:
         # `runs` traces in this call, so the bound is 2 x scenarios x runs; that is a
         # property of this input, NOT a general rule -- `check` against a stored baseline of
         # a different depth discloses `sum(len(stored)) + scenarios x runs` (ADR-0026).
-        assert "up to 80 judge calls" in plan, plan
+        # `[M] 2026-09-07` ADR-0040 widened this axis. The channel used to ask one
+        # question per run -- is it equivalent to the ONE modal baseline run -- so the
+        # bound was `reference runs + candidate runs`. It now asks whether a run is
+        # equivalent to ANY baseline run, so each candidate run costs up to `bref` calls
+        # and each reference run up to `bref - 1` (leave-one-out). Left at the old
+        # numbers this line UNDER-disclosed a paid axis by roughly `bref`x.
+        assert "up to 360 judge calls" in plan, plan
 
     def test_no_judge_configured_means_no_judge_claim(self) -> None:
         assert "judge" not in _replay_plan(1, "scenarios", 5, "openai", judge_model=None)
@@ -248,7 +254,7 @@ class TestReplayPlan:
         The judge scores every run on BOTH sides whatever their origin (semantic.py:68-69),
         so its bound is 2 x scenarios x runs and is INDEPENDENT of how many sides were
         replayed live. [M] the same 14-scenario suite: `check` queues 70 replays, `report`
-        queues 140, and `report` makes at most 126 judge calls. `check` matches that figure
+        queues 140, and `report` makes at most 630 judge calls under ADR-0040. `check` matches that figure
         only when the stored baseline holds `runs` traces per scenario -- otherwise its
         reference side is the RECORDED count (MP-72, `ref_runs`). Deriving the judge count from
         `replays` would bill `report`'s user a claim 2x too large - ADR-0019's rejected
@@ -256,11 +262,11 @@ class TestReplayPlan:
         """
         one = _replay_plan(14, "examples/report-suite", 5, "openai", "gpt-4o-mini")
         two = _replay_plan(14, "examples/report-suite", 5, "openai", "gpt-4o-mini", sides=2)
-        assert "up to 140 judge calls" in one, one
+        assert "up to 630 judge calls" in one, one
         assert (
-            "up to 140 judge calls" in two
+            "up to 630 judge calls" in two
         ), f"the judge axis must not scale with sides - it counts RUNS per side: {two!r}"
-        assert "280" not in two, f"judge calls derived from replays instead of runs: {two!r}"
+        assert "1260" not in two, f"judge calls derived from replays instead of runs: {two!r}"
 
     def test_ref_runs_defaults_to_the_pre_MP_72_line(self) -> None:
         """`ref_runs=None` and `ref_runs=count*runs` must both render the OLD string.
@@ -272,27 +278,28 @@ class TestReplayPlan:
         args = (8, "examples/suite", 5, "openai", "gpt-4o-mini")
         expected = (
             "8 scenario(s) from examples/suite -> 40 replays, >=40 paid calls "
-            "+ up to 80 judge calls"
+            "+ up to 360 judge calls"
         )
         assert _replay_plan(*args) == expected
         assert _replay_plan(*args, ref_runs=40) == expected, "the no-op default is not a no-op"
         two = _replay_plan(14, "examples/report-suite", 5, "openai", "gpt-4o-mini", sides=2)
-        assert "up to 140 judge calls" in two, f"report's judge axis moved: {two!r}"
+        assert "up to 630 judge calls" in two, f"report's judge axis moved: {two!r}"
 
     def test_a_larger_stored_baseline_widens_the_judge_bound(self) -> None:
         """MP-72: the reference side is what was RECORDED, not `--runs`.
 
-        [M] a 20-run baseline checked at `--runs 5` issues 24 judge calls (19 baseline --
-        the modal run is the reference and skips the judge -- plus 5 candidate). The bound
-        must cover that. It stays `up to`: 25 >= 24 because bounding at the raw stored count
-        is honest and simple, where subtracting the modal run per scenario would be a
-        point estimate of exactly the kind ADR-0019 rejects.
+        [M] a 20-run baseline checked at `--runs 5` compares 20 reference runs against the
+        other 19 each, and 5 candidate runs against all 20: at most 20x19 + 5x20 = 480.
+        It stays `up to` for two reasons now -- identical text costs nothing, and the
+        comparison stops at the first equivalence -- so the true number is usually far
+        below. Bounding at the raw stored count is honest and simple; a point estimate
+        would be exactly the kind ADR-0019 rejects.
         """
         plan = _replay_plan(1, "scenarios", 5, "openai", "gpt-4o-mini", ref_runs=20)
-        assert "up to 25 judge calls" in plan, plan
-        assert "up to 10 judge calls" not in plan, f"still bounded by --runs: {plan!r}"
+        assert "up to 480 judge calls" in plan, plan
+        assert "up to 100 judge calls" not in plan, f"still bounded by --runs: {plan!r}"
         # A SMALLER stored baseline must narrow it too - the bound tracks the recording.
-        assert "up to 8 judge calls" in _replay_plan(
+        assert "up to 21 judge calls" in _replay_plan(
             1, "scenarios", 5, "openai", "gpt-4o-mini", ref_runs=3
         )
 
@@ -308,7 +315,7 @@ class TestReplayPlan:
         assert _replay_plan(*args) == _replay_plan(*args, sides=1)
         assert _replay_plan(*args) == (
             "8 scenario(s) from examples/suite -> 40 replays, >=40 paid calls "
-            "+ up to 80 judge calls"
+            "+ up to 360 judge calls"
         )
         assert "models" not in _replay_plan(*args), "the x N models hint leaked into check"
 
