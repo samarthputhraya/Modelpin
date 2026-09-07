@@ -952,7 +952,9 @@ class ArtifactWriter:
     def write(self, record: dict) -> None:
         line = json.dumps(record, ensure_ascii=False, default=str)
         with self._lock:
-            with open(self.path, "a", encoding="utf-8") as fh:
+            # LF on every platform: a JSONL artifact committed from Windows must not differ from
+            # one committed from Linux by its line endings alone.
+            with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
                 fh.write(line + "\n")
                 fh.flush()
 
