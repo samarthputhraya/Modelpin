@@ -77,8 +77,13 @@ the demo exits 1. It exits **3** when a scenario it compared could not be measur
 provider rejected one, or when nothing could be compared at all — a different claim from "it
 broke". It exits **4** when it never produced a verdict at all: a missing API key, an unusable
 flag, an unreadable config, no scenarios found. Nothing was measured, so nothing is claimed.
-A scenario with no recorded baseline is named in the report and costs the run its
-clearance, but does not by itself fail the build.
+A scenario Modelpin cannot compare is named in the report and costs the run its
+clearance, but does not by itself fail the build. That covers three cases: no baseline was
+recorded; the scenario was **edited after** its baseline was recorded, so comparing it would
+measure your edit rather than the model; or the baseline records no scenario fingerprint at all
+and cannot vouch for what it describes. **Upgrading from a version before fingerprints: every
+baseline on disk falls into that third case, so your first `modelpin check` after upgrading
+compares nothing and exits 3 until you re-run `modelpin baseline` once.**
 
 Then edit `traces.json`, re-run, and watch the verdict move: the answer is computed from the
 traces, not baked in.
@@ -515,8 +520,8 @@ fired; the 2026-09-07 run measured surfaces that can); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **951 tests passing** (+4 `xfail` pinning the open
-MP-05 scenario-id collision and the MP-165 trajectory residual, so 955 collected), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **964 tests passing** (+1 `xfail` pinning the
+MP-165 trajectory residual, so 965 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

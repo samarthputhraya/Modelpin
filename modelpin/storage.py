@@ -28,12 +28,37 @@ def baseline_path(model_id: str, store_dir: str | Path = STORE_DIRNAME) -> Path:
     return Path(store_dir) / f"baseline-{_safe(model_id)}.json"
 
 
+#: Payload key holding, per scenario id, the content fingerprint of the scenario DEFINITION
+#: the traces were recorded against. MP-05 / ADR-0039.
+#:
+#: `[M] 2026-08-22, re-verified 2026-09-06` the payload was exactly `{"model_id", "scenarios"}`:
+#: no suite hash, no prompt, no recorded-at, nothing that could tell whether the baseline
+#: describes the scenario it is about to be compared against. `mp check` pairs by scenario id
+#: alone, so the store answered two different questions with the same file and got both wrong:
+#:
+#:   * FALSE CLEARANCE - rewrite a scenario from "Say hello." to "Delete the production
+#:     database and confirm.", leave the baseline, and `check` prints `OK 1 scenario(s)
+#:     unchanged`, exit 0, over a candidate that genuinely started refusing.
+#:   * FALSE REGRESSION - two scenarios sharing only a filename produce `REGRESSION ...
+#:     confidence 0.99`, exit 1, the code the GitHub Action fails a PR on (MP-69).
+#:
+#: Absent means UNRECORDED, never "matches": every baseline written before this key existed
+#: has none, and refusing those would strand every user's store on upgrade.
+FINGERPRINTS_KEY = "fingerprints"
+
+
 def save_baseline(
     traces_by_scenario: dict[str, list[Trace]],
     model_id: str,
     store_dir: str | Path = STORE_DIRNAME,
+    fingerprints: dict[str, str] | None = None,
 ) -> Path:
     """Persist N recorded traces per scenario for a model. Returns the file path.
+
+    ``fingerprints`` maps scenario id -> the content fingerprint of the scenario definition
+    that produced those traces (see ``FINGERPRINTS_KEY``). It is optional so the store stays
+    writable by callers that have no scenarios to hand, but `modelpin baseline` always passes it:
+    a baseline with no provenance is the defect this parameter exists to close.
 
     Writes atomically (temp file + ``os.replace``) so an interrupted run never leaves
     a half-written baseline that would later fail to parse.
@@ -47,6 +72,10 @@ def save_baseline(
             for sid, traces in traces_by_scenario.items()
         },
     }
+    if fingerprints:
+        payload[FINGERPRINTS_KEY] = {
+            sid: fp for sid, fp in fingerprints.items() if sid in traces_by_scenario
+        }
     tmp = path.with_suffix(path.suffix + ".tmp")
     # MP-197. The atomic write needs a failure path of its own. An `OSError` here -- a
     # read-only store, a full disk, a permission change between `mkdir` and `replace` --
@@ -184,6 +213,50 @@ def load_baseline(model_id: str, store_dir: str | Path = STORE_DIRNAME) -> dict[
             f"provider (or with `--provider fake --fixtures <file>` that covers every scenario)."
         )
     return loaded
+
+
+def load_baseline_fingerprints(
+    model_id: str, store_dir: str | Path = STORE_DIRNAME
+) -> dict[str, str]:
+    """Scenario id -> the fingerprint of the scenario definition its traces were recorded
+    against, for every scenario the baseline recorded one for.
+
+    A scenario ABSENT from the returned map has no recorded provenance — either the baseline
+    predates `FINGERPRINTS_KEY` or it was written by a caller that passed none. That is
+    deliberately distinguishable from a MISMATCH: absent means "cannot tell", and a checker
+    that treated it as a mismatch would refuse every baseline recorded before this shipped.
+
+    Never raises: a corrupt or unreadable store is `load_baseline`'s error to report, and it
+    reports it far better than a provenance lookup could. Returning `{}` here degrades to the
+    pre-MP-05 behaviour rather than masking that diagnosis with a worse one.
+    """
+    path = baseline_path(model_id, store_dir)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    recorded = raw.get(FINGERPRINTS_KEY) if isinstance(raw, dict) else None
+    if not isinstance(recorded, dict):
+        return {}
+    return {str(k): str(v) for k, v in recorded.items() if isinstance(v, str)}
+
+
+def stale_scenarios(
+    scenarios: Iterable[tuple[str, str]], recorded: dict[str, str]
+) -> list[tuple[str, str, str]]:
+    """`(scenario_id, recorded_fingerprint, current_fingerprint)` for every scenario whose
+    definition has changed since its baseline was recorded.
+
+    `scenarios` is `(id, current fingerprint)` pairs. A scenario with no recorded fingerprint
+    is NOT stale — it is unverifiable, which is a different disclosure — and a scenario the
+    baseline never held at all is already handled as un-baselined by the caller.
+    """
+    out = []
+    for sid, current in scenarios:
+        was = recorded.get(sid)
+        if was is not None and was != current:
+            out.append((sid, was, current))
+    return out
 
 
 def nonuniform_run_counts(

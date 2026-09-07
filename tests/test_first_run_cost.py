@@ -36,6 +36,7 @@ from modelpin.config import load_config
 from modelpin.models import Scenario, Trace
 from modelpin.providers.base import ProviderAdapter
 from modelpin.scenarios import load_scenarios
+from modelpin.report.suite import scenario_fingerprint
 from modelpin.storage import save_baseline
 
 REPO = Path(__file__).resolve().parents[1]
@@ -431,6 +432,9 @@ def test_check_judge_disclosure_bounds_the_judge_calls_it_makes(
     )
     # A baseline recorded at --runs 20, i.e. before the user lowered --runs to keep CI cheap.
     # Distinct outputs per run: the modal one becomes the reference, the other 19 are judged.
+    # MP-05: the fingerprint is what `modelpin baseline` records, and without it `check`
+    # refuses to compare an unverifiable store -- which would abstain before reaching the
+    # judge-count disclosure this test is about.
     save_baseline(
         {
             "one": [
@@ -445,6 +449,7 @@ def test_check_judge_disclosure_bounds_the_judge_calls_it_makes(
         },
         "old-model",
         tmp_path / ".store",
+        fingerprints={"one": scenario_fingerprint(load_scenarios(str(tmp_path / "scenarios"))[0])},
     )
 
     adapter = CountingAdapter()

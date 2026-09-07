@@ -24,17 +24,25 @@ STATUS. MP-69 shipped the INSTANCE fix: the dogfood baseline is keyed under the 
 `test_no_tracked_baseline_is_keyed_under_a_scaffoldable_model_id`, which is the test that
 must never go red.
 
-The three MECHANISM tests are `xfail(strict=True)` against **MP-05** (a content hash in the
-baseline payload), which is the row that actually closes this code path. Strict is the point:
-if MP-05 lands and these start passing, pytest fails and tells whoever did it to delete the
-marker. They are the specification of the fix, kept executable rather than turned into prose.
+The three MECHANISM tests were `xfail(strict=True)` against **MP-05** for eleven days; MP-05
+landed 2026-09-07 (ADR-0039) and the strict markers did exactly what they were for -- the suite
+went red with XPASS and told whoever did it to delete them. They now assert live behaviour.
+
+What closes the path: `mp baseline` records a content fingerprint of each scenario DEFINITION
+beside its traces (`storage.FINGERPRINTS_KEY`), and `mp check` refuses to compare a scenario
+whose fingerprint has changed OR whose baseline records none at all. The second half is what
+this file's collision needs: a baseline that arrived inside a clone carries no fingerprint, so
+it cannot vouch for what it describes, and an unprovable pairing abstains (exit 3, ADR-0018)
+instead of asserting a regression at confidence 0.99.
+
+`[M] 2026-09-07` Mutation-checked: disabling the unverified-baseline guard alone
+(`_unverified_ids = set()`) fails all three of these again.
 """
 
 import json
 import subprocess
 from pathlib import Path
 
-import pytest
 import yaml
 from typer.testing import CliRunner
 
@@ -42,13 +50,6 @@ from modelpin.cli import app
 from modelpin.diff import DiffVerdict
 from modelpin.models import ToolCall, Trace
 from modelpin.storage import save_baseline
-
-_MECHANISM = pytest.mark.xfail(
-    strict=True,
-    reason="MP-05: nothing records WHICH scenario definition produced the recorded traces, "
-    "so `mp check` still pairs on id alone. MP-69 removed the shipped instance of this "
-    "collision, not the mechanism. Delete this marker when MP-05 lands.",
-)
 
 runner = CliRunner()
 
@@ -140,7 +141,6 @@ def _run_check(tmp_path: Path):
     )
 
 
-@_MECHANISM
 def test_scenario_id_collision_does_not_manufacture_a_regression(tmp_path):
     """Two scenarios sharing only a name must not be reported as a behavioral regression."""
     _plant_collision(tmp_path)
@@ -153,7 +153,6 @@ def test_scenario_id_collision_does_not_manufacture_a_regression(tmp_path):
     )
 
 
-@_MECHANISM
 def test_scenario_id_collision_does_not_fail_ci(tmp_path):
     """Exit 1 is the CI gate the GitHub Action fails a PR on (`action.yml:128-136`); a
     fabricated pairing must never reach it."""
@@ -166,7 +165,6 @@ def test_scenario_id_collision_does_not_fail_ci(tmp_path):
     )
 
 
-@_MECHANISM
 def test_scenario_id_collision_is_not_published_to_a_report(tmp_path):
     """`cli.py:555-561` writes the report BEFORE the exit code is raised, and the Action
     posts that file as a sticky PR comment (`action.yml:135,138-146`)."""
@@ -175,9 +173,19 @@ def test_scenario_id_collision_is_not_published_to_a_report(tmp_path):
 
     report = tmp_path / ".modelpin" / "last-report.md"
     published = report.read_text(encoding="utf-8") if report.exists() else ""
-    assert "regression" not in published.lower(), (
-        "MP-69: the fabricated regression was written to .modelpin/last-report.md, which "
-        f"the GitHub Action posts as a PR comment.\n--- report ---\n{published}"
+    # Keyed on how a regression is actually PUBLISHED, not on the substring "regression".
+    # `[M] 2026-09-07` the bare substring test was satisfied by the abstention notice the fix
+    # produces -- *"This is NOT a clean result and NOT a regression"* -- so it failed on a
+    # sentence asserting the opposite of the defect. These three markers are the ones
+    # `report/__init__.py` emits for a real regression (`:481` header, `:565` section,
+    # `:36` per-row emoji); a mutation check confirms they still catch the original bug.
+    published_markers = [
+        m for m in ("**REGRESSIONS (", "behavioral regression", "❌") if m in published
+    ]
+    assert not published_markers, (
+        "MP-69: the fabricated regression was published to .modelpin/last-report.md, which "
+        f"the GitHub Action posts as a PR comment (markers: {published_markers}).\n"
+        f"--- report ---\n{published}"
     )
 
 
