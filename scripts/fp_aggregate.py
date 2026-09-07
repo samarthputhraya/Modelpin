@@ -95,6 +95,19 @@ def summarise(paths: list[str]) -> dict:
         header, rows = load_artifact(path)
         if header is None:
             raise SystemExit(f"error: {path} has no header line; is it an fp_measurement artifact?")
+        if header.get("replay_reused"):
+            # A rejudged artifact holds the SAME trials as its source, scored by a second
+            # judge. Pooling the two would count every trial twice and report the result as
+            # a larger sample - inflating exactly the denominator the north-star bound rests
+            # on. A glob over a directory holding both must fail loudly, not quietly average
+            # one measurement with itself. MP-208.
+            raise SystemExit(
+                f"error: {os.path.basename(path)} was rejudged from "
+                f"{header.get('rejudged_from')} — it is that artifact's trials scored by a "
+                "second judge, not a second sample, and pooling them would double-count every "
+                "trial. Aggregate each judge's artifacts separately, and compare the two with "
+                "scripts/judge_agreement.py."
+            )
         fp_rows = _rows_for(rows, "fp")
         rc_rows = _rows_for(rows, "recall")
         t, _ = fp_report(fp_rows)

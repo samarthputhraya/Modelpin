@@ -98,7 +98,7 @@ cross-vendor sanity arm:
 
 **How to read the bound.** Zero flags in 82 scored trials means the true conditional rate is below 3.6% with 95% confidence, and zero in 710 that reached a verdict means the rate a user sees on these shapes is below 0.4%; neither is a zero, and every point figure on this page sits beside its bound. The conditional denominator is small by design: a trial in which every channel returned `p = 1.00` could not have fired and is excluded (above), and `[M]` on prose scenarios that is most of them — 628 of 710 here. So the 0.4% is reported for completeness and is not the number to quote: it is what a user running these same checks would have seen, and 628 of its 710 trials could not have failed. The conditional 3.6% is the number that constrains the engine. That the four schema-constrained `arg_*` shapes would not score was predicted before the run (`examples/calibration/results/README-arg-gate-fp.md`: "the model varied on three of seven shapes"), and they did not.
 
-**What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios, and `[M]` **13 of them carried the bound**: 14 contributed no scored trial (four `arg_*` shapes, `classify_review_sentiment`, `format_markdown_table`, and all eight of the held-out suite), and two shapes — `summarize_standup_notes` (19) and `arg_numeric_rounding` (16) — supply 35 of the 82. Over distinct shapes the bound is **20.6%** (`upper_bound_95(0, 13)`). `[M]` Of the 82 scored trials, **51 could only have fired on the semantic channel, 30 on the advisory argument gate and 1 on refusal — 0 on the tool-call trajectory and 0 on format/assertion**: the structural floors saw no exposure here. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. Every judge here is an OpenAI model. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
+**What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios, and `[M]` **13 of them carried the bound**: 14 contributed no scored trial (four `arg_*` shapes, `classify_review_sentiment`, `format_markdown_table`, and all eight of the held-out suite), and two shapes — `summarize_standup_notes` (19) and `arg_numeric_rounding` (16) — supply 35 of the 82. Over distinct shapes the bound is **20.6%** (`upper_bound_95(0, 13)`). `[M]` Of the 82 scored trials, **51 could only have fired on the semantic channel, 30 on the advisory argument gate and 1 on refusal — 0 on the tool-call trajectory and 0 on format/assertion**: the structural floors saw no exposure here. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. **Every judge that produced a number in the bound above is an OpenAI model** — 24 of these trials have since been re-scored by a non-OpenAI judge, whose separate figures appear under *Cross-judge agreement* below; it agreed on every verdict but *not* on how many trials were scorable at all. The bound itself is unchanged and remains OpenAI-judged. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
 
 > **Corrected 2026-08-23 (MP-75).** The previous run of record's headline read *"0 false alarms in 8
 > scored trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
@@ -343,8 +343,11 @@ of *"a measured 0% false-positive rate"* stays withdrawn (2026-08-23) because th
 run can show. Bounding it took a live run over `examples/fp-suite/` and
 `examples/calibration/arg_*.json` — surfaces at temperature > 0, where false positives are actually
 possible. Establishing a rate still needs what the limitations section names: ≥30 labelled pairs
-including real migration traces, a non-OpenAI judge, and tool-channel exposure this run did not
-produce. Those sets exist; so, now, does the run.
+including real migration traces, and tool-channel exposure this run did not produce. The
+non-OpenAI judge that list also named is now **partly** discharged — `[M]` 24 of the 480 trials
+have been re-scored by `openai/gpt-oss-120b` on Groq, with 100% verdict agreement and a
+denominator that moved (see *Cross-judge agreement*); the remaining 456 are budget, not design.
+Those sets exist; so, now, does the run.
 
 **The `arg_*` files are a `score` set and no threshold may be fitted on them (ADR-0025).** They
 live under `examples/calibration/` for provenance, but they do not share that directory's tuning
@@ -504,10 +507,59 @@ what this arm cannot tell: `[M]` of those two misses, `explain_concept` is a gen
 miss while `define_term` came back judged fully equivalent at `p = 1.00`, indistinguishable
 from the candidate simply not following the injected instruction), and every trial here was
 scored by an **OpenAI judge**. Since 2026-08-31 the judge also runs on Gemini and the four
-OpenAI-compatible hosts (MP-143), but nothing on this page has been re-measured with one:
-a judge that runs is not a judge that is calibrated. **Next:** expand to
-≥30 labeled pairs incl. real model-migration traces, and repeat the 2026-09-07 same-model
-measurement with a non-OpenAI judge, before relying on the gate in high-stakes CI.
+OpenAI-compatible hosts (MP-143); as of 2026-09-07 **24 trials of the run of record have been
+re-scored by one** (below), but the calibration set above has not been, and a judge that runs is
+still not a judge that is calibrated. **Next:** expand to ≥30 labeled pairs incl. real
+model-migration traces, and extend the cross-judge comparison beyond the 24 trials measured so
+far — `[M]` 686 of the run of record's 710 FP-arm trials remain unjudged by a second judge, of
+which the 456 in the S2a+S2b `fp-suite` arms are `[M]` 3,097 stored judge calls. `[A]` At the
+~535 tokens/call assumed in ADR-0037 (the harness does not meter judge tokens) that is ~8 days
+of Groq's free tier (`[S] 2026-09-07` 200,000 tokens/day); the assumption falls if a metered run
+shows a different figure. No money, only calendar time. Then rely on the gate in high-stakes CI.
+
+## Cross-judge agreement (2026-09-07) — one replay, two judges
+
+`[M]` Until 2026-09-07 the harness could not use a non-OpenAI judge at all: it called
+`build_judge(args.judge)` with no host, and `openai/gpt-oss-120b` — a Groq-served model whose
+vendor prefix names its origin, not its host — died at preflight. It now takes
+`--judge-provider`, and `--rejudge` re-scores an artifact's **stored traces** under a second
+judge, so the same recorded model behaviour is scored twice and **no replay is bought again**.
+That matters for attribution as much as for cost: a fresh replay would confound judge
+disagreement with model nondeterminism.
+
+`[M]` **24 paired trials** — the 12 `examples/fp-suite` scenarios, rounds 1–2 of the
+`gpt-4o-mini` surface, FP arm — re-scored by **`openai/gpt-oss-120b` on Groq**. 163 judge calls,
+9.0 min wall, zero replay calls; `[S]` USD 0.00 on Groq's free tier (no invoice is recorded).
+Artifacts: [`reports/judge-agreement/2026-09-07/`](../reports/judge-agreement/2026-09-07/).
+
+`[M]` every figure in this table and the three bullets below is regenerated from those
+artifacts by `tests/test_cross_judge_agreement.py`:
+
+| | `gpt-4.1-mini` @ openai (unrecorded; inferred) | `openai/gpt-oss-120b` @ groq |
+|---|---|---|
+| false alarms / scored | **0 / 5** (ub 45.1%) | **0 / 1** (ub 95.0%) |
+| false alarms / reached | 0 / 24 (ub 11.7%) | 0 / 24 (ub 11.7%) |
+| could not have fired | 19 | 23 |
+
+- **Verdict agreement: 24 / 24 = 100%**; one-sided 95% upper bound on the judge disagreement
+  rate **11.7%**.
+- **Identical semantic score: 19 / 24 = 79.2%.** The judges differ on the score in five trials
+  without moving a verdict.
+- **They do not agree on what was measured: 5 scored trials vs 1, over identical traces.** A
+  judge that finds more outputs equivalent pushes the semantic channel to `p = 1.00`, which the
+  ADR-0022 exclusion then removes from the denominator. **The choice of judge moves the bound's
+  denominator, not only its numerator** — the finding a verdict-agreement rate alone would hide.
+
+**What this does not say.** These 24 trials are rounds 1–2 of the S2b surface alone
+(`gpt-4o-mini` vs itself, FP arm) — 10% of that surface's 240 trials, and none of the 240 on the
+S2a `gpt-4.1-mini` surface. The prefix rule was fixed before the rejudge run but **after** the
+source artifact existed, so it is pre-specified, not pre-registered; rounds are exchangeable
+replicates, which is the argument that a prefix is unbiased, and `[M]` this one is
+scored-trial-rich against its parent arm (5/24 = 20.8% vs 28/240 = 11.7%). One non-OpenAI judge
+is one judge; and a rejudged artifact is the same trials scored twice, **never a second sample**
+— `fp_aggregate.py` refuses to pool it, and these numbers are not folded into the headline
+bound. Groq substitutes `1e-8` for the requested `temperature: 0` (`[S] 2026-09-07`
+console.groq.com/docs/openai). ADR-0037.
 
 ## Honest framing (trust guardrail)
 
