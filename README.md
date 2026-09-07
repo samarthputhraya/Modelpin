@@ -515,8 +515,8 @@ fired; the 2026-09-07 run measured surfaces that can); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **898 tests passing** (+4 `xfail` pinning the open
-MP-05 scenario-id collision and the MP-165 trajectory residual, so 902 collected), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **931 tests passing** (+4 `xfail` pinning the open
+MP-05 scenario-id collision and the MP-165 trajectory residual, so 935 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

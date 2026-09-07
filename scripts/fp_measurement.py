@@ -37,7 +37,7 @@ except Exception:  # noqa: BLE001 - best effort; no-op where not needed
     pass
 
 from modelpin.diff import diff_scenario
-from modelpin.judge import build_judge
+from modelpin.judge import JUDGE_PROVIDERS, build_judge, infer_judge_provider
 from modelpin.models import DiffVerdict, Scenario
 from modelpin.providers import get_adapter
 from modelpin.providers.base import ProviderError
@@ -326,6 +326,24 @@ def fp_summary(t: dict[str, int]) -> list[str]:
         ]
     out.append("")
     return out
+
+
+def _arm_not_bought(arm_name: str, n_rows: int, chosen: str) -> str:
+    """Why an arm printed nothing, when the answer is 'nobody bought it'.
+
+    `[M] 2026-09-07` this text exists because its absence was actively misleading: a
+    `--rejudge --arm fp` run reported the untouched detection arm as *"Provider errors (never
+    reached a verdict): 12"* and then advised **"This is a connectivity/credentials problem"*.
+    Every word of that was wrong - the run was clean and the trials were simply never planned -
+    and it would have sent the next reader to debug a working key.
+    """
+    return (
+        f"  NOT MEASURED under this judge: --arm {chosen} excluded the {arm_name} arm, so its "
+        f"{n_rows} trial(s)\n"
+        "  were never planned and never bought. This is a NARROWING of what was purchased - not "
+        "a\n"
+        "  provider failure, and not a rate of 0. Use --arm both to measure it."
+    )
 
 
 def fp_report(rows) -> tuple[dict[str, int], list[str]]:
@@ -735,6 +753,13 @@ _RESUME_MUST_MATCH = (
     "only",
 )
 
+#: Fields compared only when the artifact on disk actually records them. `judge_provider` was
+#: added by MP-208, after the run of record was already committed; comparing it against an
+#: artifact written before it existed would read `None` and refuse to resume a file whose
+#: configuration never differed. Absent means UNRECORDED, not "recorded as None" - a distinction
+#: `_RESUME_MUST_MATCH` deliberately does not make, because for those fields absent IS a mismatch.
+_RESUME_MATCH_IF_RECORDED = ("judge_provider",)
+
 
 def _git_sha() -> str:
     """The tree this run was produced from, or `"unknown"` off a checkout."""
@@ -797,6 +822,57 @@ def traces_from_json(rows) -> list:
     from modelpin.models import Trace
 
     return [Trace(**r) for r in rows]
+
+
+def traces_by_key(rows) -> dict[str, tuple[list, list]]:
+    """`key -> (baseline_traces, candidate_traces)` for every artifact row that recorded both
+    sides.
+
+    This is the whole reason a second judge is nearly free. `traces_to_json` drops only
+    `messages`; the semantic channel reads `final_output` and nothing else, and every other
+    channel reads fields that are on disk too. So the expensive half - the replay - never has
+    to be bought twice, and a judge from another vendor scores the SAME recorded behaviour
+    rather than a fresh sample that would confound judge disagreement with model noise.
+    """
+    out: dict[str, tuple[list, list]] = {}
+    for rec in rows:
+        if rec.get("base_traces") is not None and rec.get("cand_traces") is not None:
+            out[rec["key"]] = (
+                traces_from_json(rec["base_traces"]),
+                traces_from_json(rec["cand_traces"]),
+            )
+    return out
+
+
+def resolve_judge_provider(args) -> str | None:
+    """The host that will actually run the judge: what was typed, else what the model id
+    implies. `None` when neither can say."""
+    typed = (getattr(args, "judge_provider", None) or "").strip().lower()
+    return typed or infer_judge_provider(args.judge)
+
+
+def require_judge_provider(args) -> str:
+    """Resolve the judge host or refuse, by name, before anything is spent.
+
+    `[M]` MP-208: `build_judge` already raised here, but it raised a `ProviderError` naming a
+    config file the harness does not read, so the operator's next move was wrong. A vendor
+    prefix names the model's ORIGIN, not its host - `openai/gpt-oss-120b` runs on Groq - and
+    nothing but the flag can settle it.
+    """
+    resolved = resolve_judge_provider(args)
+    if resolved is None:
+        raise SystemExit(
+            f"error: cannot tell which host should run the judge model {args.judge!r}. "
+            f"Pass --judge-provider ({' | '.join(JUDGE_PROVIDERS)}).\n"
+            "  A vendor-prefixed id names the model's ORIGIN, not its host: "
+            "'openai/gpt-oss-120b' is served by groq."
+        )
+    if resolved not in JUDGE_PROVIDERS:
+        raise SystemExit(
+            f"error: --judge-provider {resolved!r} is not a judge host. "
+            f"Supported: {', '.join(JUDGE_PROVIDERS)}."
+        )
+    return resolved
 
 
 def judge_calls_implied(base_traces, cand_traces) -> int:
@@ -890,6 +966,9 @@ def check_resume_header(header: dict | None, expected: dict) -> None:
     if header is None:
         raise SystemExit("error: --resume: the artifact has no header line; start a fresh --out.")
     bad = [k for k in _RESUME_MUST_MATCH if header.get(k) != expected.get(k)]
+    bad += [
+        k for k in _RESUME_MATCH_IF_RECORDED if k in header and header.get(k) != expected.get(k)
+    ]
     if bad:
         detail = ", ".join(f"{k}: artifact={header.get(k)!r} now={expected.get(k)!r}" for k in bad)
         raise SystemExit(
@@ -899,7 +978,7 @@ def check_resume_header(header: dict | None, expected: dict) -> None:
         )
 
 
-def run_trials(plan, verdict_live, memo: dict, workers: int, on_row) -> None:
+def run_trials(plan, verdict_live, memo: dict, workers: int, on_row, miss_label="provider error"):
     """Fill `memo` for every planned trial not already in it.
 
     `verdict_live(base, cand, sid) -> (DiffResult, base_traces, cand_traces) | None` is
@@ -922,7 +1001,7 @@ def run_trials(plan, verdict_live, memo: dict, workers: int, on_row) -> None:
         out = verdict_live(base, cand, sid)
         elapsed = time.perf_counter() - started
         if out is None:
-            return key, sid, None, None, None, "provider error", elapsed
+            return key, sid, None, None, None, miss_label, elapsed
         res, base_traces, cand_traces = out
         return key, sid, res, base_traces, cand_traces, None, elapsed
 
@@ -959,10 +1038,32 @@ class ArtifactWriter:
                 fh.flush()
 
 
-def artifact_header(args, scenario_ids, git_sha: str) -> dict:
-    """The configuration a rate is a rate OF. Everything a reader needs to re-run it."""
+def artifact_header(args, scenario_ids, git_sha: str, source: dict | None = None) -> dict:
+    """The configuration a rate is a rate OF. Everything a reader needs to re-run it.
+
+    `source` is the header of the artifact a `--rejudge` run re-scored. It is recorded so a
+    rejudged file can never be mistaken for an independent sample: it is the SAME replay,
+    and pooling the two would double-count every trial.
+    """
     from modelpin import diff as _diff
     from modelpin.config import DEFAULT_RUNS
+
+    rejudged: dict[str, Any] = {}
+    if source is not None:
+        rejudged = {
+            "rejudged_from": os.path.basename(args.rejudge),
+            "rejudged_from_git_sha": source.get("git_sha"),
+            "rejudged_from_started_utc": source.get("started_utc"),
+            "rejudged_from_judge": source.get("judge"),
+            "rejudged_from_judge_provider": source.get("judge_provider"),
+            # What was NOT bought. A rejudged file is routinely a pre-registered SUBSET of its
+            # source, because the free judge tier that makes it affordable is a daily quota;
+            # the subset rule belongs in the artifact, not only in the write-up.
+            "rejudged_arm": args.arm,
+            "rejudged_repeats_of": source.get("repeats"),
+            # Not an independent sample. Stated in the artifact, not only in the write-up.
+            "replay_reused": True,
+        }
 
     return {
         "kind": ARTIFACT_KIND_HEADER,
@@ -970,6 +1071,10 @@ def artifact_header(args, scenario_ids, git_sha: str) -> dict:
         "model": args.model,
         "runs": args.runs,
         "judge": None if args.no_judge else args.judge,
+        # The RESOLVED host, not the flag: an artifact must say which vendor's judge produced
+        # its semantic verdicts even when nobody typed --judge-provider, because that is the
+        # fact MP-208 found unrecorded and unpriced across every number published before it.
+        "judge_provider": None if args.no_judge else resolve_judge_provider(args),
         "scenarios_dir": os.path.basename(os.path.normpath(args.scenarios_dir)),
         "scenarios_path": args.scenarios_dir,
         "role": args.role,
@@ -987,6 +1092,7 @@ def artifact_header(args, scenario_ids, git_sha: str) -> dict:
         },
         "git_sha": git_sha,
         "started_utc": _utcnow(),
+        **rejudged,
     }
 
 
@@ -1011,18 +1117,29 @@ def select_only(scenarios, only: set[str] | None):
 
 
 def run_footer(
-    live_rows, all_rows, reused: int, artifact: str | None, elapsed_s: float
+    live_rows, all_rows, reused: int, artifact: str | None, elapsed_s: float, rejudged=False
 ) -> list[str]:
     """Tokens, judge calls, wall time - the cost side of the number, printed once. Tokens are
     summed over EVERY trial the report rests on (reused ones included); the live count is
-    this invocation's alone."""
+    this invocation's alone.
+
+    Under `--rejudge` the replay tokens were spent by the SOURCE run and not by this one, so
+    they are labelled as such. Printing them unqualified beside a run that made no replay call
+    invites a reader to price a free re-score as if it had bought the replay again.
+    """
     tin = sum(r.get("tokens_in") or 0 for r in all_rows)
     tout = sum(r.get("tokens_out") or 0 for r in all_rows)
     jc = sum(r.get("judge_calls") or 0 for r in all_rows)
+    spent = (
+        "carried over from the source run; NO replay call was made"
+        if rejudged
+        else "over all %d trial(s)" % len(all_rows)
+    )
     out = [
-        f"  This invocation: {len(live_rows)} trial(s) run live, {reused} reused from the "
+        f"  This invocation: {len(live_rows)} trial(s) "
+        f"{'re-scored (judge calls only)' if rejudged else 'run live'}, {reused} reused from the "
         f"artifact, {elapsed_s / 60:.1f} min wall.",
-        f"  Replay tokens in/out over all {len(all_rows)} trial(s): {tin:,}/{tout:,}; judge calls "
+        f"  Replay tokens in/out {spent}: {tin:,}/{tout:,}; judge calls "
         f"implied by the traces: {jc} (judge tokens are not metered).",
     ]
     if artifact:
@@ -1040,6 +1157,18 @@ def main() -> None:
     ap.add_argument("--model", default="gpt-4o-mini")
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--judge", default="gpt-4o-mini")
+    ap.add_argument(
+        "--judge-provider",
+        default=None,
+        help="which host runs the judge: "
+        + " | ".join(JUDGE_PROVIDERS)
+        + ". Optional for a model whose host is inferable from its id (`gpt-4o-mini` -> "
+        "openai); REQUIRED otherwise. [M] MP-208: `openai/gpt-oss-120b` is a GROQ id whose "
+        "vendor prefix says `openai`, so inference returns None and the run dies at "
+        "preflight. Without this flag the harness could only ever score with an OpenAI "
+        "judge, and 51 of the 82 trials in the run of record were scored on the semantic "
+        "channel alone.",
+    )
     ap.add_argument("--no-judge", action="store_true", help="skip the semantic LLM-judge")
     ap.add_argument("--scenarios-dir", default=None, help="default examples/suite")
     ap.add_argument(
@@ -1084,6 +1213,26 @@ def main() -> None:
         "the artifact's own configuration is used and the command line's is ignored.",
     )
     ap.add_argument(
+        "--rejudge",
+        default=None,
+        metavar="ARTIFACT.jsonl",
+        help="REPLAY-FREE RE-SCORE: rebuild every trial from an artifact's stored traces and "
+        "re-diff them under the judge named by --judge/--judge-provider. No replay provider is "
+        "called and no replay key is read, so the same recorded model behaviour can be scored "
+        "by a second judge for the price of the judge calls alone. The artifact's measured "
+        "configuration (provider, model, runs, repeats, role, scenarios) is adopted; the JUDGE "
+        "is the one thing the command line still decides. Needs --out; --resume works, which is "
+        "what makes a rate-limited free judge tier survivable.",
+    )
+    ap.add_argument(
+        "--arm",
+        default="both",
+        choices=("fp", "recall", "both"),
+        help="with --rejudge: which arm to re-score. The arms are independent measurements, "
+        "and a free judge tier is a DAILY budget, so being unable to buy one without the "
+        "other means being unable to buy either.",
+    )
+    ap.add_argument(
         "--workers",
         type=int,
         default=1,
@@ -1095,17 +1244,92 @@ def main() -> None:
         raise SystemExit("error: --repeats must be >= 1.")
     if args.workers < 1:
         raise SystemExit("error: --workers must be >= 1.")
+    if args.rescore and args.rejudge:
+        raise SystemExit(
+            "error: --rescore replays the judgement already on disk and --rejudge replaces it; "
+            "they cannot both describe one run. Pick one."
+        )
     if args.rescore and (args.out or args.resume):
         raise SystemExit(
             "error: --rescore re-reads an artifact and never writes one; drop --out/--resume."
         )
     if args.resume and not args.out:
         raise SystemExit("error: --resume needs --out to say which artifact to continue.")
+    if args.rejudge:
+        if not args.out:
+            # A rejudged verdict is a NEW measurement of the same behaviour, so it gets its own
+            # artifact of record. Printing it and discarding it would leave the agreement rate
+            # this mode exists to publish resting on a terminal transcript.
+            raise SystemExit(
+                "error: --rejudge needs --out: the re-scored verdicts are a new measurement "
+                "and belong in their own artifact, not only on stdout."
+            )
+        if args.no_judge:
+            raise SystemExit("error: --rejudge --no-judge would re-score with nothing.")
+        if os.path.abspath(args.rejudge) == os.path.abspath(args.out):
+            raise SystemExit(
+                "error: --rejudge and --out name the same file; the source artifact is read-only "
+                "and a second judge's verdicts must not be appended to the first judge's record."
+            )
 
     memo: dict[str, tuple] = {}
     recorded: dict | None = None
     rows_on_disk: list[dict] = []
-    if args.rescore:
+    source_rows: list[dict] = []
+    source_header: dict | None = None
+    traces_source: dict[str, tuple[list, list]] = {}
+    if args.rejudge:
+        source_header, source_rows = load_artifact(args.rejudge)
+        if source_header is None:
+            raise SystemExit("error: --rejudge: the artifact has no header line.")
+        # The artifact fixes WHAT was measured; the command line fixes WHO scores it. That
+        # split is the point of the mode: same traces, different judge, so a disagreement is
+        # the judges' and not the models'.
+        for k in ("provider", "model", "runs", "role"):
+            setattr(args, k, source_header[k])
+        # `--repeats` narrows to the FIRST k recorded rounds. The rounds are exchangeable
+        # replicates of one design, so a prefix of them is an unbiased subset - which a subset
+        # chosen by scenario, or by which trials the first judge happened to flag, would not be.
+        # 1 is argparse's default and is indistinguishable from a typed 1 - and it could not be
+        # honoured anyway: `fp_label` drops the `#i` suffix at repeats == 1, so the keys would
+        # stop matching the artifact's and every trial would miss. 1 therefore means "all".
+        recorded_repeats = source_header["repeats"]
+        args.repeats = (
+            recorded_repeats if args.repeats == 1 else min(args.repeats, recorded_repeats)
+        )
+        args.scenarios_dir = (
+            args.scenarios_dir
+            or source_header.get("scenarios_path")
+            or source_header["scenarios_dir"]
+        )
+        # `--only` NARROWS a rejudge; it does not redefine it. `[S] 2026-09-07` the free Groq
+        # tier that makes a second judge affordable caps 200,000 tokens/day; `[M]` one
+        # artifact's stored `judge_calls` runs to the thousands, and `[A]` at ~535 tokens/call
+        # (an assumption - the harness does not meter judge tokens) that is more than a day's
+        # budget in a single all-or-nothing command. Discarding a typed --only here left no way
+        # to rejudge a subset at all.
+        recorded_only = set(source_header["only"]) if source_header.get("only") else None
+        typed_only = parse_only(args.only)
+        if typed_only and recorded_only and not typed_only <= recorded_only:
+            raise SystemExit(
+                "error: --rejudge --only names ids the source artifact never measured: "
+                f"{', '.join(sorted(typed_only - recorded_only))}."
+            )
+        args.only = typed_only or recorded_only
+        if source_header.get("judge") is None:
+            raise SystemExit(
+                "error: --rejudge: that artifact was recorded with --no-judge, so it has no "
+                "semantic verdict to disagree with. Re-scoring it would compare a judge to "
+                "nothing."
+            )
+        traces_source = traces_by_key(source_rows)
+        if not traces_source:
+            raise SystemExit(
+                f"error: --rejudge: {args.rejudge} records no trial with traces on both sides, "
+                "so there is nothing to re-score. Artifacts written before traces were kept "
+                "(MP-205) cannot be rejudged."
+            )
+    elif args.rescore:
         recorded, rows_on_disk = load_artifact(args.rescore)
         if recorded is None:
             raise SystemExit("error: --rescore: the artifact has no header line.")
@@ -1116,6 +1340,15 @@ def main() -> None:
             args.scenarios_dir or recorded.get("scenarios_path") or recorded["scenarios_dir"]
         )
         args.judge = recorded.get("judge")
+        # ...and the host that ran it, or `resolve_judge_provider` would later re-infer a host
+        # for an id that has none. Inert today (--rescore builds no judge and forbids --out),
+        # a trap tomorrow.
+        args.judge_provider = recorded.get("judge_provider")
+        # ...and which arms were actually bought. A rejudged artifact is routinely one arm only;
+        # without this, an offline re-read plans the arm nobody paid for, finds every trial
+        # missing, and reports the absence as 12 provider errors under a banner blaming the
+        # operator's credentials.
+        args.arm = recorded.get("rejudged_arm") or "both"
         args.no_judge = args.judge is None
         args.only = set(recorded["only"]) if recorded.get("only") else None
         memo = memo_from_rows(rows_on_disk)
@@ -1132,16 +1365,19 @@ def main() -> None:
     adapter = None
     judge = None
     if not args.rescore:
-        adapter = get_adapter(args.provider)
-        adapter.preflight()
-        judge = None if args.no_judge else build_judge(args.judge)
-        if judge is not None:
+        if not args.rejudge:
+            # --rejudge reads its replay off the disk, so it needs no replay adapter and no
+            # replay key. That is what makes a second judge cost the judge calls alone.
+            adapter = get_adapter(args.provider)
+            adapter.preflight()
+        if not args.no_judge:
+            judge = build_judge(args.judge, provider=require_judge_provider(args))
             judge.preflight()
 
     git_sha = _git_sha()
     writer: ArtifactWriter | None = None
     if args.out:
-        expected = artifact_header(args, [s.id for s in scenarios], git_sha)
+        expected = artifact_header(args, [s.id for s in scenarios], git_sha, source_header)
         if os.path.exists(args.out):
             if not args.resume:
                 raise SystemExit(
@@ -1180,6 +1416,18 @@ def main() -> None:
             f"  RESCORED OFFLINE from {args.rescore} (recorded {recorded.get('started_utc')} "
             f"@ {recorded.get('git_sha')}); no provider was called."
         )
+    if args.rejudge:
+        assert source_header is not None
+        print(
+            f"  REJUDGED from {args.rejudge} (recorded {source_header.get('started_utc')} "
+            f"@ {source_header.get('git_sha')}): {len(traces_source)} trial(s) of stored "
+            f"replay, re-diffed under judge {args.judge} on "
+            f"{resolve_judge_provider(args)}.\n"
+            f"  The replay was NOT repeated, so this is the same recorded behaviour scored "
+            f"twice - not a second sample. Prior judge: "
+            f"{source_header.get('judge')} on "
+            f"{source_header.get('judge_provider') or 'openai (unrecorded; inferred)'}."
+        )
     print(
         f"  git {git_sha} * {_utcnow()} * workers={args.workers}"
         + (f" * artifact {args.out}" if args.out else "")
@@ -1200,11 +1448,41 @@ def main() -> None:
             print(f"  {sid:<22} ERROR  ({str(exc)[:70]})")
             return None
 
+    def _verdict_rejudge(base_scn, cand_scn, sid):
+        """Re-diff ONE stored trial under the new judge. No replay: the traces come off the
+        source artifact, so every channel but the semantic one is recomputed from identical
+        inputs and must return an identical answer. Any difference in the verdict is
+        therefore attributable to the judge alone - which is the measurement.
+
+        A key the source artifact never recorded (a provider error at the time) returns None
+        and reports as a miss, exactly as a live provider error would.
+        """
+        stored = traces_source.get(trial_key(base_scn, cand_scn, sid))
+        if stored is None:
+            return None
+        base, cand = stored
+        try:
+            r = diff_scenario(sid, args.model, args.model, base, cand, base_scn, judge=judge)
+        except ProviderError as exc:  # the JUDGE's host, not the replay's
+            print(f"  {sid:<22} JUDGE ERROR  ({str(exc)[:70]})")
+            return None
+        return r, base, cand
+
     plan = plan_trials(scenarios, args.repeats)
+    if args.arm != "both":
+        # Only ever a NARROWING of a rejudge, and only of which trials are bought. Both arms
+        # still print below; the one that was not re-scored simply reports its trials as
+        # missing, which is the honest rendering of "not measured under this judge".
+        plan = [t for t in plan if t[0].startswith(f"{args.arm}:")]
     reused = sum(1 for key, *_ in plan if key in memo)
     rows_written: list[dict] = []
     started = time.perf_counter()
-    if not args.rescore:
+    if args.rejudge:
+        print(
+            f"REJUDGING {len(plan) - reused} trial(s) ({reused} reused from --out), "
+            f"{args.workers} worker(s); no replay call is made:"
+        )
+    elif not args.rescore:
         print(
             f"RUNNING {len(plan) - reused} trial(s) live ({reused} reused from the artifact), "
             f"{args.workers} worker(s):"
@@ -1226,7 +1504,14 @@ def main() -> None:
                 f"  {elapsed:5.1f}s  [{_rep(rec['base_rep'], rec['cand_rep'])}]"
             )
 
-    run_trials(plan, None if args.rescore else _verdict_live, memo, args.workers, _on_row)
+    if args.rescore:
+        _verdict_fn = None
+    elif args.rejudge:
+        _verdict_fn = _verdict_rejudge
+    else:
+        _verdict_fn = _verdict_live
+    _miss = "judge error or absent from the source" if args.rejudge else "provider error"
+    run_trials(plan, _verdict_fn, memo, args.workers, _on_row, _miss)
     print()
 
     def _verdict(base_scn, cand_scn, sid):
@@ -1253,11 +1538,15 @@ def main() -> None:
         for i in range(args.repeats)
         for scn in scenarios
     ]
-    t, lines_out = fp_report(rows)
-    for line in lines_out:
-        print(line)
-    for line in fp_summary(t):
-        print(line)
+    t: dict[str, int] = {}
+    if args.arm == "recall":
+        print(_arm_not_bought("false-positive", len(rows), args.arm))
+    else:
+        t, lines_out = fp_report(rows)
+        for line in lines_out:
+            print(line)
+        for line in fp_summary(t):
+            print(line)
 
     # --- detection: injected perturbations -------------------------- [ARM:RECALL] ---
     perturbed = [s for s in scenarios if s.id in PERTURBATIONS]
@@ -1267,13 +1556,18 @@ def main() -> None:
     print("  Nothing is excluded here but an abstention: a candidate that still reads")
     print("  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted")
     print("  instruction from a dead engine, so it never excludes on that basis.")
-    rt, recall_lines = recall_report(
-        [build_row(s.id, s, _perturb(s, PERTURBATIONS[s.id]), _verdict) for s in perturbed]
-    )
-    for line in recall_lines:
-        print(line)
-    for line in recall_summary(rt):
-        print(line)
+    recall_rows = [
+        build_row(s.id, s, _perturb(s, PERTURBATIONS[s.id]), _verdict) for s in perturbed
+    ]
+    rt: dict[str, int] = {}
+    if args.arm == "fp":
+        print(_arm_not_bought("detection", len(recall_rows), args.arm))
+    else:
+        rt, recall_lines = recall_report(recall_rows)
+        for line in recall_lines:
+            print(line)
+        for line in recall_summary(rt):
+            print(line)
 
     for note in run_footer(
         rows_written,
@@ -1281,6 +1575,7 @@ def main() -> None:
         reused,
         args.out or args.rescore,
         time.perf_counter() - started,
+        bool(args.rejudge) or bool(recorded and recorded.get("replay_reused")),
     ):
         print(note)
     if writer is not None:

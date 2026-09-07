@@ -271,7 +271,11 @@ class _StubJudge:
 def _run_main(monkeypatch, argv: list[str], adapter=None):
     adapter = adapter or _StubAdapter()
     monkeypatch.setattr(fp, "get_adapter", lambda name: adapter)
-    monkeypatch.setattr(fp, "build_judge", lambda model: _StubJudge())
+    # `provider=` is not decoration: MP-208's whole defect was that the harness called
+    # `build_judge` with the model alone, so a judge whose host cannot be inferred from its id
+    # could never be reached. A stub that accepted only `model` would keep passing after a
+    # revert of the fix.
+    monkeypatch.setattr(fp, "build_judge", lambda model, provider=None: _StubJudge())
     monkeypatch.setattr(sys, "argv", ["fp_measurement.py", *argv])
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -289,6 +293,10 @@ def _live_argv(out: Path, *extra: str) -> list[str]:
         "4",
         "--judge",
         "j",
+        # `j` names no host, so the harness now refuses it without this - by design, and the
+        # reason a Groq judge was unreachable before MP-208.
+        "--judge-provider",
+        "openai",
         "--scenarios-dir",
         str(SUITE),
         "--only",
