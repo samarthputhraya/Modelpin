@@ -1493,5 +1493,15 @@
       }
     ]
   },
-  "_note": "Store key only. The traces below were recorded from the REAL model gpt-4o-mini on 2026-06-24 (see each trace's own model field). The key is deliberately NOT a real model id: this file is tracked so the repo can dogfood itself, so it ships in every clone, and any key that a stranger's `modelpin.yaml` could name would be paired against THEIR scenarios by `mp check`. See MP-69 / ADR-0021."
+  "_note": "Store key only. The traces below were recorded from the REAL model gpt-4o-mini on 2026-06-24 (see each trace's own model field). The key is deliberately NOT a real model id: this file is tracked so the repo can dogfood itself, so it ships in every clone, and any key that a stranger's `modelpin.yaml` could name would be paired against THEIR scenarios by `mp check`. See MP-69 / ADR-0021. | MP-05 2026-09-07: the `fingerprints` map records the scenario DEFINITION each set of traces was recorded against. The values are taken from examples/suite at cb6c089 -- the commit that last wrote this file -- and NOT from the current tree, because stamping today's hashes would assert a provenance this file does not have. [M] order_status genuinely changed meaning on 2026-09-02 (sha256:ba8ad482bb54 -> sha256:bca3398456d8), so `modelpin check` now refuses to compare it and says why. This baseline is honestly stale for 1 of its 8 scenarios; that is the defect MP-05 exists to surface, and re-recording is what closes it (MP-214).",
+  "fingerprints": {
+    "cancel_subscription": "sha256:abd28f148b61",
+    "classify_sentiment": "sha256:2b022ccbde09",
+    "decline_pii": "sha256:7c04fd307b08",
+    "extract_total": "sha256:53a9819fe65a",
+    "format_contact_json": "sha256:0d161d7da6b3",
+    "order_status": "sha256:ba8ad482bb54",
+    "refund_request": "sha256:1e10ea409118",
+    "summarize_ticket": "sha256:651af3596364"
+  }
 }

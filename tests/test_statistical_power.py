@@ -44,7 +44,12 @@ from modelpin.diff.stats import (
 from modelpin.models import DiffResult, DiffVerdict, Trace
 from modelpin.report import _RECOMMENDED_RUNS as _REPORT_RECOMMENDED_RUNS
 from modelpin.report import render_cli, render_pr_comment
-from modelpin.storage import load_baseline, nonuniform_run_counts, save_baseline
+from modelpin.storage import (
+    load_baseline,
+    load_baseline_fingerprints,
+    nonuniform_run_counts,
+    save_baseline,
+)
 
 _DEMO_ROOT = Path(tempfile.mkdtemp(prefix="modelpin-power-demo-"))
 write_demo(_DEMO_ROOT)
@@ -416,7 +421,9 @@ def _heterogeneous_check(tmp_path):
     recorded = load_baseline(DEMO_FROM, store)
     for sid in ("angry_customer", "invoice_parse"):
         recorded[sid] = recorded[sid][:2]
-    save_baseline(recorded, DEMO_FROM, store)
+    save_baseline(
+        recorded, DEMO_FROM, store, fingerprints=load_baseline_fingerprints(DEMO_FROM, store)
+    )
     chk = runner.invoke(
         app, ["check", "--to", DEMO_FROM, "--from", DEMO_FROM, *common, "--runs", "4"]
     )
@@ -666,7 +673,9 @@ def test_a_scenario_id_that_looks_like_rich_markup_does_not_crash_mp_check(tmp_p
     assert base.exit_code == 0, base.output
     recorded = load_baseline(DEMO_FROM, store)
     recorded[_HOSTILE_ID] = recorded[_HOSTILE_ID][:2]
-    save_baseline(recorded, DEMO_FROM, store)
+    save_baseline(
+        recorded, DEMO_FROM, store, fingerprints=load_baseline_fingerprints(DEMO_FROM, store)
+    )
 
     chk = runner.invoke(
         app, ["check", "--to", DEMO_FROM, "--from", DEMO_FROM, *common, "--runs", "4"]

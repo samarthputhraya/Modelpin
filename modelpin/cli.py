@@ -61,17 +61,24 @@ from modelpin.report import (
     render_report_md,
     to_report_sidecar,
 )
-from modelpin.report.suite import compute_suite_hash, read_manifest, slug
+from modelpin.report.suite import (
+    compute_suite_hash,
+    read_manifest,
+    scenario_fingerprint,
+    slug,
+)
 from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
 from modelpin.scenarios import ScenarioError, load_scenarios, unrecognised_assertion_keys
 from modelpin.storage import (
     STORE_DIRNAME,
     BaselineError,
     load_baseline,
+    load_baseline_fingerprints,
     nonuniform_run_counts,
     degenerate_scenarios,
     save_baseline,
     secret_bearing_scenarios,
+    stale_scenarios,
 )
 
 #: A behavioral diff compares run *distributions*; fewer than this can't form one.
@@ -940,7 +947,15 @@ def baseline(
     # gives it the friendly message and EXIT_SETUP_FAILED (ADR-0035), which is right: nothing
     # was measured, so nothing is claimed.
     try:
-        path = save_baseline(traces, from_model, store_dir)
+        # MP-05: record WHICH scenario definition produced each set of traces, so a later
+        # `check` can tell whether this baseline describes the scenario it is about to be
+        # compared against. Without it the store answers by id alone and cannot.
+        path = save_baseline(
+            traces,
+            from_model,
+            store_dir,
+            fingerprints={s.id: scenario_fingerprint(s) for s in scenarios},
+        )
     except BaselineError as exc:
         _fail(str(exc))
     console.print(
@@ -1010,9 +1025,13 @@ def check(
     `action.yml` publishes as "Modelpin detected a behavioral regression". ADR-0035 gives
     setup failure its own code so that this docstring can be true.
 
-    A scenario with no recorded baseline is the deliberate exception: it is named in the
+    A scenario that cannot be compared is the deliberate exception: it is named in the
     report, on the console and in the archive, and it removes the affirmative clearance, but
-    it does not by itself fail the build. `[M]` Precisely: it does not change the exit code,
+    it does not by itself fail the build. Three conditions reach it -- no baseline was
+    recorded; the scenario was EDITED since its baseline was (comparing it would measure the
+    edit, not the model); or the baseline records no scenario fingerprint, so nothing can
+    confirm it describes this scenario. The last is what every store written before
+    fingerprints looks like: re-run `modelpin baseline` once. See ADR-0033 and ADR-0039. `[M]` Precisely: it does not change the exit code,
     so a run keeps whatever its COMPARED scenarios earned -- 0 if they were clean, 1 if one
     of them regressed. Only when NOTHING is left to compare does the run abstain with 3.
     Reasoning, options and revisit trigger: ADR-0033.
@@ -1067,6 +1086,7 @@ def check(
     # right not to fail over a file it can use, and the user can act on this before spending.
     # Printed BEFORE the pre-spend disclosure below, which prices the whole run off
     # `min(baseline_sizes)` and so describes the weakest scenario, not every one.
+    _recorded_fp = load_baseline_fingerprints(from_model, store_dir)
     uneven = nonuniform_run_counts(base, [s.id for s in scenarios])
     if uneven:
         # `escape`, not raw: `[M]` a first-run review crashed `mp check` with an unhandled
@@ -1109,8 +1129,36 @@ def check(
     #: `insufficient_evidence` verdict (replayed, but nothing usable came back).
     rejected: list[tuple[str, str]] = []
 
+    # MP-05 / ADR-0039. Which scenario DEFINITION each baseline entry was recorded against.
+    # A scenario absent from this map has no recorded provenance (a baseline written before
+    # the fingerprint shipped); that is unverifiable, not stale, and is left alone.
+    _stale = stale_scenarios(((s.id, scenario_fingerprint(s)) for s in scenarios), _recorded_fp)
+    _stale_ids = {sid for sid, _, _ in _stale}
+    #: Baselined scenarios whose store records no fingerprint at all — written before MP-05,
+    #: or shipped inside a clone. These are not KNOWN to be wrong; they are unverifiable, and
+    #: they are refused for the same reason a mismatch is. `[M]` This is the exact path MP-69
+    #: measured: a fresh clone's tracked baseline plus a user's own `scenarios/refund_request
+    #: .json` — two scenarios sharing nothing but a filename — produced `REGRESSION ...
+    #: confidence 0.99`, exit 1, the code the GitHub Action fails a PR on. "If Modelpin says
+    #: it broke, it broke" cannot survive a pairing nothing can vouch for, so an unprovable
+    #: comparison abstains (ADR-0018) instead of being asserted at confidence 0.99.
+    _unverified = sorted(s.id for s in scenarios if s.id in base and s.id not in _recorded_fp)
+    _unverified_ids = set(_unverified)
+
     def _run_check() -> None:
         for s in scenarios:
+            if s.id in _stale_ids or s.id in _unverified_ids:
+                # The store holds traces recorded against a DIFFERENT definition of this
+                # scenario. Comparing them measures the edit, not the model, and it does so
+                # confidently in whichever direction the edit happened to push: a stale
+                # baseline over a candidate that started refusing prints `OK ... unchanged`
+                # and exit 0, while two scenarios sharing only a filename print `REGRESSION
+                # ... confidence 0.99` and exit 1. Both are the north-star promise inverted,
+                # so this pairing is not made at all: the scenario joins `skipped`, is
+                # disclosed on the console and in the published report, and is replayed by
+                # nothing - which also means the user is not charged for it.
+                skipped.append(s.id)
+                continue
             base_traces = base.get(s.id)
             if not base_traces:
                 skipped.append(s.id)
@@ -1167,24 +1215,52 @@ def check(
         if rejected:
             _why.append(f"the provider rejected {len(rejected)} scenario(s)")
         if skipped:
-            _why.append(f"{len(skipped)} scenario(s) had no recorded baseline")
+            _why.append(f"{len(skipped)} scenario(s) had no usable baseline")
         detail = " and ".join(_why) if _why else "no scenario produced a comparison"
         console.print(f"[yellow]could not measure:[/] nothing was compared -- {detail}.")
-        if skipped:
+        # `[M] 2026-09-07 first-run review` This branch used to print `no baseline: <ids>` for
+        # EVERY skipped id, which is false for the two conditions MP-05 added and is the shape
+        # an upgrading user meets first: their whole store predates the fingerprint, so every
+        # scenario lands here and every one of them is told it has no baseline when it plainly
+        # has one. The carefully worded stale/unverified notes further down sit past this
+        # `raise` and were unreachable exactly when they mattered most. Each cause now names
+        # itself, and only genuinely un-baselined ids get the un-baselined sentence.
+        _no_base = [sid for sid in skipped if sid not in _stale_ids | _unverified_ids]
+        if _no_base:
             console.print(
-                f"[dim]   no baseline: {_rich_escape(', '.join(skipped))}. "
+                f"[dim]   no baseline: {_rich_escape(', '.join(_no_base))}. "
                 f"Record one with `modelpin baseline`.[/]"
             )
+        for _sid, _was, _now in _stale:
+            console.print(
+                f"[dim]   changed since its baseline: {_rich_escape(_sid)} "
+                f"(recorded against {_was}, now {_now}). Comparing it would measure your "
+                f"edit, not the model.[/]"
+            )
+        if _unverified:
+            console.print(
+                f"[dim]   no recorded fingerprint, so nothing can confirm the baseline "
+                f"describes these scenarios: {_rich_escape(', '.join(_unverified))}. A store "
+                f"written before this version, or one that arrived inside a clone, cannot "
+                f"vouch for what it holds.[/]"
+            )
+        if _stale or _unverified:
+            console.print("[dim]   Re-run `modelpin baseline` once to re-record them.[/]")
         # `[M]` This path wrote NO artifact, so the PREVIOUS run's `last-report.md` stayed on
         # disk as the reviewer-facing verdict -- and `action.yml` posts that file whenever it
         # exists, regardless of the exit code. A run that compared nothing has to say so in
         # the artifact, not only on a console nobody reads.
-        _publish_report(
+        #
+        # `[M] 2026-09-07` The notes were DISCARDED here while the sibling branch above prints
+        # them, so the one surface that names MP-05 in this exact situation -- the Markdown
+        # header -- was written and never pointed to.
+        for _note in _publish_report(
             render_pr_comment([], from_model, to, n, prov, (), None, rejected, skipped),
             store_dir,
             from_model,
             to,
-        )
+        ):
+            console.print(_note)
         raise typer.Exit(code=EXIT_UNMEASURED)
 
     # MP-55. Which scenarios were compared at run counts where NO signal could reach ALPHA?
@@ -1245,10 +1321,45 @@ def check(
         # comment sent the next reader hunting a bug that had already been fixed one commit
         # earlier -- which is how this codebase accumulated four comments each claiming the
         # last unescaped site was closed.
-        console.print(
-            f"[yellow]note:[/] {len(skipped)} scenario(s) had no baseline and were skipped: "
-            f"{_rich_escape(', '.join(skipped))}. Re-run `modelpin baseline` to cover them."
-        )
+        _no_baseline = [sid for sid in skipped if sid not in _stale_ids | _unverified_ids]
+        if _unverified:
+            console.print(
+                f"[yellow]note:[/] {len(_unverified)} scenario(s) have a baseline that records "
+                "no scenario fingerprint, so nothing can confirm it was recorded against the "
+                f"scenario of the same name: {_rich_escape(', '.join(_unverified))}. They were "
+                "NOT compared."
+            )
+            console.print(
+                "[dim]   A baseline recorded before this version, or one that arrived inside a "
+                "clone, cannot vouch for what it describes — and an id collision there reports "
+                "a confident regression over two scenarios sharing only a filename. Re-run "
+                "`modelpin baseline` once to record fingerprints.[/]"
+            )
+        if _no_baseline:
+            console.print(
+                f"[yellow]note:[/] {len(_no_baseline)} scenario(s) had no baseline and were "
+                f"skipped: {_rich_escape(', '.join(_no_baseline))}. Re-run `modelpin baseline` "
+                "to cover them."
+            )
+        if _stale:
+            # Louder than the no-baseline note, and worded as a REFUSAL rather than a skip.
+            # `[M]` This is the path that printed `OK 1 scenario(s) unchanged`, exit 0, over a
+            # scenario rewritten from "Say hello." to "Delete the production database and
+            # confirm." — the stale store was the only difference between a green tick and a
+            # confident regression, and nothing said so.
+            console.print(
+                f"[yellow]note:[/] {len(_stale)} scenario(s) CHANGED since the baseline for "
+                f"{_rich_escape(from_model)} was recorded, so the recorded traces describe a "
+                "different scenario and were NOT compared:"
+            )
+            for _sid, _was, _now in _stale:
+                console.print(
+                    f"[dim]   {_rich_escape(_sid)}: recorded against {_was}, now {_now}[/]"
+                )
+            console.print(
+                "[dim]   Comparing them would measure your edit, not the model. Re-run "
+                "`modelpin baseline` to re-record them.[/]"
+            )
 
     if has_regression:
         raise typer.Exit(code=1)  # fail CI on a real regression

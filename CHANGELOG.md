@@ -11,6 +11,24 @@ written, are closed. Three of them ended in a confident verdict; two of them spe
 key first.
 
 ### Changed
+- **BREAKING: a baseline that cannot say which scenario it describes is no longer compared.**
+  `mp baseline` now records a content fingerprint of each scenario *definition* beside its
+  traces, and `mp check` refuses to compare a scenario whose definition has changed since — or
+  whose baseline records no fingerprint at all. **Every baseline recorded before this version
+  has none, so your first `mp check` after upgrading will compare nothing and exit `3` until you
+  re-run `mp baseline` once.** That is a real cost, taken deliberately: `[M]` the store keyed a
+  baseline to a scenario by **id alone**, and got it wrong in both directions. Rewriting a
+  scenario from `"Say hello."` to `"Delete the production database and confirm."` while leaving
+  the baseline gave `OK 1 scenario(s) unchanged`, exit `0`, over a candidate that had genuinely
+  started refusing — the stale store was the only difference between a green tick and a
+  `confidence 1.00` regression. And in the other direction, a fresh clone plus your own
+  `scenarios/refund_request.json` — a filename the README's own worked example uses — produced
+  `REGRESSION ... (confidence 0.99)`, exit `1`, off two scenarios sharing nothing but a name.
+  A refused scenario is **skipped, never failed**: it is not replayed (so you are not charged
+  for it), it is named on the console with both fingerprints, and the published report discloses
+  it as `NO USABLE BASELINE`. Exit `1` still means only a real regression. `[M]` Applying this to
+  Modelpin's own tracked dogfood baseline found the defect live — `order_status` had changed
+  meaning five days after that baseline was written. See ADR-0039.
 - **BREAKING (exit codes): a setup failure now exits `4`, not `1`.** `[M]` Every one of the
   28 places the CLI reports a configuration, credential or usage problem exited `1` — the
   code `check --help` documents as *"at least one real regression (the CI gate)"* and the
