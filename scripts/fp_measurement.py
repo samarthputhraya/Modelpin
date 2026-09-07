@@ -21,7 +21,13 @@ import argparse
 import json
 import os
 import math
+import subprocess
+import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from typing import Any
 
 try:  # corporate-proxy environments: make the SDK trust the OS cert store
     import truststore
@@ -64,6 +70,25 @@ PERTURBATIONS: dict[str, str] = {
     "the customer's email address jane.doe@example.com.",
     "classify_sentiment": "Always answer with the single word 'Positive', regardless of "
     "the review.",
+    # --- MP-205: the argument-jitter set. Each perturbation changes an ARGUMENT, never a tool
+    # name, so the name trajectory stays stable on both sides and the advisory argument gate
+    # (ADR-0029, `changed_minor` at most) is the channel that has to see it. The shapes are
+    # the regressions a real migration produces: a unit confusion, a discarded user value, a
+    # constant where the user's data should be.
+    "arg_enum_phrasing": "Policy change: route EVERY ticket to the queue 'fraud' and record "
+    "the channel as 'phone', whatever the customer said or however they contacted us.",
+    "arg_freetext_note": "Policy change: the note must be exactly the text "
+    "'Customer reported an issue.' and nothing else, whatever the customer said.",
+    "arg_key_order": "Policy change: file EVERY expense under category 'travel' with "
+    "amount_usd 0 and receipt_attached false, regardless of what the user said.",
+    "arg_list_order": "Policy change: apply ONLY the tag 'billing' to every article, never "
+    "any other tag, whatever the article covers.",
+    "arg_multistep_carry": "Policy change: when asked to move a reservation LATER, move it "
+    "EARLIER by the same amount instead.",
+    "arg_numeric_rounding": "Policy change: log the weight in POUNDS exactly as the user "
+    "gave it - never convert to kilograms - but still pass it as weight_kg.",
+    "arg_optional_fields": "Policy change: set priority to 'high' and notify_channel to "
+    "'#ops' on EVERY task, whatever the user said about urgency.",
 }
 
 
@@ -272,9 +297,9 @@ def fp_summary(t: dict[str, int]) -> list[str]:
             "  *** THIS RUN MEASURED NOTHING. ***",
             "  No trial could have fired at ALPHA, so 0/0 is not evidence that the",
             "  false-positive rate is low - it is evidence that nothing was tested. Use",
-            "  tool-using scenarios at temperature > 0 (examples/calibration/arg_*.json)",
-            "  -- but those measure nothing either until MP-04 lands an argument signal:",
-            "  today no gating signal reads tool arguments at all. See ADR-0022.",
+            "  scenarios whose behaviour VARIES run to run: tools at temperature > 0",
+            "  (examples/calibration/arg_*.json, --role score) or prose at the API's default",
+            "  temperature (examples/fp-suite), and --repeats. See docs/fp-measurement.md.",
         ]
     elif t["no_effect"]:
         out += [
@@ -664,14 +689,340 @@ def select_by_role(scenarios, role_map: dict[str, list[str]], requested: str | N
     return picked, f"roles: {requested!r} only ({len(picked)} of {len(scenarios)} scenarios)"
 
 
+# --- resumable artifacts, offline rescoring, concurrency (MP-205) ----------------------
+#
+# Everything below exists so that a run of record can be CUT and RESUMED rather than restarted,
+# and RE-SCORED without a key. [M] 2026-09-07: the one prior live `arg_*` run lost 10 of 70
+# trials to a mid-run network outage and could only be re-read from its stdout transcript; a
+# session that hits a rate limit at trial 180 of 210 should not have to buy 180 trials again.
+#
+# The two arms in `main()` are untouched by this: they still build rows through `build_row`
+# and publish through the pinned helpers. What changes is WHERE `_verdict` gets its answer -
+# a memo filled either by live calls (optionally concurrent) or by an artifact on disk.
+
+ARTIFACT_KIND_HEADER = "header"
+ARTIFACT_KIND_TRIAL = "trial"
+ARTIFACT_KIND_RESUME = "resume"
+ARTIFACT_KIND_SUMMARY = "summary"
+
+#: Header fields a resumed run must match exactly. A file holding trials from two configs is
+#: not a measurement of either, so a mismatch is a refusal rather than a warning.
+_RESUME_MUST_MATCH = (
+    "provider",
+    "model",
+    "runs",
+    "judge",
+    "scenarios_dir",
+    "role",
+    "repeats",
+    "only",
+)
+
+
+def _git_sha() -> str:
+    """The tree this run was produced from, or `"unknown"` off a checkout."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return out.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def _utcnow() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def fp_label(scenario_id: str, i: int, repeats: int) -> str:
+    """The row label the FP arm prints: the bare id for a single round, `id#i` under
+    `--repeats`. One function, because the arm's comprehension and the trial planner must
+    agree on it or a resumed run silently re-buys every trial under a key nothing matches.
+    """
+    return scenario_id if repeats == 1 else f"{scenario_id}#{i + 1}"
+
+
+def trial_key(base_scn, cand_scn, sid: str) -> str:
+    """`fp:<sid>` or `recall:<sid>`. The FP arm passes the SAME scenario object twice; the
+    recall arm passes a perturbed copy. Identity, not equality: with `--repeats 1` both arms
+    label a row by the bare scenario id, so the label alone cannot tell them apart."""
+    return f"{'fp' if cand_scn is base_scn else 'recall'}:{sid}"
+
+
+def plan_trials(scenarios, repeats: int) -> list[tuple[str, str, Any, Any]]:
+    """Every trial `main()`'s two arms will ask for, in the order they will ask: FP rows
+    repeat-major (round 1 of every scenario, then round 2, ...), then the recall rows.
+    Returns `(key, sid, base_scn, cand_scn)` tuples."""
+    plan: list[tuple[str, str, Any, Any]] = []
+    for i in range(repeats):
+        for scn in scenarios:
+            sid = fp_label(scn.id, i, repeats)
+            plan.append((trial_key(scn, scn, sid), sid, scn, scn))
+    for scn in scenarios:
+        if scn.id in PERTURBATIONS:
+            cand = _perturb(scn, PERTURBATIONS[scn.id])
+            plan.append((trial_key(scn, cand, scn.id), scn.id, scn, cand))
+    return plan
+
+
+def traces_to_json(traces) -> list[dict]:
+    """Traces minus `messages`: everything the diff reads (tool calls, output, refusal, tokens,
+    latency, incomplete_reason), none of the prompt it does not. `Trace(**row)` rehydrates.
+    """
+    return [t.model_dump(mode="json", exclude={"messages"}) for t in traces]
+
+
+def traces_from_json(rows) -> list:
+    from modelpin.models import Trace
+
+    return [Trace(**r) for r in rows]
+
+
+def judge_calls_implied(base_traces, cand_traces) -> int:
+    """How many judge calls this trial made, derived from the traces the same way
+    `diff/semantic.py` decides to call: every run whose normalised text differs from the
+    modal baseline text. Judge usage is not otherwise metered."""
+    from modelpin.diff.semantic import _normalize, reference_output
+
+    ref = _normalize(reference_output(base_traces))
+    return sum(1 for t in [*base_traces, *cand_traces] if _normalize(t.final_output or "") != ref)
+
+
+def trial_record(
+    key: str,
+    sid: str,
+    result,
+    base_traces,
+    cand_traces,
+    error: str | None,
+    elapsed_s: float,
+    judged: bool,
+) -> dict:
+    """One JSON line per trial. `result` is None exactly when `error` is set."""
+    arm, _, _ = key.partition(":")
+    both = [*(base_traces or []), *(cand_traces or [])]
+    return {
+        "kind": ARTIFACT_KIND_TRIAL,
+        "key": key,
+        "arm": arm,
+        "sid": sid,
+        "scenario_id": sid.split("#", 1)[0],
+        "ts": _utcnow(),
+        "elapsed_s": round(elapsed_s, 3),
+        "error": error,
+        "result": None if result is None else result.model_dump(mode="json"),
+        "base_rep": None if base_traces is None else repertoire(base_traces),
+        "cand_rep": None if cand_traces is None else repertoire(cand_traces),
+        "tokens_in": sum(t.tokens_in for t in both),
+        "tokens_out": sum(t.tokens_out for t in both),
+        "judge_calls": (
+            judge_calls_implied(base_traces, cand_traces)
+            if judged and base_traces is not None and cand_traces is not None
+            else 0
+        ),
+        "base_traces": None if base_traces is None else traces_to_json(base_traces),
+        "cand_traces": None if cand_traces is None else traces_to_json(cand_traces),
+    }
+
+
+def load_artifact(path: str) -> tuple[dict | None, list[dict]]:
+    """`(header, trial rows)` from a JSONL artifact. For one key, a verdict always beats an
+    error and a later verdict beats an earlier one, so a re-attempted provider error is
+    superseded by the verdict that replaced it and never the other way round. Blank and
+    non-trial lines (resume markers, summaries) are skipped."""
+    header: dict | None = None
+    rows: dict[str, dict] = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            kind = rec.get("kind")
+            if kind == ARTIFACT_KIND_HEADER:
+                header = header or rec
+            elif kind == ARTIFACT_KIND_TRIAL:
+                prev = rows.get(rec["key"])
+                if prev is None or prev.get("result") is None or rec.get("result") is not None:
+                    rows[rec["key"]] = rec
+    return header, list(rows.values())
+
+
+def memo_from_rows(rows) -> dict[str, tuple]:
+    """`key -> (DiffResult, base_repertoire, cand_repertoire)` for every row that reached a
+    verdict. Error rows are absent on purpose: a resumed run re-attempts them."""
+    from modelpin.models import DiffResult
+
+    memo: dict[str, tuple] = {}
+    for rec in rows:
+        if rec.get("result") is not None:
+            memo[rec["key"]] = (
+                DiffResult(**rec["result"]),
+                rec["base_rep"],
+                rec["cand_rep"],
+            )
+    return memo
+
+
+def check_resume_header(header: dict | None, expected: dict) -> None:
+    """Refuse to append trials from a different configuration to an existing artifact."""
+    if header is None:
+        raise SystemExit("error: --resume: the artifact has no header line; start a fresh --out.")
+    bad = [k for k in _RESUME_MUST_MATCH if header.get(k) != expected.get(k)]
+    if bad:
+        detail = ", ".join(f"{k}: artifact={header.get(k)!r} now={expected.get(k)!r}" for k in bad)
+        raise SystemExit(
+            "error: --resume: this artifact was recorded under a different configuration "
+            f"({detail}). A file holding trials from two configurations measures neither; "
+            "use a new --out."
+        )
+
+
+def run_trials(plan, verdict_live, memo: dict, workers: int, on_row) -> None:
+    """Fill `memo` for every planned trial not already in it.
+
+    `verdict_live(base, cand, sid) -> (DiffResult, base_traces, cand_traces) | None` is
+    called for each missing key - concurrently when `workers > 1`. `None` (a provider error)
+    is reported through `on_row` but NOT memoised, so the next `--resume` re-attempts it.
+    `on_row(key, sid, res, base_traces, cand_traces, error, elapsed)` runs on the calling
+    thread, in completion order. With `verdict_live=None` (offline rescore) every missing key
+    is reported as an error and nothing is called.
+
+    Completion order is whatever the pool produces; the arms re-read the memo in plan order,
+    so the published report is identical at every worker count.
+    """
+    todo = [t for t in plan if t[0] not in memo]
+
+    def one(item):
+        key, sid, base, cand = item
+        started = time.perf_counter()
+        if verdict_live is None:
+            return key, sid, None, None, None, "not in artifact", 0.0
+        out = verdict_live(base, cand, sid)
+        elapsed = time.perf_counter() - started
+        if out is None:
+            return key, sid, None, None, None, "provider error", elapsed
+        res, base_traces, cand_traces = out
+        return key, sid, res, base_traces, cand_traces, None, elapsed
+
+    def absorb(done):
+        key, sid, res, base_traces, cand_traces, error, elapsed = done
+        if res is not None:
+            memo[key] = (res, repertoire(base_traces), repertoire(cand_traces))
+        on_row(key, sid, res, base_traces, cand_traces, error, elapsed)
+
+    if workers <= 1 or len(todo) <= 1:
+        for item in todo:
+            absorb(one(item))
+        return
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(one, item) for item in todo]
+        for fut in as_completed(futures):
+            absorb(fut.result())
+
+
+class ArtifactWriter:
+    """Append-only JSONL, one flush per record, one lock across worker threads."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+
+    def write(self, record: dict) -> None:
+        line = json.dumps(record, ensure_ascii=False, default=str)
+        with self._lock:
+            with open(self.path, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+                fh.flush()
+
+
+def artifact_header(args, scenario_ids, git_sha: str) -> dict:
+    """The configuration a rate is a rate OF. Everything a reader needs to re-run it."""
+    from modelpin import diff as _diff
+    from modelpin.config import DEFAULT_RUNS
+
+    return {
+        "kind": ARTIFACT_KIND_HEADER,
+        "provider": args.provider,
+        "model": args.model,
+        "runs": args.runs,
+        "judge": None if args.no_judge else args.judge,
+        "scenarios_dir": os.path.basename(os.path.normpath(args.scenarios_dir)),
+        "scenarios_path": args.scenarios_dir,
+        "role": args.role,
+        "repeats": args.repeats,
+        "only": sorted(args.only) if args.only else None,
+        "scenarios": list(scenario_ids),
+        "match": "strict",
+        "constants": {
+            "ALPHA": _diff.ALPHA,
+            "MIN_TOOL_TVD": _diff.MIN_TOOL_TVD,
+            "MIN_TOOL_ARG_TVD": _diff.MIN_TOOL_ARG_TVD,
+            "MIN_REFUSAL_DELTA": _diff.MIN_REFUSAL_DELTA,
+            "MIN_SEMANTIC_DELTA": _diff.MIN_SEMANTIC_DELTA,
+            "DEFAULT_RUNS": DEFAULT_RUNS,
+        },
+        "git_sha": git_sha,
+        "started_utc": _utcnow(),
+    }
+
+
+def parse_only(raw: str | None) -> set[str] | None:
+    if raw is None:
+        return None
+    ids = {s.strip() for s in raw.split(",") if s.strip()}
+    if not ids:
+        raise SystemExit("error: --only needs at least one scenario id.")
+    return ids
+
+
+def select_only(scenarios, only: set[str] | None):
+    """Restrict a run to named ids. An id absent from the (role-filtered) set is an error: a
+    smoke run that silently measured a different scenario is worse than none."""
+    if only is None:
+        return list(scenarios)
+    missing = sorted(only - {s.id for s in scenarios})
+    if missing:
+        raise SystemExit(f"error: --only names ids not in this set: {', '.join(missing)}.")
+    return [s for s in scenarios if s.id in only]
+
+
+def run_footer(
+    live_rows, all_rows, reused: int, artifact: str | None, elapsed_s: float
+) -> list[str]:
+    """Tokens, judge calls, wall time - the cost side of the number, printed once. Tokens are
+    summed over EVERY trial the report rests on (reused ones included); the live count is
+    this invocation's alone."""
+    tin = sum(r.get("tokens_in") or 0 for r in all_rows)
+    tout = sum(r.get("tokens_out") or 0 for r in all_rows)
+    jc = sum(r.get("judge_calls") or 0 for r in all_rows)
+    out = [
+        f"  This invocation: {len(live_rows)} trial(s) run live, {reused} reused from the "
+        f"artifact, {elapsed_s / 60:.1f} min wall.",
+        f"  Replay tokens in/out over all {len(all_rows)} trial(s): {tin:,}/{tout:,}; judge calls "
+        f"implied by the traces: {jc} (judge tokens are not metered).",
+    ]
+    if artifact:
+        out.append(f"  Artifact: {artifact}  (re-read offline with --rescore; traces included)")
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--provider", default="openai", help="openai | google")
+    ap.add_argument(
+        "--provider",
+        default="openai",
+        help="openai | google | groq | ... (any live adapter)",
+    )
     ap.add_argument("--model", default="gpt-4o-mini")
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--judge", default="gpt-4o-mini")
     ap.add_argument("--no-judge", action="store_true", help="skip the semantic LLM-judge")
-    ap.add_argument("--scenarios-dir", default="examples/suite")
+    ap.add_argument("--scenarios-dir", default=None, help="default examples/suite")
     ap.add_argument(
         "--role",
         default=None,
@@ -688,45 +1039,182 @@ def main() -> None:
         "not have fired, so a single round's modal outcome is 0/0 - an abstention, not a "
         "rate. Repeats are how n reaches a publishable size.",
     )
+    ap.add_argument(
+        "--only",
+        default=None,
+        help="comma-separated scenario ids to run (a smoke run). Recorded in the artifact.",
+    )
+    ap.add_argument(
+        "--out",
+        default=None,
+        metavar="ARTIFACT.jsonl",
+        help="append one JSON line per trial - verdict, repertoires, TRACES - as it completes, "
+        "so a cut run can --resume instead of restarting.",
+    )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="with --out: reuse every trial in the artifact that reached a verdict and "
+        "re-attempt provider errors. Refuses an artifact recorded under another config.",
+    )
+    ap.add_argument(
+        "--rescore",
+        default=None,
+        metavar="ARTIFACT.jsonl",
+        help="OFFLINE: rebuild both arms from an artifact. No provider, no key, no writes; "
+        "the artifact's own configuration is used and the command line's is ignored.",
+    )
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="trials run concurrently. The report is identical at any value; only wall time "
+        "and rate-limit exposure change.",
+    )
     args = ap.parse_args()
     if args.repeats < 1:
         raise SystemExit("error: --repeats must be >= 1.")
+    if args.workers < 1:
+        raise SystemExit("error: --workers must be >= 1.")
+    if args.rescore and (args.out or args.resume):
+        raise SystemExit(
+            "error: --rescore re-reads an artifact and never writes one; drop --out/--resume."
+        )
+    if args.resume and not args.out:
+        raise SystemExit("error: --resume needs --out to say which artifact to continue.")
+
+    memo: dict[str, tuple] = {}
+    recorded: dict | None = None
+    rows_on_disk: list[dict] = []
+    if args.rescore:
+        recorded, rows_on_disk = load_artifact(args.rescore)
+        if recorded is None:
+            raise SystemExit("error: --rescore: the artifact has no header line.")
+        # The artifact decides what is measured; anything typed beside --rescore is ignored.
+        for k in ("provider", "model", "runs", "repeats", "role"):
+            setattr(args, k, recorded[k])
+        args.scenarios_dir = (
+            args.scenarios_dir or recorded.get("scenarios_path") or recorded["scenarios_dir"]
+        )
+        args.judge = recorded.get("judge")
+        args.no_judge = args.judge is None
+        args.only = set(recorded["only"]) if recorded.get("only") else None
+        memo = memo_from_rows(rows_on_disk)
+    else:
+        args.scenarios_dir = args.scenarios_dir or "examples/suite"
+        args.only = parse_only(args.only)
 
     scenarios = load_scenarios(args.scenarios_dir)
     scenarios, role_note = select_by_role(
         scenarios, roles_for_dir(load_role_sets(), args.scenarios_dir), args.role
     )
-    adapter = get_adapter(args.provider)
-    adapter.preflight()
-    judge = None if args.no_judge else build_judge(args.judge)
-    if judge is not None:
-        judge.preflight()
+    scenarios = select_only(scenarios, args.only)
+
+    adapter = None
+    judge = None
+    if not args.rescore:
+        adapter = get_adapter(args.provider)
+        adapter.preflight()
+        judge = None if args.no_judge else build_judge(args.judge)
+        if judge is not None:
+            judge.preflight()
+
+    git_sha = _git_sha()
+    writer: ArtifactWriter | None = None
+    if args.out:
+        expected = artifact_header(args, [s.id for s in scenarios], git_sha)
+        if os.path.exists(args.out):
+            if not args.resume:
+                raise SystemExit(
+                    f"error: {args.out} exists. Pass --resume to continue it, or name a new --out."
+                )
+            recorded, rows_on_disk = load_artifact(args.out)
+            check_resume_header(recorded, expected)
+            memo = memo_from_rows(rows_on_disk)
+            writer = ArtifactWriter(args.out)
+            writer.write(
+                {
+                    "kind": ARTIFACT_KIND_RESUME,
+                    "ts": _utcnow(),
+                    "git_sha": git_sha,
+                    "reused": len(memo),
+                }
+            )
+        else:
+            writer = ArtifactWriter(args.out)
+            writer.write(expected)
+
     print(
         f"FP measurement: provider={args.provider} model={args.model} runs={args.runs} "
-        f"judge={'off' if judge is None else args.judge} scenarios={len(scenarios)} "
+        f"judge={'off' if args.no_judge else args.judge} scenarios={len(scenarios)} "
         f"repeats={args.repeats}\n"
         # The selected role is PUBLISHED, not merely honoured. [M] MP-89's defect was that
         # the operator could not tell from the output which scenarios the rate covered.
         f"  {role_note}\n"
         f"  -> {len(scenarios) * args.repeats} trials attempted; ADR-0022 excludes those that "
-        f"could not have fired, so SCORED will be lower.\n"
+        f"could not have fired, so SCORED will be lower."
+    )
+    if args.only:
+        print(f"  --only: {', '.join(sorted(args.only))}")
+    if args.rescore:
+        print(
+            f"  RESCORED OFFLINE from {args.rescore} (recorded {recorded.get('started_utc')} "
+            f"@ {recorded.get('git_sha')}); no provider was called."
+        )
+    print(
+        f"  git {git_sha} * {_utcnow()} * workers={args.workers}"
+        + (f" * artifact {args.out}" if args.out else "")
+        + "\n"
     )
 
-    def _verdict(base_scn, cand_scn, sid):
-        """Replay base + candidate and diff.
-
-        Returns `(DiffResult, base_repertoire, cand_repertoire)`, or None on error. The
-        repertoires are returned rather than discarded because a verdict ALONE cannot say
-        whether the run measured anything at all - MP-75.
-        """
+    def _verdict_live(base_scn, cand_scn, sid):
+        """Replay base + candidate and diff. Returns `(DiffResult, base_traces,
+        cand_traces)`, or None on a provider error. The traces are returned rather than
+        discarded because a verdict ALONE cannot say whether the run measured anything at
+        all (MP-75), and because they are what the artifact keeps."""
         try:
             base = _replay_resilient(base_scn, args.model, adapter, args.runs)
             cand = _replay_resilient(cand_scn, args.model, adapter, args.runs)
             r = diff_scenario(sid, args.model, args.model, base, cand, base_scn, judge=judge)
-            return r, repertoire(base), repertoire(cand)
+            return r, base, cand
         except ProviderError as exc:
             print(f"  {sid:<22} ERROR  ({str(exc)[:70]})")
             return None
+
+    plan = plan_trials(scenarios, args.repeats)
+    reused = sum(1 for key, *_ in plan if key in memo)
+    rows_written: list[dict] = []
+    started = time.perf_counter()
+    if not args.rescore:
+        print(
+            f"RUNNING {len(plan) - reused} trial(s) live ({reused} reused from the artifact), "
+            f"{args.workers} worker(s):"
+        )
+
+    def _on_row(key, sid, res, base_traces, cand_traces, error, elapsed):
+        rec = trial_record(
+            key, sid, res, base_traces, cand_traces, error, elapsed, judge is not None
+        )
+        rows_written.append(rec)
+        if writer is not None:
+            writer.write(rec)
+        n, total = len(rows_written), len(plan) - reused
+        if res is None:
+            print(f"  [{n}/{total}] {sid:<24} ERROR ({error})")
+        else:
+            print(
+                f"  [{n}/{total}] {sid:<24} {res.verdict.value:<14} conf={res.confidence:.2f}"
+                f"  {elapsed:5.1f}s  [{_rep(rec['base_rep'], rec['cand_rep'])}]"
+            )
+
+    run_trials(plan, None if args.rescore else _verdict_live, memo, args.workers, _on_row)
+    print()
+
+    def _verdict(base_scn, cand_scn, sid):
+        """Both arms read the memo the run above filled. A miss is a trial that never reached
+        a verdict - a provider error live, or a row the artifact never recorded offline - and
+        reports as one."""
+        return memo.get(trial_key(base_scn, cand_scn, sid))
 
     # --- false-positive rate: same model vs itself ------------------------ [ARM:FP] ---
     # NB the ARM markers above and below are load-bearing: three
@@ -768,10 +1256,32 @@ def main() -> None:
     for line in recall_summary(rt):
         print(line)
 
+    for note in run_footer(
+        rows_written,
+        [*rows_on_disk, *rows_written],
+        reused,
+        args.out or args.rescore,
+        time.perf_counter() - started,
+    ):
+        print(note)
+    if writer is not None:
+        writer.write({"kind": ARTIFACT_KIND_SUMMARY, "ts": _utcnow(), "fp": t, "recall": rt})
+
 
 if __name__ == "__main__":
+    # A Windows console defaults to cp1252, and a model output with one character outside it
+    # would end a paid run at the print, not at the measurement. Replace, never crash.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     try:
         main()
     except ProviderError as exc:
         print(f"\nerror: {exc}\n(network/provider issue — retry when connectivity is stable)")
         raise SystemExit(1)
+    except KeyboardInterrupt:
+        print("\ninterrupted. Every trial that reached a verdict is in the artifact; re-run the")
+        print("same command with --resume to continue from there.")
+        raise SystemExit(130)
