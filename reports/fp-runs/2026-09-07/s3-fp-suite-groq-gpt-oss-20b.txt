@@ -1,0 +1,85 @@
+FP measurement: provider=groq model=openai/gpt-oss-20b runs=5 judge=gpt-4o-mini scenarios=12 repeats=1
+  roles: all 'score' (single-role directory)
+  -> 12 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+  git b504730 * 2026-09-07T10:36:14Z * workers=1 * artifact reports/fp-runs/2026-09-07/s3-fp-suite-groq-gpt-oss-20b.jsonl
+
+RUNNING 24 trial(s) live (0 reused from the artifact), 1 worker(s):
+  [1/24] agent_missing_param_ask  unchanged      conf=1.00   16.5s  [tools 1|1 args 1|1 text 5|5]
+  [2/24] agent_reschedule_two_step unchanged      conf=1.00   51.5s  [tools 1|1 args 1|1 text 5|5]
+  [3/24] borderline_medication_question unchanged      conf=1.00   76.8s  [tools 1|1 args 1|1 text 5|5]
+  [4/24] classify_review_sentiment unchanged      conf=1.00   10.7s  [tools 1|1 args 1|1 text 1|1]
+  [5/24] extract_invoice_fields   unchanged      conf=1.00   39.0s  [tools 1|1 args 1|1 text 2|2]
+  [6/24] format_markdown_table    unchanged      conf=1.00   27.5s  [tools 1|1 args 1|1 text 4|5]
+  [7/24] rag_answer_with_citation unchanged      conf=0.50   24.2s  [tools 1|1 args 1|1 text 5|5]
+  [8/24] rewrite_email_polite     unchanged      conf=1.00   34.5s  [tools 1|1 args 1|1 text 5|5]
+  [9/24] sql_from_question        unchanged      conf=1.00   24.3s  [tools 1|1 args 1|1 text 2|4]
+  [10/24] summarize_standup_notes  unchanged      conf=1.00   41.8s  [tools 1|1 args 1|1 text 5|5]
+  [11/24] support_order_status     unchanged      conf=1.00   45.5s  [tools 1|1 args 1|1 text 5|5]
+  [12/24] triage_ticket_json       unchanged      conf=1.00   23.3s  [tools 1|1 args 1|1 text 5|5]
+  [13/24] agent_missing_param_ask  regression     conf=1.00   38.3s  [tools 1|1 args 1|2 text 5|5]
+  [14/24] agent_reschedule_two_step regression     conf=1.00   67.8s  [tools 1|1 args 1|1 text 5|5]
+  [15/24] borderline_medication_question regression     conf=1.00   59.7s  [tools 1|1 args 1|1 text 5|1]
+  [16/24] classify_review_sentiment regression     conf=0.98   12.4s  [tools 1|1 args 1|1 text 2|1]
+  [17/24] extract_invoice_fields   regression     conf=0.98   33.1s  [tools 1|1 args 1|1 text 2|1]
+  [18/24] format_markdown_table    regression     conf=1.00   26.0s  [tools 1|1 args 1|1 text 5|5]
+  [19/24] rag_answer_with_citation changed_minor  conf=1.00   21.7s  [tools 1|1 args 1|1 text 5|5]
+  [20/24] rewrite_email_polite     regression     conf=1.00   36.6s  [tools 1|1 args 1|1 text 5|5]
+  [21/24] sql_from_question        regression     conf=1.00   25.4s  [tools 1|1 args 1|1 text 3|4]
+  [22/24] summarize_standup_notes  regression     conf=0.98   43.1s  [tools 1|1 args 1|1 text 5|5]
+  [23/24] support_order_status     regression     conf=1.00   37.6s  [tools 1|1 args 1|1 text 5|5]
+  [24/24] triage_ticket_json       regression     conf=1.00   24.7s  [tools 1|1 args 1|1 text 5|5]
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  agent_missing_param_ask unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table  unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  rewrite_email_polite   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question      unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|4]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json     unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/1 = 0%
+  95% upper bound on the true rate: 95.0% (one-sided Clopper-Pearson, n=1)
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 11
+
+  NOTE: the rate is over the 1 scenario(s) in which something could have
+  fired; 11 could not, and are excluded.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+  agent_missing_param_ask regression     conf=1.00  [tools 1|1 args 1|2 text 5|5]  detected  (tool-call behavior changed: [] -> ['send_statement']; s)
+  agent_reschedule_two_step regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (tool-call behavior changed: ['get_appointment', 'resche)
+  borderline_medication_question regression     conf=1.00  [tools 1|1 args 1|1 text 5|1]  detected  (refusal rate 0% -> 100%; semantic drift: candidate answ)
+  classify_review_sentiment regression     conf=0.98  [tools 1|1 args 1|1 text 2|1]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  extract_invoice_fields regression     conf=0.98  [tools 1|1 args 1|1 text 2|1]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  format_markdown_table  regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (output format drift: violates the scenario's text asser)
+  rag_answer_with_citation changed_minor  conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (output format drift: violates the scenario's text asser)
+  rewrite_email_polite   regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  sql_from_question      regression     conf=1.00  [tools 1|1 args 1|1 text 3|4]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  summarize_standup_notes regression     conf=0.98  [tools 1|1 args 1|1 text 5|5]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  support_order_status   regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (tool-call behavior changed: ['lookup_order'] -> []; sem)
+  triage_ticket_json     regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (semantic drift: candidate answers diverge in meaning fr)
+
+  Detection: 12/12 injected perturbations caught
+  95% lower bound on the true rate: 77.9% (one-sided Clopper-Pearson, n=12)
+  That rate is over perturbations APPLIED, not over behaviour changes; and the
+  interval treats them as exchangeable trials, which by construction they are
+  not - each targets a different signal.
+  Unmeasured (excluded): 0
+
+  This invocation: 24 trial(s) run live, 0 reused from the artifact, 14.0 min wall.
+  Replay tokens in/out over all 24 trial(s): 67,588/54,578; judge calls implied by the traces: 186 (judge tokens are not metered).
+  Artifact: reports/fp-runs/2026-09-07/s3-fp-suite-groq-gpt-oss-20b.jsonl  (re-read offline with --rescore; traces included)

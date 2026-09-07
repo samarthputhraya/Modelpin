@@ -42,6 +42,25 @@ key first.
   skip outside a checkout.
 
 ### Added
+- **The false-positive rate of record is measured.** `[M]` 710 same-model comparisons at the
+  shipped defaults on 2026-09-07: **0 false alarms in 82 scored trials** and in 710 trials that
+  reached a verdict — one-sided 95% upper bounds **3.6%** and **0.4%** — across five
+  surfaces and three models on two vendors, with the semantic judge on. Detection on the same
+  surfaces: **43 of 46** injected perturbations flagged (lower bound **84.0%**). Until this
+  release the document the README pointed to for this number read *"0 false alarms in 0 scored
+  trials"*: every scenario set ran at temperature 0, where a false positive is impossible. Every
+  trial and its traces are committed under `reports/fp-runs/2026-09-07/`, and a test regenerates the
+  published tables from them. Bound, not zero; see `docs/fp-measurement.md` for what it does not say.
+- **`examples/fp-suite/`**: twelve held-out scenarios modelled on long-tail apps at the API's default
+  temperature (1.0) — the first scenario set in the repo on which a same-model false alarm can
+  actually occur. Role `score`; reviewed before its first run; never edited after.
+- **`scripts/fp_measurement.py` can be cut and resumed, and re-scored without a key.** `--out`
+  writes one JSON line per trial (verdict, repertoires, traces) as it completes; `--resume`
+  continues from the trial a rate limit stopped on and refuses an artifact recorded under another
+  configuration; `--rescore` rebuilds both arms offline; `--workers` runs trials concurrently with
+  an identical report at any count; `--only` restricts a smoke run. Nineteen more perturbations
+  (seven `arg_*`, twelve `fp-suite`). `scripts/fp_aggregate.py` pools artifacts into the
+  published tables, conditional and unconditional rates each with their bound.
 - **`mp scan` now sees Llama, Qwen, Mistral, DeepSeek and `gpt-oss` ids, and reads `.env.example`.**
   `[M]` It was OpenAI/Anthropic/Google-shaped: a repo naming `llama-3.3-70b-versatile`,
   `qwen/qwen3-32b` and `openai/gpt-oss-20b` scanned to `No model identifiers found.`, exit 0 —

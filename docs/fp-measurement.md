@@ -52,46 +52,74 @@ This file records how we measure it and the results.
   the false-positive arm, which additionally excludes a trial that **could not have fired**
   (ADR-0022) — an exclusion this arm must never adopt. → ADR-0023
 
-Harness: [`scripts/fp_measurement.py`](../scripts/fp_measurement.py). BYO-key; reproducible.
+- **Two rates, both published, never one.** *Conditional*: false alarms over SCORED trials —
+  the engine-centric number the exclusion above defines, and the stricter one. *Unconditional*:
+  false alarms over every trial that reached a verdict (scored + could-not-fire) — what a user
+  running the same check sees. Abstentions and provider errors are printed beside both and
+  folded into neither. Each carries its one-sided 95% Clopper-Pearson upper bound.
+- **Pre-registered.** The surfaces, models, repeat counts, exclusions and the rule that every
+  flagged trial is published with its traces were written down before the first trial of the
+  2026-09-07 run (`examples/fp-suite/README.md`), and no repeat was added or dropped after a
+  number was seen.
+
+Harness: [`scripts/fp_measurement.py`](../scripts/fp_measurement.py). BYO-key; reproducible;
+`--out` records every trial with its traces as it completes, `--resume` continues a cut run,
+`--rescore` rebuilds the report offline from an artifact with no key, and
+[`scripts/fp_aggregate.py`](../scripts/fp_aggregate.py) pools artifacts into the tables below
+through the same pure functions the harness prints with.
 
 > `ADR-nnnn` refers to this project's internal decision records, which are not published. They
 > are cited for provenance only — every argument they carry is stated inline here, so nothing
 > on this page depends on reading one.
 
 ```
-python scripts/fp_measurement.py --model gpt-4o-mini --runs 5     # judged, full suite
+python scripts/fp_measurement.py --model gpt-4o-mini --runs 5     # judged, held-out suite
+python scripts/fp_measurement.py --provider openai --model gpt-4.1-mini --judge gpt-4o-mini \
+    --runs 5 --repeats 20 --scenarios-dir examples/fp-suite \
+    --out reports/fp-runs/2026-09-07/s2a-fp-suite-gpt-4.1-mini.jsonl --workers 3
+python scripts/fp_aggregate.py reports/fp-runs/2026-09-07/*.jsonl     # the tables below, offline
 ```
 
 ## Results
 
-**Headline (live, judged, held-out): 0 false alarms in 0 scored trials — this run did not measure the false-positive rate.**
+**Headline (run of record 2026-09-07, live, judged, same model vs itself, five surfaces): 0 false alarms in 82 scored trials, 710 trials reached a verdict — one-sided 95% upper bound 3.6% of scored trials, 0.4% of trials that reached a verdict.**
 
-> **Corrected 2026-08-23 (MP-75).** This line previously read *"0 false alarms in 8 scored
-> trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
-> could have fired at ALPHA — counting it as a passed trial credits the engine for a test it
-> could not fail. **Re-scored, not re-run** — no API call was made: the same recorded verdicts
-> (8 × `unchanged` at confidence 1.00) yield `0/0 = n/a` and `*** THIS RUN MEASURED NOTHING ***`.
-> The engine did not change; the accounting did. The paragraphs below already said as much — the
-> headline had not caught up.
+`[M]` 710 same-model comparisons at the shipped defaults (`runs: 5`, `--match strict`, semantic judge on), 5 artifacts, 3 candidate models across two vendors, 2,071,848/447,798 replay tokens. Every trial, with the traces its verdict was computed over, is in [`reports/fp-runs/2026-09-07/`](../reports/fp-runs/2026-09-07/) and the tables below are regenerated from those files by a test, so this page cannot drift from the run. Three of the five surfaces are where a false positive is actually possible:
+
+- **`examples/fp-suite/`** — twelve scenarios modelled on long-tail apps, every one at **temperature 1.0**, the API's default (`gpt-4.1-mini` (judge `gpt-4o-mini`): 0/23 (upper bound 12.2%) of scored, 0/240 (upper bound 1.2%) of reached; `gpt-4o-mini` (judge `gpt-4.1-mini`): 0/28 (upper bound 10.1%) of scored, 0/240 (upper bound 1.2%) of reached; `openai/gpt-oss-20b` (judge `gpt-4o-mini`): 0/1 (upper bound 95.0%) of scored, 0/12 (upper bound 22.1%) of reached). This is the number the promise rests on.
+- **`examples/calibration/arg_*`** — the seven tool-argument scenarios at 0.7, 30 repeats (`gpt-4.1-mini`: 0/30 (upper bound 9.5%) of scored, 0/210 (upper bound 1.4%) of reached). The closest any null trial came to firing was `p = 0.087`.
+- **`examples/suite/`** — the original held-out eight at temperature 0, re-run for continuity: 0 of 8 could fire, exactly as in 2026-08. It still measures nothing about false positives, and is kept so the previous run of record stays comparable.
+
+**How to read the bound.** Zero flags in 82 scored trials means the true conditional rate is below 3.6% with 95% confidence, and zero in 710 that reached a verdict means the rate a user sees on these shapes is below 0.4%; neither is a zero, and every point figure on this page sits beside its bound. The conditional denominator is small by design: a trial in which every channel returned `p = 1.00` could not have fired and is excluded (above), and `[M]` on prose scenarios that is most of them — 628 of 710 here. The scored count was predicted before the run, not discovered after it.
+
+**What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios; repeats buy resolution on them, never coverage of a twenty-eighth. Two candidate models and one open-weight model on a free tier are three models. Every judge here is an OpenAI model. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
+
+> **Corrected 2026-08-23 (MP-75).** The previous run of record's headline read *"0 false alarms in 8
+> scored trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
+> could have fired at ALPHA — counting it as a passed trial credits the engine for a test it could
+> not fail. **Re-scored, not re-run** — no API call was made: the same recorded verdicts (8 ×
+> `unchanged` at confidence 1.00) yield `0/0 = n/a` and `*** THIS RUN MEASURED NOTHING ***`. The
+> engine did not change; the accounting did. That reading stood, as *"the real reading is `0/0`,
+> the bound is unbounded, the scenarios exist, the run does not"*, until the 2026-09-07 run above.
+
+### The previous run of record (2026-08, held-out suite at temperature 0)
 
 Read as `0/8`, that was an *observation, not a rate*: the exact one-sided 95% upper bound on
 0/8 is **~31%**, consistent with a true false-positive rate anywhere from 0% to about a third.
 Read as `0/0` — which is what it actually was — the bound is **unbounded**. Either way it is
-reported as a fraction and never as "0%"; the harness now prints the upper bound itself.
+reported as a fraction and never as "0%"; the harness prints the upper bound itself.
 
-It is also measured on the wrong surface to be reassuring: all 8 held-out scenarios run at
+It was also measured on the wrong surface to be reassuring: all 8 held-out scenarios run at
 temperature 0, and identical distributions short-circuit to `p=1.0` without the statistic
-running at all. **This number says nothing about the one surface where false positives are
-actually possible** — tool use at temperature > 0. `[M] 2026-08-24` MP-54 has since landed the
-seven `examples/calibration/arg_*.json` scenarios, which do combine both (temperature 0.7, real
-JSON-Schema tools); they are the repo's only such surface. **Measured coverage there is still
-`0/0`: the scenarios exist, the run does not.** Until it is performed, no stronger claim than
-the sentence above is supported — and see the `arg_*` section below for the bound that run
-could reach even if it goes perfectly.
+running at all. **That number says nothing about the surfaces where false positives are
+actually possible** — tool use and prose at temperature > 0. `[M] 2026-08-24` MP-54 landed the
+seven `examples/calibration/arg_*.json` scenarios (temperature 0.7, real JSON-Schema tools); until
+2026-09-07 they had never been run under the shipped engine, and no prose surface at the API's
+default temperature existed at all. Both gaps are what the run of record above closes.
 
 `scripts/fp_measurement.py --model gpt-4o-mini --runs 5`, semantic judge ON
 (gpt-4o-mini), gpt-4o-mini vs itself across all 8 held-out scenarios — every verdict
-`unchanged` at confidence 1.00:
+`unchanged` at confidence 1.00, in 2026-08 and again in the continuity surface above:
 
 ```
 cancel_subscription  classify_sentiment  decline_pii          extract_total
@@ -100,25 +128,130 @@ format_contact_json  order_status        refund_request       summarize_ticket
                           => 0 SCORED trials: none could have fired (MP-75)
 ```
 
-**Detection: `[M]` 2 of 3 injected perturbations were flagged.**
+**Detection: `[M]` 43 of 46 injected perturbations were flagged.**
 
-| Injected perturbation | Verdict | Outcome |
-|---|---|---|
-| `refund_request`: never issue refunds | **regression** (conf 0.99) | **detected** — dropped the `issue_refund` tool call |
-| `classify_sentiment`: always "Positive" | **changed_minor** | **detected** — assertion violation |
-| `decline_pii`: leak the customer email | **unchanged** | **MISSED** — counted against detection, never excluded |
+One perturbation per scenario — a replacement system prompt that keeps the task and changes one
+policy — replayed as the candidate against the unperturbed baseline, once per surface. `[M]` The 95%
+one-sided *lower* bound on the true rate at 43/46 is **84.0%**: `1 - upper_bound_95(3, 46)`,
+the harness's own exact Clopper-Pearson helper in [`scripts/fp_measurement.py`](../scripts/fp_measurement.py).
+The 3 that read `unchanged` (`decline_pii` on `gpt-4o-mini`, `summarize_standup_notes` on `gpt-4.1-mini`, `triage_ticket_json` on `gpt-4o-mini`) are scored MISSED and never excluded: a
+miss means either the engine failed to see a real change or the candidate ignored the injected
+instruction, and this arm cannot tell those apart. Two flags need a label the harness cannot supply and the traces do: on `arg_numeric_rounding` the
+candidate resisted the pounds instruction (every stored payload is still kilograms) and the advisory
+argument gate fired on 4- versus 5-decimal rounding jitter at `p = 0.048` — the same mode the `arg_*`
+section below prices as a false positive; and the earlier `decline_pii` miss on the held-out suite is
+the model resisting a leak instruction (it still declined), which is scored against detection all the
+same. These are synthetic, deliberately extreme system-prompt replacements, one run each, and the
+interval treats them as exchangeable trials, which by construction they are not. Detection is
+demonstrated on twenty-two perturbations across five surfaces, **not characterised**.
 
 That is what the harness prints, verbatim and unadjusted:
 
+<!-- fp-run-of-record:begin 2026-09-07 -->
+### Surfaces
+
+| surface | artifact | candidate (judge) | temp | runs x repeats | attempted | reached verdict | SCORED | could not fire | abstained | errors | false alarms | conditional (of scored) | unconditional (of reached) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| suite | s0-suite-gpt-4o-mini.jsonl | `gpt-4o-mini` (gpt-4o-mini) | 0 | 5 x 1 | 8 | 8 | **0** | 8 | 0 | 0 | **0** | n/a (0 trials) | 0/8 = 0.0%, 95% ub 31.2% |
+| calibration (score) | s1-arg-gpt-4.1-mini.jsonl | `gpt-4.1-mini` (gpt-4o-mini) | 0.7 | 5 x 30 | 210 | 210 | **30** | 180 | 0 | 0 | **0** | 0/30 = 0.0%, 95% ub 9.5% | 0/210 = 0.0%, 95% ub 1.4% |
+| fp-suite | s2a-fp-suite-gpt-4.1-mini.jsonl | `gpt-4.1-mini` (gpt-4o-mini) | 1.0 | 5 x 20 | 240 | 240 | **23** | 217 | 0 | 0 | **0** | 0/23 = 0.0%, 95% ub 12.2% | 0/240 = 0.0%, 95% ub 1.2% |
+| fp-suite | s2b-fp-suite-gpt-4o-mini.jsonl | `gpt-4o-mini` (gpt-4.1-mini) | 1.0 | 5 x 20 | 240 | 240 | **28** | 212 | 0 | 0 | **0** | 0/28 = 0.0%, 95% ub 10.1% | 0/240 = 0.0%, 95% ub 1.2% |
+| fp-suite | s3-fp-suite-groq-gpt-oss-20b.jsonl | `openai/gpt-oss-20b` (gpt-4o-mini) | 1.0 | 5 x 1 | 12 | 12 | **1** | 11 | 0 | 0 | **0** | 0/1 = 0.0%, 95% ub 95.0% | 0/12 = 0.0%, 95% ub 22.1% |
+| **POOLED** |  |  |  |  | 710 | 710 | **82** | 628 | 0 | 0 | **0** | 0/82 = 0.0%, 95% ub 3.6% | 0/710 = 0.0%, 95% ub 0.4% |
+
+### Per scenario (FP arm)
+
+| surface | scenario | attempted | scored | false alarms | could not fire | abstained | errors |
+|---|---|---|---|---|---|---|---|
+| fp-suite | `summarize_standup_notes` | 41 | **19** | 0 | 22 | 0 | 0 |
+| calibration (score) | `arg_numeric_rounding` | 30 | **16** | 0 | 14 | 0 | 0 |
+| calibration (score) | `arg_freetext_note` | 30 | **13** | 0 | 17 | 0 | 0 |
+| fp-suite | `triage_ticket_json` | 41 | **8** | 0 | 33 | 0 | 0 |
+| fp-suite | `rewrite_email_polite` | 41 | **7** | 0 | 34 | 0 | 0 |
+| fp-suite | `agent_missing_param_ask` | 41 | **6** | 0 | 35 | 0 | 0 |
+| fp-suite | `agent_reschedule_two_step` | 41 | **6** | 0 | 35 | 0 | 0 |
+| fp-suite | `sql_from_question` | 41 | **2** | 0 | 39 | 0 | 0 |
+| calibration (score) | `arg_optional_fields` | 30 | **1** | 0 | 29 | 0 | 0 |
+| fp-suite | `borderline_medication_question` | 41 | **1** | 0 | 40 | 0 | 0 |
+| fp-suite | `extract_invoice_fields` | 41 | **1** | 0 | 40 | 0 | 0 |
+| fp-suite | `rag_answer_with_citation` | 41 | **1** | 0 | 40 | 0 | 0 |
+| fp-suite | `support_order_status` | 41 | **1** | 0 | 40 | 0 | 0 |
+| calibration (score) | `arg_enum_phrasing` | 30 | **0** | 0 | 30 | 0 | 0 |
+| calibration (score) | `arg_key_order` | 30 | **0** | 0 | 30 | 0 | 0 |
+| calibration (score) | `arg_list_order` | 30 | **0** | 0 | 30 | 0 | 0 |
+| calibration (score) | `arg_multistep_carry` | 30 | **0** | 0 | 30 | 0 | 0 |
+| fp-suite | `classify_review_sentiment` | 41 | **0** | 0 | 41 | 0 | 0 |
+| fp-suite | `format_markdown_table` | 41 | **0** | 0 | 41 | 0 | 0 |
+| suite | `cancel_subscription` | 1 | **0** | 0 | 1 | 0 | 0 |
+| suite | `classify_sentiment` | 1 | **0** | 0 | 1 | 0 | 0 |
+| suite | `decline_pii` | 1 | **0** | 0 | 1 | 0 | 0 |
+| suite | `extract_total` | 1 | **0** | 0 | 1 | 0 | 0 |
+| suite | `format_contact_json` | 1 | **0** | 0 | 1 | 0 | 0 |
+| suite | `order_status` | 1 | **0** | 0 | 1 | 0 | 0 |
+| suite | `refund_request` | 1 | **0** | 0 | 1 | 0 | 0 |
+| suite | `summarize_ticket` | 1 | **0** | 0 | 1 | 0 | 0 |
+
+### Flagged trials (every one, never excluded)
+
+(none)
+
+### Detection (pooled across surfaces)
+
+| `classify_sentiment` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - output format drift: violates the scenario's text assertions; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `decline_pii` on `gpt-4o-mini` | unchanged (conf 1.0) | **MISSED** - no statistically significant behavior change |
+| `refund_request` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - tool-call behavior changed: ['lookup_order', 'issue_refund'] -> []; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `arg_enum_phrasing` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - tool-call arguments changed: route_ticket(channel (changed); queue (changed)); semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `arg_freetext_note` on `gpt-4.1-mini` | changed_minor (conf 0.992) | **detected** - tool-call arguments changed: add_call_note(note (changed)) |
+| `arg_key_order` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - tool-call arguments changed: submit_expense(amount_usd 128.45->0; category (changed)); semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `arg_list_order` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - tool-call arguments changed: tag_article(tags_0_ (changed); dropped tags_1_; dropped tags_2_); semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `arg_multistep_carry` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - tool-call arguments changed: change_reservation_time(new_time (changed)); semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `arg_numeric_rounding` on `gpt-4.1-mini` | changed_minor (conf 0.952) | **detected** - tool-call arguments changed: log_parcel_weight(weight_kg 3.35716->3.3566) |
+| `arg_optional_fields` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - tool-call arguments changed: create_task(added notify_channel; priority (changed)); semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `agent_missing_param_ask` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - tool-call behavior changed: [] -> ['send_statement']; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `agent_reschedule_two_step` on `gpt-4.1-mini` | regression (conf 0.992) | **detected** - tool-call behavior changed: ['get_appointment', 'reschedule_appointment'] -> ['get_appointment']; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `borderline_medication_question` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - refusal rate 0% -> 100%; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `classify_review_sentiment` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `extract_invoice_fields` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `format_markdown_table` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - output format drift: violates the scenario's text assertions; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `rag_answer_with_citation` on `gpt-4.1-mini` | changed_minor (conf 0.996) | **detected** - output format drift: violates the scenario's text assertions |
+| `rewrite_email_polite` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `sql_from_question` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `summarize_standup_notes` on `gpt-4.1-mini` | unchanged (conf 0.5) | **MISSED** - no statistically significant behavior change |
+| `support_order_status` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - tool-call behavior changed: ['lookup_order'] -> []; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `triage_ticket_json` on `gpt-4.1-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `agent_missing_param_ask` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - tool-call behavior changed: [] -> ['send_statement']; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `agent_reschedule_two_step` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - tool-call behavior changed: ['get_appointment', 'reschedule_appointment'] -> ['get_appointment']; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `borderline_medication_question` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - refusal rate 0% -> 100%; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `classify_review_sentiment` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `extract_invoice_fields` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `format_markdown_table` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - output format drift: violates the scenario's text assertions; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `rag_answer_with_citation` on `gpt-4o-mini` | changed_minor (conf 0.996) | **detected** - output format drift: violates the scenario's text assertions |
+| `rewrite_email_polite` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `sql_from_question` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `summarize_standup_notes` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `support_order_status` on `gpt-4o-mini` | regression (conf 0.996) | **detected** - tool-call behavior changed: ['lookup_order'] -> []; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `triage_ticket_json` on `gpt-4o-mini` | unchanged (conf 0.083) | **MISSED** - no statistically significant behavior change |
+| `agent_missing_param_ask` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - tool-call behavior changed: [] -> ['send_statement']; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `agent_reschedule_two_step` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - tool-call behavior changed: ['get_appointment', 'reschedule_appointment'] -> ['get_appointment']; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `borderline_medication_question` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - refusal rate 0% -> 100%; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `classify_review_sentiment` on `openai/gpt-oss-20b` | regression (conf 0.976) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `extract_invoice_fields` on `openai/gpt-oss-20b` | regression (conf 0.976) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `format_markdown_table` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - output format drift: violates the scenario's text assertions; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `rag_answer_with_citation` on `openai/gpt-oss-20b` | changed_minor (conf 0.996) | **detected** - output format drift: violates the scenario's text assertions |
+| `rewrite_email_polite` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `sql_from_question` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `summarize_standup_notes` on `openai/gpt-oss-20b` | regression (conf 0.976) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `support_order_status` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - tool-call behavior changed: ['lookup_order'] -> []; semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+| `triage_ticket_json` on `openai/gpt-oss-20b` | regression (conf 0.996) | **detected** - semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%) |
+
 ```
-  Detection: 2/3 injected perturbations caught
-  95% lower bound on the true rate: 13.5% (one-sided Clopper-Pearson, n=3)
+  Detection: 43/46 injected perturbations caught
+  95% lower bound on the true rate: 84.0% (one-sided Clopper-Pearson, n=46)
   That rate is over perturbations APPLIED, not over behaviour changes; and the
   interval treats them as exchangeable trials, which by construction they are
   not - each targets a different signal.
   Unmeasured (excluded): 0
-
-  NOTE: 1 perturbation(s) MISSED - counted against detection, never
+  NOTE: 3 perturbation(s) MISSED - counted against detection, never
   excluded. A miss means EITHER the engine failed to see a real change OR the
   candidate ignored the injected instruction and its behaviour did not change.
   This arm cannot tell those apart, and one that could would let a dead engine
@@ -126,18 +259,10 @@ That is what the harness prints, verbatim and unadjusted:
   repertoire above before treating one as an engine defect (ADR-0022).
 ```
 
-The third perturbation (`decline_pii`) the model simply resisted — it still declined
-(*"I can't provide personal information…"*, no email), so nothing changed for the engine to
-see; the harness scores that a **MISS** and we claim no credit for it either way. These are 3
-synthetic, deliberately extreme system-prompt injections against one model at temperature 0,
-in a single run — and the interval treats the three as exchangeable trials, which by
-construction they are not, since each was chosen to hit a different signal. `[M]` The 95%
-one-sided *lower* bound at 2/3 is **13.5%**: `1 - upper_bound_95(1, 3)`, the harness's own exact
-Clopper-Pearson helper in [`scripts/fp_measurement.py`](../scripts/fp_measurement.py). `[M]` The
-tool now prints that bound itself — it is the second line of the block above (MP-82); until then
-this page and `README.md` published a floor the executable withheld, leaving the detection arm
-the only one of the two not bounding its own claim.
-Detection is demonstrated, **not characterised**.
+### Cost
+
+Replay tokens in/out 2,071,848/447,798 across 5 artifact(s); 3711 judge calls implied by the traces (judge tokens not metered).
+<!-- fp-run-of-record:end -->
 
 > **Corrected 2026-08-24 (MP-81).** This section previously read *"Detection: every
 > perturbation that actually changed behavior was caught"* and concluded *"So 2/2 real
@@ -161,6 +286,7 @@ Detection is demonstrated, **not characterised**.
 
 | Evidence | Pairs | Scored (could have fired) | Result |
 |---|---|---|---|
+| **Run of record 2026-09-07** (five surfaces above; artifacts in `reports/fp-runs/2026-09-07/`) | 710 | **82** | **0/82**, upper bound 3.6%; 0/710 of trials reached, upper bound 0.4% |
 | Live judged held-out suite (gpt-4o-mini vs itself, N=5, judge on) | 8 | **0** | n/a — no trial could fire; was published as `0/8` |
 | Synthetic noisy-but-equivalent pairs (golden test) | 4 | **0** | n/a — `[M]` all four return `unchanged` at confidence 1.0000; was published as `0/4` |
 | Real same-model split-half (captured gpt-4o-mini + gpt-3.5-turbo traces) | 6 | **not re-scored** | `0/6` on the pre-MP-75 accounting — treat as unaudited |
@@ -185,14 +311,14 @@ cross-vendor judge fired and found two genuinely different models behaviorally e
 this suite — i.e. the engine did not manufacture a regression where the behaviors actually
 agree. (The run also surfaced + fixed two Gemini-3.x tool-loop bugs.)
 
-**Phase-0 DoD: detection demonstrated but NOT characterised; false-positive rate NOT
-established.** `[M]` `mp check` flagged **2 of 3** injected perturbations on the run of record
-(95% one-sided lower bound **13.5%**), on real model behaviors. The false-positive half of that claim is
-withdrawn as of 2026-08-23: it read "a measured **0% false-positive rate**", which contradicted
-this document's own rule four paragraphs above ("reported as `0/8` and never as `0%`") and, after
-MP-75, rests on 0 scored trials rather than 8. Establishing it needs a live run over
-`examples/calibration/arg_*.json` — tool-using scenarios at temperature > 0, the surface where
-false positives are actually possible. That set exists (MP-54); the run does not.
+**Phase-0 DoD: detection demonstrated (43/46, lower bound 84.0%) but not characterised; the
+false-positive rate is MEASURED as a bound — 0/82 of scored trials (upper bound 3.6%), 0/710 of trials
+that reached a verdict (upper bound 0.4%) — on the 2026-09-07 run of record.** It is a bound, not a
+zero, and it is a bound on twenty-seven scenario shapes and three models under the shipped defaults;
+the previous claim of *"a measured 0% false-positive rate"* stays withdrawn (2026-08-23) because
+that is not what any run can show. Establishing it took a live run over `examples/fp-suite/` and
+`examples/calibration/arg_*.json` — surfaces at temperature > 0, where false positives are actually
+possible. Those sets exist; so, now, does the run.
 
 **The `arg_*` files are a `score` set and no threshold may be fitted on them (ADR-0025).** They
 live under `examples/calibration/` for provenance, but they do not share that directory's tuning
@@ -251,6 +377,11 @@ role; roles are declared in [`examples/roles.json`](../examples/roles.json) and 
   headline this section is missing, and no run of it should be reported as having done so.
   **This is the measured case for MP-89's `--repeats`: without more trials per scenario, the
   run most likely returns an abstention rather than a number.**
+  > **`[M] 2026-09-07` Measured, and the projection above was wrong in the pessimistic direction.**
+  > At `--repeats 30` on `gpt-4.1-mini` (judge on) this set scored **30 of 210** trials — 14.3%, not 5.0% — with **0** false alarms: upper bound **9.5%** of scored, **1.4%** of reached. Three shapes scored
+  > (`arg_numeric_rounding`, `arg_freetext_note`, `arg_optional_fields`) and four never did, exactly the
+  > split the repertoire artifacts predicted. The set still cannot establish a rate below 5% on its
+  > own; pooled with `examples/fp-suite/` it contributes to the headline above.
 - `[M] 2026-08-25` **`scripts/fp_measurement.py` now refuses to pool across roles.**
   `--scenarios-dir examples/calibration` names a directory declaring **two** roles — the seven
   `arg_*` (`score`) and the six semantic scenarios `MIN_SEMANTIC_DELTA` was fitted on (`fit`) —
@@ -347,8 +478,8 @@ from the candidate simply not following the injected instruction), and every tri
 scored by an **OpenAI judge**. Since 2026-08-31 the judge also runs on Gemini and the four
 OpenAI-compatible hosts (MP-143), but nothing on this page has been re-measured with one:
 a judge that runs is not a judge that is calibrated. **Next:** expand to
-≥30 labeled pairs incl. real model-migration traces, and repeat this measurement with a
-non-OpenAI judge, before relying on the gate in high-stakes CI.
+≥30 labeled pairs incl. real model-migration traces, and repeat the 2026-09-07 same-model
+measurement with a non-OpenAI judge, before relying on the gate in high-stakes CI.
 
 ## Honest framing (trust guardrail)
 
