@@ -279,30 +279,11 @@ you something, never to stop you.
 
 ### The false-positive evidence — and its limits, stated plainly
 
-**Result: the false-positive rate is not yet established.** This section previously read
-"**0/8 false positives** on a held-out 8-scenario suite ... all `unchanged` at confidence 1.00".
-That claim is **withdrawn** as of 2026-08-23. All 8 of those trials ran at temperature 0, and a
-trial in which *every* channel returned `p = 1.00` could not have produced a false alarm at any
-threshold — counting it as a passed trial credits the engine for a test it could not fail. That
-is broader than "nothing moved": it also drops trials where an effect **was** measured but 5
-runs a side could not separate it. Scored
-honestly the same run is **0/0**, whose 95% upper bound is *unbounded*. The harness now says so
-itself. Full writeup: [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md), summarised in the
-[changelog](https://github.com/samarthputhraya/modelpin/blob/main/CHANGELOG.md).
+**Result: measured, as a bound, on the 2026-09-07 run of record — 0 false alarms in 82 scored trials and 710 trials that reached a verdict, same model vs itself, five surfaces, three models across two vendors.** One-sided 95% upper bound **3.6%** on the conditional rate (over trials in which some channel could have fired) and **0.4%** on the rate a user sees (over every trial that reached a verdict). Not "0%": a bound, on twenty-seven scenario shapes at the shipped defaults (`runs: 5`, `--match strict`, judge on), the twelve that carry the number at the API's default temperature 1.0. Every trial's traces are committed under [`reports/fp-runs/2026-09-07/`](https://github.com/samarthputhraya/modelpin/tree/main/reports/fp-runs/2026-09-07/) and a test regenerates the published tables from them, so the numbers cannot be adjusted by hand. Full writeup, both rates per surface, and what the bound does *not* say: [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md).
 
-What that run **does** still support, and how far: the accounting change touches only the
-false-positive arm (the recall arm excludes nothing, deliberately), so detection is unaffected.
-**2 of 3** injected perturbations were flagged. The third (`decline_pii`) the model simply
-resisted — it still declined, so nothing changed for the engine to see; the harness scores that a
-**MISS** and we claim no credit for it either way. These are 3 synthetic, deliberately extreme
-system-prompt injections against one model at temperature 0, in a single run, and the interval
-treats the three as exchangeable trials, which by construction they are not. `[M]` The 95%
-one-sided *lower* bound on true detection is **13.5%** at 2/3 — `1 - upper_bound_95(1, 3)` in
-[`scripts/fp_measurement.py`](https://github.com/samarthputhraya/modelpin/blob/main/scripts/fp_measurement.py). A `2/2` reading, which drops the
-resisted case from the denominator, is **withdrawn**: the harness cannot tell a resisted
-instruction from a dead engine, so it never excludes on that basis. See the correction note in
-[`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md). Detection is demonstrated, not
-characterised — and quietness on *equivalent* behavior is not evidenced at all.
+This section previously read "**0/8 false positives** on a held-out 8-scenario suite ... all `unchanged` at confidence 1.00". That claim is **withdrawn** as of 2026-08-23 and stays withdrawn: all 8 of those trials ran at temperature 0, and a trial in which *every* channel returned `p = 1.00` could not have produced a false alarm at any threshold — counting it as a passed trial credits the engine for a test it could not fail. Scored honestly that run is **0/0**, and `[M]` re-run on the current engine it is 0/0 again; it is kept as a continuity surface and contributes nothing to the bound above.
+
+What the run of record supports on detection: **43 of 46** injected perturbations were flagged, one per scenario across the five surfaces. The 3 that were not (`decline_pii` on `gpt-4o-mini`, `summarize_standup_notes` on `gpt-4.1-mini`, `triage_ticket_json` on `gpt-4o-mini`) are scored **MISSED** and we claim no credit for them either way — a miss is either a real change the engine did not see or a candidate that ignored the injected instruction, and the harness cannot tell which. One flag is labelled rather than celebrated: on `arg_numeric_rounding` the candidate kept converting to kilograms and the advisory argument gate fired on rounding jitter. These are synthetic system-prompt replacements, one run each, and the interval treats them as exchangeable trials, which by construction they are not. `[M]` The 95% one-sided *lower* bound on true detection is **84.0%** at 43/46 — `1 - upper_bound_95(3, 46)` in [`scripts/fp_measurement.py`](https://github.com/samarthputhraya/modelpin/blob/main/scripts/fp_measurement.py). A `2/2` reading of the earlier held-out run, which dropped a resisted case from the denominator, is **withdrawn**: the harness cannot tell a resisted instruction from a dead engine, so it never excludes on that basis. See the correction notes in [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md). Detection is demonstrated, not characterised.
 
 The semantic judge's escalation threshold is **calibrated** on a labeled set in
 <!-- calibrated = confirmed FP-safe and detection-preserving on a labelled set, NOT fitted -->
@@ -333,8 +314,8 @@ So the floor rests on **one** labeled condition — and that one scores 0/1, not
   2026-08-31 the judge also RUNS on Gemini and the four OpenAI-compatible hosts (MP-143),
   but no FP rate has been measured on any of those **five** - a judge that works is not a
   judge that is calibrated;
-- the structural floors are **not** FP-validated: `[M]` the held-out run contributed 0 scored
-  trials, and at the shipped `runs: 5` the floors are **inert** anyway — the p-value gate is
+- the structural floors are **not** FP-validated by the held-out run, which contributed 0 scored
+  trials; the 2026-09-07 run scored 82 (above), and at the shipped `runs: 5` the floors are **inert** anyway — the p-value gate is
   strictly stricter, and they first bind at N=9 (semantic), N=11 (tool), N=12 (refusal).
 
 Planned before any high-stakes reliance: ≥30 pairs including real migration traces, and the
@@ -524,15 +505,15 @@ is what keeps the false-positive promise honest and the tool small enough to tru
 
 ## Status
 
-**Phase 0 (core engine MVP) — detection demonstrated but NOT characterised; the false-positive half is NOT met**
+**Phase 0 (core engine MVP) — detection demonstrated but not characterised; the false-positive rate MEASURED as a bound: 0/82 scored, 0/710 reached, upper bounds 3.6% / 0.4%**
 (see [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)); `v0.2.1` live on PyPI. Live-validated cross-vendor
-(OpenAI ↔ Google ↔ Groq/Llama); **false-positive rate not established** (the "0 in 8 held-out
-trials" claim is withdrawn — those 8 could not have fired, so the honest score is 0/0); multi-turn replay; a real
+(OpenAI ↔ Google ↔ Groq); **the "0 in 8 held-out trials" claim stays withdrawn** (those 8 could not have
+fired; the 2026-09-07 run measured surfaces that can); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **874 tests passing** (+4 `xfail` pinning the open
-MP-05 scenario-id collision and the MP-165 trajectory residual, so 878 collected), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **898 tests passing** (+4 `xfail` pinning the open
+MP-05 scenario-id collision and the MP-165 trajectory residual, so 902 collected), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 
