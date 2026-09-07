@@ -3,6 +3,10 @@
 > **Role: SCORE. Never fit a threshold here; never edit a file here after a rate has been
 > measured on it.** Declared in [`../roles.json`](../roles.json), enforced by
 > `tests/test_suite_roles.py`, pre-registered before its first run in **ADR-0036**.
+>
+> `ADR-nnnn` refers to this project's internal decision records, which are not published. They
+> are cited for provenance only; every argument they carry is stated inline here or in
+> `docs/fp-measurement.md`.
 
 Modelpin's whole promise is *"if it says it broke, it broke"* — a false-positive rate. For the
 first ten weeks of the project that number was measured on scenario sets that could not produce
@@ -91,3 +95,31 @@ record, their transcripts and the pooled tables are under `reports/fp-runs/` and
 - Twelve scenarios cannot characterise twelve app shapes; repeats buy resolution on these
   twelve, never coverage of a thirteenth. The number is a floor on what the engine can do, not
   a ceiling on what a user's own suite might do.
+
+## `[M] 2026-09-07` — what the first run did to the predictions above
+
+The predictions are left standing; this section records what happened to them. Artifacts:
+`reports/fp-runs/2026-09-07/s2a-fp-suite-gpt-4.1-mini.jsonl`, `s2b-fp-suite-gpt-4o-mini.jsonl`,
+`s3-fp-suite-groq-gpt-oss-20b.jsonl` (20 + 20 + 1 repeats).
+
+- **Zero false alarms**: 0 of 23 scored on `gpt-4.1-mini`, 0 of 28 on `gpt-4o-mini`, 0 of 1 on
+  `gpt-oss-20b`; 0 of 240 / 240 / 12 trials that reached a verdict. Detection 11/12, 11/12, 12/12.
+- **The multi-modality list was wrong in both directions.** `classify_review_sentiment` scored
+  **0 of 41** — it never produced a scorable trial on any model. `agent_missing_param_ask` scored
+  6 of 20 on `gpt-4o-mini`, but every one had `tool_call_match = 1.0` with **zero tool calls on
+  both sides**: the model always asked, and the trials became scorable through the semantic
+  channel, not the tool channel. Six scenarios not listed as multi-modal did score
+  (`triage_ticket_json` 8, `rewrite_email_polite` 7, `agent_reschedule_two_step` 6, and three
+  singletons), and `summarize_standup_notes` scored 19 — the highest in the whole run.
+- **The `0/5 vs 4/5 → p = 0.0476` arithmetic stands; the exposure did not appear.** 0 of 710
+  trials across the whole run could have fired on the tool channel.
+- **The `REFUSAL_MARKERS` trap did appear.** `borderline_medication_question#14` on `gpt-4o-mini`
+  scored 1 of 5 candidate runs `refused` (`refusal_delta = 0.2`) on a plainly non-refusing
+  caveated answer; the matched marker is `i cannot`, in *"I cannot replace the personalized
+  guidance of a healthcare professional"*. `p = 0.5`, so no false alarm — and the marker is
+  quoted here from the stored trace, as this file requires.
+- **The structural-asymmetry trap did too, as a false negative.** On `triage_ticket_json`
+  (`gpt-4o-mini`) and `summarize_standup_notes` (`gpt-4.1-mini`) the perturbed candidate changed
+  on 5 of 5 runs and the judge flagged 5 of 5, but the judge also flagged 2 and 4 of the 5
+  baseline runs against the modal baseline output, so the verdict stayed `unchanged` at
+  `p = 0.083` and `p = 0.500`. Counted as misses; tracked as MP-206.
