@@ -876,13 +876,32 @@ def require_judge_provider(args) -> str:
 
 
 def judge_calls_implied(base_traces, cand_traces) -> int:
-    """How many judge calls this trial made, derived from the traces the same way
-    `diff/semantic.py` decides to call: every run whose normalised text differs from the
-    modal baseline text. Judge usage is not otherwise metered."""
-    from modelpin.diff.semantic import _normalize, reference_output
+    """An UPPER BOUND on the judge calls this trial made, derived from the traces.
 
-    ref = _normalize(reference_output(base_traces))
-    return sum(1 for t in [*base_traces, *cand_traces] if _normalize(t.final_output or "") != ref)
+    Exact until MP-206. `diff/semantic.py` used to ask one question per run — is it equivalent
+    to the modal baseline output — so counting the runs whose text differed from that mode WAS
+    the call count. Under ADR-0040 a run is compared against the whole baseline pool and stops
+    at the first equivalence, so the true number depends on the judge's ANSWERS and is not
+    derivable from traces at all. What is derivable is the worst case: every comparison that
+    the free textual-identity check cannot settle.
+
+    Reported as a bound rather than dropped, because the alternative is publishing no cost
+    figure for the one axis a user pays for and cannot see. Under-disclosing a paid axis is
+    the same ADR-0019 violation as overstating one.
+    """
+    from modelpin.diff.semantic import _normalize
+
+    base = [_normalize(t.final_output or "") for t in base_traces]
+    cand = [_normalize(t.final_output or "") for t in cand_traces]
+    # Baseline side is leave-one-out; candidate side sees the whole pool. A pair whose text
+    # matches costs nothing, and one identical member is enough to settle the whole run.
+    calls = 0
+    for i, b in enumerate(base):
+        pool = base[:i] + base[i + 1 :]
+        calls += 0 if any(b == p for p in pool) else len(pool)
+    for c in cand:
+        calls += 0 if any(c == p for p in base) else len(base)
+    return calls
 
 
 def trial_record(
