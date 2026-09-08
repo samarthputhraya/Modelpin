@@ -1,0 +1,108 @@
+{
+  "id": "tc_skihire_boot_swap",
+  "name": "Ski hire: a return and an issue in free order, plus an optional note",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the hire-desk assistant at Vindel Ski Hire. return_item takes a hired item back and issue_item gives a replacement out. Both are needed for a swap and either order is fine. log_fit_note records a note about the fit; use it when you judge it worth recording. Reply to the hire log with one short sentence naming the customer and the boot size they now have. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Anneli Vartia is back with the 26.5 boots, they are rubbing. Give her the 27.0 pair instead."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "return_item",
+          "description": "Take a hired item back from a customer.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "customer": {
+                "type": "string",
+                "description": "The customer's name."
+              },
+              "item": {
+                "type": "string",
+                "description": "The item and size, e.g. boots 26.5."
+              }
+            },
+            "required": [
+              "customer",
+              "item"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "issue_item",
+          "description": "Issue a hire item to a customer.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "customer": {
+                "type": "string",
+                "description": "The customer's name."
+              },
+              "item": {
+                "type": "string",
+                "description": "The item and size, e.g. boots 27.0."
+              }
+            },
+            "required": [
+              "customer",
+              "item"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "log_fit_note",
+          "description": "Record a note about how an item fitted a customer.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "customer": {
+                "type": "string",
+                "description": "The customer's name."
+              },
+              "note": {
+                "type": "string",
+                "description": "The note to record."
+              }
+            },
+            "required": [
+              "customer",
+              "note"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "return_item": {
+        "customer": "Anneli Vartia",
+        "item": "boots 26.5",
+        "status": "returned"
+      },
+      "issue_item": {
+        "customer": "Anneli Vartia",
+        "item": "boots 27.0",
+        "status": "issued"
+      },
+      "log_fit_note": {
+        "customer": "Anneli Vartia",
+        "logged": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

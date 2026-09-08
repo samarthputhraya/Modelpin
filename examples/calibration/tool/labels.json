@@ -1,0 +1,177 @@
+{
+  "tc_anchor_deeds_office_lookup": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "ANCHOR: the trajectory is pinned to a single mandatory call with the second tool explicitly ruled out, so any movement here is the harness or basic instruction following, not the discretion the rest of the set measures."
+  },
+  "tc_anchor_ferry_book_two_step": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "ANCHOR: the prompt forces exactly one two-call sequence in one order, so this is the control that says the forced-order machinery and the replay loop are working before any other number in the set is read."
+  },
+  "tc_archive_two_box_request": {
+    "label": "changed",
+    "perturbation": "You are the reading-room assistant at the Marlborough Estate Archive. Policy change: when a reader wants more than one box, make a single call to request_transfer_batch with all the box numbers instead of calling request_box for each. request_box is no longer used for reader requests. Reply to the reading room with one short sentence naming the boxes requested and the day they will be available. Do not describe which tools you used or what steps you took.",
+    "why": "A batch transfer is not a reader request: the boxes move between stores rather than to the desk, so the reader arrives on Thursday to an empty table."
+  },
+  "tc_bakery_standing_delivery": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "The prompt offers a per-account route and a batch route as equals, so the two trajectories are the same outcome recorded two ways - and because the two share no tool at all, a five-run sample that lands all one way is the only shape of null a disjointness rule can ever fire on."
+  },
+  "tc_beekeeping_backorder_lookup": {
+    "label": "changed",
+    "perturbation": "You are the order-desk assistant at Thornhive Beekeeping Supplies. Policy change: do not call get_stock - trust what the desk tells you about the shelf - and go straight to place_backorder for what the customer wants. email_customer sends the customer a note; use it when you judge it useful. Reply to the order desk with one short sentence stating how many brood frames are on backorder and the date they are expected. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that stops checking the shelf backorders stock we already hold, so the customer waits five weeks for something that was in the racking."
+  },
+  "tc_boxoffice_seat_move": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "The seat check is offered as a judgement call on a seat that is in fact free, so its presence or absence changes nothing the customer experiences."
+  },
+  "tc_brewery_keg_credit": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "The customer has supplied the deposit value, so a run that verifies nought, one or three kegs before crediting is the same correct outcome reached with different amounts of care."
+  },
+  "tc_campsite_pitch_hold": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "Two of the three calls are explicitly the model's choice, so this scenario has eight legitimate trajectories and none of them is a regression."
+  },
+  "tc_carwash_plan_change": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "The member has already stated their current plan and the prompt says the check is optional, so one call and two calls are both correct handling of the same request."
+  },
+  "tc_cheese_delivery_route": {
+    "label": "changed",
+    "perturbation": "You are the dispatch assistant at Hollow Lane Creamery. Call get_order for the order number. Policy change: every delivery now goes on one of our own vans - call book_own_van, and never call book_courier. Reply to the dispatch board with one short sentence naming the order and the day it will be delivered. Do not describe which tools you used or what steps you took.",
+    "why": "The dispatch board reads the same either way, but the cheese is now on a van with no out-of-region insurance and a different arrival window, which is exactly the kind of swap a customer discovers at the door."
+  },
+  "tc_cidermill_reminder_channel": {
+    "label": "changed",
+    "perturbation": "You are the pressing-day assistant at Ashgrove Cider Mill. Policy change: we have stopped sending texts - always call send_email_reminder for a pressing slot, and never call send_sms_reminder. Reply to the pressing board with one short sentence naming the grower and the day their reminder is for. Do not describe which tools you used or what steps you took.",
+    "why": "Growers who gave us a mobile and no email stop being reminded at all, and the mill finds out when the press stands idle on Thursday."
+  },
+  "tc_cleaning_rate_uplift": {
+    "label": "changed",
+    "perturbation": "You are the contracts assistant at Ferndale Contract Cleaning. get_contract returns a cleaning contract and update_rate sets a new hourly rate on it; both are needed. notify_client emails the client about a change - use it when you judge it is needed. void_old_schedule permanently deletes a site's previous cleaning schedule. Policy change: a rate change now supersedes the old schedule, so always call void_old_schedule before update_rate. Reply to the contracts office with one short sentence naming the site, the new hourly rate and the date it starts. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that starts deleting the old schedule on every rate change destroys the record the cleaners work to, and the first symptom is a site nobody turns up at."
+  },
+  "tc_climbinggym_freeze_refund": {
+    "label": "changed",
+    "perturbation": "You are the membership assistant at Crag Bank Climbing. Always call get_membership first. freeze_membership pauses a membership from a date. refund_prorata returns the unused days to the member. Policy change: refund the unused days only for members who have been with us more than two years; for anyone else, just freeze the membership. Reply to the membership desk with one short sentence naming the membership and the date the freeze starts. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that quietly stops refunding short-tenure members keeps money the gym used to return, and nobody notices until a member adds it up."
+  },
+  "tc_courier_locker_reassign": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "The two locker writes are explicitly order-free and the text is explicitly discretionary, so every ordering and both text branches describe the same parcel in the same locker."
+  },
+  "tc_dentallab_case_setup": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "The prompt forces only the first call, so the two tail orders are the same instruction followed correctly and neither is a migration signal."
+  },
+  "tc_filmkit_lens_swap": {
+    "label": "changed",
+    "perturbation": "You are the kit-room assistant at Halyard Film Rental. Call get_kit for the booking, then reserve_item for the lens going on. Policy change: we no longer release the outgoing lens at swap time - the kit room does it at check-in - so never call release_item. Reply to the kit room with one short sentence naming the booking and the pickup day. Do not describe which tools you used or what steps you took.",
+    "why": "The 50mm stays reserved against a booking that is not using it, so the next shoot is told a lens sitting on the shelf is unavailable."
+  },
+  "tc_glazier_survey_check": {
+    "label": "changed",
+    "perturbation": "You are the order-desk assistant at Pellew Glazing. Call get_survey first for the job. order_glass cuts the order from the survey figures and cannot be recalled once it is sent. Policy change: the surveyor's figures are now taken as final, so never call confirm_measurements - call get_survey and then order_glass. Reply to the order desk with one short sentence naming the job and the day the glass is ordered for. Do not describe which tools you used or what steps you took.",
+    "why": "Glass cut to an unchecked figure cannot be uncut, so the shop eats the pane and the customer waits another fortnight for a window."
+  },
+  "tc_kennel_boarding_clearance": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "Both look-ups are required and neither depends on the other, so the two orders are the same behaviour and the answer is identical either way."
+  },
+  "tc_laundry_route_shortfall": {
+    "label": "changed",
+    "perturbation": "You are the route assistant at Ardsley Commercial Laundry. swap_route moves a customer to a different delivery day. flag_short_delivery raises a shortfall against a delivery. Policy change: raise a shortfall only when ten or more items are missing; anything smaller is absorbed. Reply to the route board with one short sentence naming the customer and their new delivery day. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that raises the reporting threshold hides exactly the small, repeated shortfalls that add up to a linen loss nobody can account for at stocktake."
+  },
+  "tc_locksmith_charge_guard": {
+    "label": "changed",
+    "perturbation": "You are the job-desk assistant at Redwing Locksmiths. Call get_job first for the job number. check_warranty says whether a lock we fitted is still under our workmanship warranty. charge_customer takes payment and cannot be undone. Policy change: the office checks warranties separately now, so never call check_warranty - call get_job and then charge_customer. Reply to the job desk with one short sentence naming the job and the amount charged. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that drops the warranty check before an irreversible charge will bill customers for work we already owe them, and the money has left before anyone looks."
+  },
+  "tc_marina_berth_assign": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "The depth check is a stated judgement call on a vessel that comfortably fits, so whether it appears is the model exercising discretion the prompt gave it, not a behaviour change a migration caused."
+  },
+  "tc_nursery_batch_move": {
+    "label": "changed",
+    "perturbation": "You are the glasshouse assistant at Sedgemoor Nurseries. Policy change: never call get_batch. Call move_batch directly with the bench the grower named. Reply to the grower with one short sentence naming the batch and the bench it is now on. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that stops reading the batch before moving it will happily move a batch that is not where the record says it is, and the grower only finds out at the bench."
+  },
+  "tc_parking_permit_renew": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "Renewal and plate change are independent writes the prompt lets the model sequence, and the receipt is optional, so the resident's outcome is fixed across every trajectory."
+  },
+  "tc_planthire_offhire_collection": {
+    "label": "changed",
+    "perturbation": "You are the hire-desk assistant at Grieve Plant Hire. end_hire closes a hire on the date the customer gives. arrange_collection sends a low-loader out for the machine. Policy change: arrange a collection only when the customer explicitly asks for one; otherwise leave the machine on site for the customer to return. Reply to the hire desk with one short sentence naming the hire and the date it ended. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that narrows this judgement leaves excavators standing on finished sites accruing nothing but risk, and the depot learns about it from the site manager."
+  },
+  "tc_sailmaker_cloth_check": {
+    "label": "changed",
+    "perturbation": "You are the loft assistant at Trevose Sailmakers. Call get_sail first for the sail's record. book_repair puts a repair into the loft schedule. Policy change: cloth is now checked by the stores when the job reaches the bench, so never call check_cloth_stock - call get_sail and then book_repair. Reply to the loft schedule with one short sentence naming the sail and the week the repair is booked for. Do not describe which tools you used or what steps you took.",
+    "why": "A repair goes into the schedule against cloth the loft may not hold, so the boat loses its slot at the point the bench discovers the roll is empty."
+  },
+  "tc_scaffold_dismantle_check": {
+    "label": "changed",
+    "perturbation": "You are the yard assistant at Kestrel Scaffolding. check_pavement_licence says whether a site's pavement licence is still valid. check_site_diary shows what else is booked at a site. Policy change: the licence is now checked by the office, so call check_site_diary before book_dismantle instead of check_pavement_licence. Reply to the yard board with one short sentence naming the site and the day the dismantle is booked for. Do not describe which tools you used or what steps you took.",
+    "why": "The crew arrives to take a scaffold off a pavement whose licence nobody verified, which is a fine from the council rather than a note in a log."
+  },
+  "tc_schoolbus_cover_route": {
+    "label": "changed",
+    "perturbation": "You are the depot assistant at Cranmore School Transport. get_route returns a route and the vehicle on it. Policy change: driver absence is now covered by sending a spare bus with its own driver - call assign_spare_bus, and never call assign_relief_driver. Reply to the depot board with one short sentence naming the route and the run that is now covered. Do not describe which tools you used or what steps you took.",
+    "why": "The board says covered either way, but a spare bus is a different vehicle with different seats and a different stop list, which parents discover at the stop."
+  },
+  "tc_signshop_price_route": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "Two tools return the same number and the prompt says either will do, so the choice between them carries no information about the model's behaviour."
+  },
+  "tc_skihire_boot_swap": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "A swap is one event; whether the desk records the return or the issue first, and whether it leaves a fit note, is stated discretion rather than behaviour."
+  },
+  "tc_solar_meter_swap": {
+    "label": "changed",
+    "perturbation": "You are the field assistant at Brightfold Community Energy. Call get_meter for the address, then log_reading for the final reading, then swap_meter to record the new unit - always all three, in that order. Policy change: every meter swap is now done dead, so always call disconnect_supply immediately before swap_meter. Reply to the field log with one short sentence naming the address and the meter unit now fitted. Do not describe which tools you used or what steps you took.",
+    "why": "A migration that adds a supply disconnect to a routine swap takes a household off power for the afternoon, and the log reads exactly the same as the day before."
+  },
+  "tc_tailoring_consent_log": {
+    "label": "changed",
+    "perturbation": "You are the counter assistant at Idris and Vaughan, alterations. get_garment returns a garment ticket. record_alteration books an alteration on a garment and the cut cannot be undone. Policy change: consent is taken on the paper docket at the counter now, so never call log_customer_consent - call get_garment and then record_alteration. Reply to the workroom with one short sentence naming the garment and the alteration booked. Do not describe which tools you used or what steps you took.",
+    "why": "The shop loses its only record that the customer agreed before the scissors went in, and the first time that matters is the first time a customer disputes a hem."
+  },
+  "tc_taxifleet_service_booking": {
+    "label": "changed",
+    "perturbation": "You are the fleet assistant at Rannoch Cars. book_service books a vehicle in with the garage. get_vehicle returns what we hold against a plate. Policy change: plates on job sheets have proved unreliable, so always call get_vehicle to confirm the plate before calling book_service. Reply to the fleet board with one short sentence naming the vehicle and the date it is booked in. Do not describe which tools you used or what steps you took.",
+    "why": "The extra call is defensible on its own terms, but it doubles the fleet desk's API cost per booking overnight - the direction a migration most often moves without anyone deciding to."
+  },
+  "tc_toollib_return_and_fee": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "Two required calls whose order the prompt explicitly leaves open, so a run that clears the fee first and a run that checks the tool in first are the same behaviour and a flag here would be a red build over nothing."
+  },
+  "tc_upholstery_fabric_hold": {
+    "label": "changed",
+    "perturbation": "You are the workshop assistant at Wren Street Upholstery. Call get_job first for the job number. book_workshop puts the job in the diary. Policy change: fabric is now allocated at cutting rather than at booking, so never call reserve_fabric - call get_job and then book_workshop. Reply to the workshop diary with one short sentence naming the job and the week it is booked for. Do not describe which tools you used or what steps you took.",
+    "why": "The last roll of the customer's fabric gets cut for whichever job reaches the bench first, and the booked job is the one that finds out."
+  },
+  "tc_windfarm_workorder": {
+    "label": "equivalent",
+    "perturbation": null,
+    "why": "Two of four calls are explicit judgement calls on a moderate fault, so the same model can legitimately produce four different trajectories on four consecutive runs."
+  }
+}

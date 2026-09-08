@@ -1,0 +1,74 @@
+{
+  "id": "tc_anchor_deeds_office_lookup",
+  "name": "ANCHOR - deeds office: one mandatory look-up, everything else forbidden",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the enquiries assistant at the Ballantrae Deeds Office. You MUST call get_record with the reference the caller gives before answering any question about a record, and you must never answer from memory. Call get_record exactly once. Do not call order_copy for this enquiry - the caller has not asked for a copy. Reply to the caller with one short sentence giving the record's title and the year it was filed. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "What is deed reference DR-1908/4, and what year did it go in?"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_record",
+          "description": "Return a filed record by its reference.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "description": "The record reference, e.g. DR-1908/4."
+              }
+            },
+            "required": [
+              "reference"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "order_copy",
+          "description": "Order a certified paper copy of a record for a caller.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "description": "The record reference."
+              },
+              "caller": {
+                "type": "string",
+                "description": "The caller's name."
+              }
+            },
+            "required": [
+              "reference",
+              "caller"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_record": {
+        "reference": "DR-1908/4",
+        "title": "Feu disposition, Ballantrae Mains",
+        "filed_year": 1908
+      },
+      "order_copy": {
+        "reference": "DR-1908/4",
+        "ordered": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

@@ -37,6 +37,7 @@ from modelpin.config import (
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_TO, write_demo
 from modelpin.detector import scan_repo
 from modelpin.diff import (
+    MatchMode,
     ALPHA,
     EQUIVALENCE_MODES,
     MIN_REFUSAL_DELTA,
@@ -49,7 +50,7 @@ from modelpin.diff.stats import (
     min_achievable_pvalue_distribution,
     min_achievable_pvalue_mean,
 )
-from modelpin.models import Assertion, DiffResult, DiffVerdict, Scenario, Trace
+from modelpin.models import MATCH_MODES, Assertion, DiffResult, DiffVerdict, Scenario, Trace
 from modelpin.providers import ProviderAdapter, ProviderError, get_adapter, provider_help
 from modelpin.providers.fake import FakeProvider
 from modelpin.replay import replay
@@ -106,8 +107,11 @@ EXIT_SETUP_FAILED = 4
 #: can never disagree; three copies of it drifting apart is exactly what MP-03 was.
 RECOMMENDED_RUNS = DEFAULT_RUNS
 #: Tool-call trajectory match modes accepted by `--match` (validated at the CLI boundary
-#: so an unknown mode fails friendly here rather than deep in the diff engine).
-VALID_MATCH_MODES = ("strict", "unordered", "subset", "superset")
+#: so an unknown mode fails friendly here rather than deep in the diff engine). Aliased from
+#: `models.MATCH_MODES` rather than re-listed: MP-227 gave the same four names a third home
+#: (`Scenario.match`), and three hand-maintained copies of one list is exactly the drift MP-03
+#: and MP-204 each cost a session to unpick.
+VALID_MATCH_MODES = MATCH_MODES
 
 app = typer.Typer(
     help="Modelpin - Dependabot for AI models. Know before the model breaks you.",
@@ -824,6 +828,49 @@ def _resolve_match_mode(mode: str) -> str:
     return mode
 
 
+def _effective_match(scenario: Scenario, mode: str) -> MatchMode:
+    """The match mode this ONE scenario is diffed under (MP-227).
+
+    A scenario that declares nothing gets the run's global `--match`, which is how every
+    scenario written before MP-227 behaves. A scenario that declares `match` overrides it,
+    because the relation is a property of the scenario's own prompt: `[M]` a prompt that says
+    of a tool *"use it when it would be useful"* is stating a SUBSET relation, and under
+    `strict` the model exercising that discretion publishes `regression` @ 0.952 and a red
+    build on a same-model null (MP-220). `[M]` The inverse global fix does not work -- making
+    `subset` the default exposes only 3 of the 10 detection rows -- so the declaration has to
+    be per scenario.
+
+    The scenario's value is already one of `VALID_MATCH_MODES`: `Scenario.match` is typed
+    `Literal`, so an unknown mode is refused by `load_scenarios` with the offending file named,
+    before anything is replayed or spent.
+    """
+    # `mode` reaches here only through `_resolve_match_mode`, which `_fail`s on anything
+    # outside `VALID_MATCH_MODES`, and `scenario.match` is typed `Literal` -- so the cast
+    # narrows what is already true and cannot mask a bad value.
+    return cast(MatchMode, scenario.match or mode)
+
+
+def _match_override_note(scenarios: list[Scenario], mode: str) -> str:
+    """A one-line disclosure of every scenario that is NOT being diffed under `--match`.
+
+    Printed beside the run header rather than left implicit. `[M]` The header line already
+    prints `match=<mode>`, and with per-scenario overrides live that line alone would be a
+    false statement about part of the run -- the same class of defect as a published verdict
+    that does not say what produced it. Empty string when nothing overrides, so the ordinary
+    run gains no noise.
+    """
+    overrides = sorted(
+        {s.match for s in scenarios if s.match is not None and s.match != mode}  # type: ignore[misc]
+    )
+    if not overrides:
+        return ""
+    per_mode = [
+        f"{m}: {', '.join(sorted(s.id for s in scenarios if _effective_match(s, mode) == m))}"
+        for m in overrides
+    ]
+    return "scenario `match` overrides -- " + "; ".join(per_mode)
+
+
 @app.command()
 def version() -> None:
     """Print the Modelpin version."""
@@ -1031,7 +1078,10 @@ def check(
     ),
     runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario."),
     mode: str = typer.Option(
-        "strict", "--match", help="Tool-call match mode: strict|unordered|subset|superset."
+        "strict",
+        "--match",
+        help="Tool-call match mode: strict|unordered|subset|superset. A scenario file's "
+        'own "match" key overrides this for that scenario.',
     ),
     config_path: str = typer.Option("modelpin.yaml", "--config"),
     scenarios_dir: Optional[str] = typer.Option(None, "--scenarios-dir"),
@@ -1147,6 +1197,11 @@ def check(
     console.print(
         f"[dim]provider={prov} from={_rich_escape(from_model)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
     )
+    # MP-227. The line above says `match=<mode>`; with per-scenario overrides live that
+    # is only true of the scenarios that declare nothing, so name the rest before the
+    # run rather than leaving the header quietly wrong about part of it.
+    if _note := _match_override_note(scenarios, mode):
+        console.print(f"[dim]{_rich_escape(_note)}[/]")
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to, from_model=from_model)
 
@@ -1221,7 +1276,17 @@ def check(
             if _exercised_tools(base_traces, cand):
                 tool_active.add(s.id)
             results.append(
-                diff_scenario(s.id, from_model, to, base_traces, cand, s, mode, judge=judge)
+                diff_scenario(
+                    s.id,
+                    from_model,
+                    to,
+                    base_traces,
+                    cand,
+                    s,
+                    # MP-227: the scenario's own declaration wins over the global flag.
+                    _effective_match(s, mode),
+                    judge=judge,
+                )
             )
 
     # NotImplementedError stays a HARD failure: an unimplemented adapter is a config error
@@ -1300,8 +1365,14 @@ def check(
     # Computed per scenario, because a stored baseline can hold a different number of runs
     # than `--runs` gives the candidate (`baseline --runs 5` then `check --runs 2` is 5v2),
     # and the permutation floor depends on BOTH sides.
-    def _blind(sid: str) -> bool:
-        return _cannot_reach_alpha(len(base[sid]), n, mode)
+    def _blind(s: Scenario) -> bool:
+        # MP-227: the EFFECTIVE mode, not the global flag. `_cannot_reach_alpha` branches on
+        # `mode in EQUIVALENCE_MODES` -- the equivalence modes route the tool and argument
+        # signals through the two-sided test, whose floor is higher -- so pricing a
+        # `subset`-declaring scenario under a global `strict` would assert blindness about
+        # signals that can and do fire on it. That is a disclosure describing a run that did
+        # not happen, the exact defect the comment below this one exists to prevent.
+        return _cannot_reach_alpha(len(base[s.id]), n, _effective_match(s, mode))
 
     # The scenarios that actually produced `results` -- a scenario with no stored baseline is
     # skipped above and never diffed. Both disclosures below must be read off THIS set, or
@@ -1312,7 +1383,7 @@ def check(
     # trap with a new cause.
     _rejected_ids = {sid for sid, _ in rejected}
     compared = [s for s in scenarios if base.get(s.id) and s.id not in _rejected_ids]
-    underpowered = [s.id for s in compared if _blind(s.id)]
+    underpowered = [s.id for s in compared if _blind(s)]
 
     # MP-138. `underpowered` above prices RUN COUNT. This prices CHANNEL AVAILABILITY --
     # the other way a run can be structurally unable to fail, and one `_resolve_runs`
@@ -1334,7 +1405,20 @@ def check(
     # The housekeeping notes are held and printed after the summary, so reading order is
     # unchanged: verdict first, file paths after.
     markdown = render_pr_comment(
-        results, from_model, to, n, prov, underpowered, census, rejected, skipped
+        results,
+        from_model,
+        to,
+        n,
+        prov,
+        underpowered,
+        census,
+        rejected,
+        skipped,
+        # MP-227. `action.yml` posts THIS artifact and never reads the console note above,
+        # so a scenario compared under a looser relation than the run's `--match` has to say
+        # so here or the PR reviewer cannot see it at all. Read off `compared`, so a scenario
+        # that declared a mode but was never diffed does not claim to have been.
+        match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
     )
     _publish_notes = _publish_report(markdown, store_dir, from_model, to)
     console.print(_summary)
@@ -1464,7 +1548,10 @@ def report(
     ),
     runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario per model."),
     mode: str = typer.Option(
-        "strict", "--match", help="Tool-call match mode: strict|unordered|subset|superset."
+        "strict",
+        "--match",
+        help="Tool-call match mode: strict|unordered|subset|superset. A scenario file's "
+        'own "match" key overrides this for that scenario.',
     ),
     suite_dir: str = typer.Option(
         ...,
@@ -1500,6 +1587,11 @@ def report(
     console.print(
         f"[dim]provider={prov} from={_rich_escape(from_)} to={_rich_escape(to)} runs={n} match={mode} | {plan}[/]"
     )
+    # MP-227. The line above says `match=<mode>`; with per-scenario overrides live that
+    # is only true of the scenarios that declare nothing, so name the rest before the
+    # run rather than leaving the header quietly wrong about part of it.
+    if _note := _match_override_note(scenarios, mode):
+        console.print(f"[dim]{_rich_escape(_note)}[/]")
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to, from_model=from_)
 
@@ -1528,7 +1620,17 @@ def report(
         if _exercised_tools(base_traces, cand_traces):
             tool_active.add(s.id)
         results.append(
-            diff_scenario(s.id, from_, to, base_traces, cand_traces, s, mode, judge=judge)
+            diff_scenario(
+                s.id,
+                from_,
+                to,
+                base_traces,
+                cand_traces,
+                s,
+                # MP-227: the scenario's own declaration wins over the global flag.
+                _effective_match(s, mode),
+                judge=judge,
+            )
         )
 
     if not results:
@@ -1544,7 +1646,11 @@ def report(
     # still materialised per scenario: the renderers name the blind ones, and a future
     # per-scenario run count must not need this call site changed to stay honest.
     compared = [s for s in scenarios if s.id not in set(skipped)]
-    underpowered = [s.id for s in compared] if _cannot_reach_alpha(n, n, mode) else []
+    # MP-227 made the "future" in the comment above arrive early, from the MODE axis rather
+    # than the run-count one: `_cannot_reach_alpha` branches on `mode in EQUIVALENCE_MODES`,
+    # so blindness is no longer all-or-nothing once a scenario declares its own `match`. It is
+    # now evaluated per scenario, as the comment promised it would already be.
+    underpowered = [s.id for s in compared if _cannot_reach_alpha(n, n, _effective_match(s, mode))]
     census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
     console.print(render_cli(results, from_, to, n, underpowered, census))
@@ -1569,6 +1675,10 @@ def report(
         runs=n,
         judge_model=cfg.judge_model if judge is not None else "disabled",
         match_mode=mode,
+        # MP-227. `match_mode` above is the run's GLOBAL flag; these are the scenarios that
+        # did not use it. Read off `compared`, not off every loaded scenario, so the Report
+        # names the overrides that were actually exercised.
+        match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
         modelpin_version=__version__,
         diff_thresholds={
             "alpha": ALPHA,

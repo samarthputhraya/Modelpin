@@ -694,11 +694,18 @@ def test_a_rescored_aggregation_says_so_before_it_shows_a_number(monkeypatch, tm
     src, dst = _pair(monkeypatch, tmp_path, judge_b_verdict=True, judge_b="openai/gpt-oss-120b",
                      host_b="groq")  # fmt: skip
 
+    # A fresh run gets no banner at all -- the first line is the first heading, not a `>`
+    # quote. Asserted as "no banner" rather than against one section title: MP-223 added a
+    # severity block above `### Surfaces`, and the invariant ADR-0037 needs is that the
+    # banner precedes EVERY number, not that any particular table is first.
+    fresh = agg.render(agg.summarise([str(src)]))
     assert agg.summarise([str(src)])["provenance"] == []
-    assert agg.render(agg.summarise([str(src)]))[0].startswith("### Surfaces")
+    assert not fresh[0].startswith(">"), fresh[0]
+    assert fresh[0].startswith("### "), fresh[0]
 
     rescored = agg.render(agg.summarise([str(dst)]))
-    banner = chr(10).join(rescored[: rescored.index("### Surfaces")])
+    first_heading = next(i for i, ln in enumerate(rescored) if ln.startswith("### "))
+    banner = chr(10).join(rescored[:first_heading])
     assert "RE-SCORES of stored replays, not new samples" in banner
     assert "REPLACES its source" in banner
     assert src.name in banner, "the banner must name the source it replaces"

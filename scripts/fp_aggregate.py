@@ -33,16 +33,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modelpin.models import DiffResult  # noqa: E402
+from modelpin.models import DiffResult, Trace  # noqa: E402
 from scripts.fp_measurement import (  # noqa: E402
+    ADVISORY_CHANNELS,
     FP_OUTCOMES,
+    HARD_CHANNELS,
     fp_outcome,
     fp_report,
     load_artifact,
     recall_outcome,
     recall_report,
     recall_summary,
+    semantic_pvalue,
+    severity_exposure,
+    severity_fired,
+    structural_channel_pvalues,
     upper_bound_95,
+    verify_against_published,
 )
 
 
@@ -80,6 +87,113 @@ def _rate(fp: int, n: int) -> str:
     if n == 0:
         return "n/a (0 trials)"
     return f"{fp}/{n} = {fp / n:.1%}, 95% ub {upper_bound_95(fp, n):.1%}"
+
+
+#: Counters that hold SETS of scenario ids rather than counts. `[M] 2026-09-08 FP review`
+#: these are what stop the split flattering itself: hard `0/9` is 6 distinct shapes (ub 39.3%,
+#: not 28.3%) and advisory `0/30` is **3** (ub 63.2%, not 9.5%), two of which supply 29 of the
+#: 30. `examples/roles.json` already prices this same set by scenario count, and ADR-0041's
+#: detection arm carries the identical discount -- a bound over repeats of three shapes is a
+#: statement about three shapes. ADR-0042 D3.
+_SEVERITY_SETS = ("hard_shapes", "advisory_shapes")
+
+#: Per-CHANNEL exposure, published beside the severity rate. `[M]` Without it "the CI-FAILING
+#: channels" overstates coverage: the hard 0/9 is 8 semantic + 1 refusal + **0 tool** + 0
+#: assertion, i.e. zero exposure on the channel a migration tool exists for (MP-207's open P0).
+#: ADR-0038 D3 exists to stop channels with different exposure being pooled into one bound;
+#: this split pools them deliberately, for a question about CONSEQUENCE rather than mechanism,
+#: and therefore publishes the breakdown alongside rather than instead. ADR-0042 D4.
+_CHANNELS = (*HARD_CHANNELS, *ADVISORY_CHANNELS)
+
+
+def _empty_severity() -> dict:
+    base: dict = {
+        "hard_scored": 0,
+        "hard_fp": 0,
+        "hard_undetermined": 0,
+        "advisory_scored": 0,
+        "advisory_fp": 0,
+        "advisory_undetermined": 0,
+    }
+    base.update({k: set() for k in _SEVERITY_SETS})
+    base["exposed_by_channel"] = dict.fromkeys(_CHANNELS, 0)
+    return base
+
+
+def _severity_tally(header: dict, rows: list[dict]) -> dict[str, int]:
+    """MP-223. The false-positive rate SPLIT BY SEVERITY, each with its own denominator.
+
+    One pooled rate answered a question nobody asks. `[M] 2026-09-08` on the run of record,
+    **30 of the 39 scored trials could only ever have fired on the advisory argument gate**,
+    which by ADR-0029 escalates to `changed_minor` and can never fail a build alone
+    (`cli.py` gates exit 1 on `regression`). A bound 77% carried by a signal that cannot
+    produce a red build does not describe the product's promise -- "if Modelpin says it
+    broke, it broke" is a claim about the BUILD-FAILING channels.
+
+    **The classifier is not touched.** `_FLAGGED` still counts `changed_minor` against the
+    north-star metric, and it must: if an advisory verdict were reclassified `clean`, any
+    future channel could escape the metric permanently by shipping as "advisory", and
+    ADR-0029's argument gate is already that shape. The defect was the REPORTING, and this is
+    the reporting.
+
+    Denominators follow ADR-0038 D3's per-channel shape: a trial enters a severity's
+    denominator when a channel of that severity COULD have fired on it (`p < 1.0`), and its
+    numerator when a channel of that severity actually did. The two overlap by design -- a
+    trial where both severities were live is counted in both -- so the two denominators do
+    not sum to `scored` and are never presented as if they did.
+    """
+    from modelpin.scenarios import load_scenarios
+
+    scen_dir = header.get("scenarios_path") or header.get("scenarios_dir")
+    try:
+        scenarios = {s.id: s for s in load_scenarios(scen_dir)} if scen_dir else {}
+    except Exception:  # noqa: BLE001 - a missing suite must not silently mis-attribute
+        scenarios = {}
+    mode = header.get("match") or "strict"
+
+    tally = _empty_severity()
+    for rec in rows:
+        if rec.get("arm") != "fp" or rec.get("result") is None:
+            continue
+        result = DiffResult(**rec["result"])
+        if fp_outcome(result) in {"unmeasured", "no-effect"}:
+            continue  # ADR-0022/ADR-0018 exclusions apply unchanged, before any split
+        base = rec.get("base_traces")
+        cand = rec.get("cand_traces")
+        if base is None or cand is None:
+            # No traces means no recomputation is possible. Counted as undetermined on BOTH
+            # severities rather than guessed: a guess here re-attributes a published bound.
+            tally["hard_undetermined"] += 1
+            tally["advisory_undetermined"] += 1
+            continue
+        base_t = [Trace(**x) for x in base]
+        cand_t = [Trace(**x) for x in cand]
+        scn = scenarios.get(rec["scenario_id"])
+        # MP-227 / `[M] 2026-09-08 FP review`: the ENGINE's mode is `scenario.match or mode`
+        # (`cli.py::_effective_match`), so reading the header alone would silently diverge the
+        # moment a scenario declares its own -- and a directional mode routes `tool_p` through
+        # the MEAN statistic instead of the distributional one, i.e. straight into the hard
+        # denominator. Consistent today only because nothing in `examples/` declares `match`;
+        # this makes it consistent by construction instead of by coincidence.
+        channel_p = structural_channel_pvalues(
+            base_t, cand_t, scn, (scn.match if scn is not None else None) or mode
+        )
+        channel_p["semantic"] = semantic_pvalue(result, channel_p)
+        verify_against_published(result, channel_p)
+        exposure = severity_exposure(result, channel_p)
+        fired = severity_fired(result)
+        for channel in _CHANNELS:
+            p = channel_p.get(channel)
+            if p is not None and p < 1.0:
+                tally["exposed_by_channel"][channel] += 1
+        for severity in ("hard", "advisory"):
+            if exposure[severity] is None:
+                tally[f"{severity}_undetermined"] += 1
+            elif exposure[severity]:
+                tally[f"{severity}_scored"] += 1
+                tally[f"{severity}_fp"] += int(fired[severity])
+                tally[f"{severity}_shapes"].add(rec["scenario_id"])
+    return tally
 
 
 def _sample_identity(header: dict, path: str) -> str:
@@ -159,6 +273,7 @@ def summarise(paths: list[str]) -> dict:
         lambda: {"attempted": 0, "scored": 0, "fp": 0, "no_effect": 0, "unmeasured": 0, "errors": 0}
     )
     flagged = []
+    pooled_severity = _empty_severity()
     loaded: list[tuple[str, dict, list]] = []
     for path in paths:
         header, rows = load_artifact(path)
@@ -204,8 +319,18 @@ def summarise(paths: list[str]) -> dict:
                     }
                 )
         reached = t["scored"] + t["no_effect"]
+        sev = _severity_tally(header, rows)
+        for k, v in sev.items():
+            if k in _SEVERITY_SETS:
+                pooled_severity[k] |= v
+            elif k == "exposed_by_channel":
+                for channel, n in v.items():
+                    pooled_severity[k][channel] += n
+            else:
+                pooled_severity[k] += v
         surfaces.append(
             {
+                "severity": sev,
                 "artifact": name,
                 "surface": label,
                 "model": header["model"],
@@ -255,6 +380,7 @@ def summarise(paths: list[str]) -> dict:
     return {
         "surfaces": surfaces,
         "pooled": {
+            "severity": pooled_severity,
             "attempted": len(pooled_fp_rows),
             "reached_verdict": reached,
             "scored": pt["scored"],
@@ -279,6 +405,66 @@ def summarise(paths: list[str]) -> dict:
     }
 
 
+def _render_severity(summary: dict) -> list[str]:
+    """The severity split, FIRST, above the pooled table (MP-223).
+
+    Placed above `### Surfaces` deliberately. The pooled rate is the number a skimmer quotes,
+    and `[M]` on the run of record it is 77% carried by a gate that cannot fail a build -- so
+    the split has to be read BEFORE the number it qualifies, not in a footnote under it.
+    """
+    out = ["### False-positive rate by severity (MP-223)", ""]
+    out += [
+        "A `changed_minor` counts against the north-star metric exactly like a `regression`",
+        "and must keep doing so -- otherwise a channel could escape the metric permanently by",
+        "shipping as advisory. But the two have incompatible consequences: only `regression`",
+        "exits 1 and fails a build. Each severity therefore gets its OWN denominator -- the",
+        "trials in which a channel of that severity could have fired at all (ADR-0022's",
+        "predicate, applied one severity at a time; ADR-0038 D3's shape).",
+        "",
+        f"Hard (CI-failing) channels: {', '.join(f'`{c}`' for c in HARD_CHANNELS)}. "
+        f"Advisory: {', '.join(f'`{c}`' for c in ADVISORY_CHANNELS)}.",
+        "**The two denominators overlap and do not sum to SCORED** -- a trial on which both",
+        "severities were live is in both.",
+        "",
+        "| surface | HARD (fails your build) | over distinct shapes | advisory (annotates "
+        "only) | over distinct shapes | undetermined |",
+        "|---|---|---|---|---|---|",
+    ]
+    rows = summary["surfaces"] + [{**summary["pooled"], "surface": "**POOLED**"}]
+    for s in rows:
+        sev = s.get("severity") or _empty_severity()
+        und = sev["hard_undetermined"] + sev["advisory_undetermined"]
+        out.append(
+            f"| {s['surface']} | **{_rate(sev['hard_fp'], sev['hard_scored'])}** | "
+            f"{_rate(sev['hard_fp'], len(sev['hard_shapes']))} | "
+            f"{_rate(sev['advisory_fp'], sev['advisory_scored'])} | "
+            f"{_rate(sev['advisory_fp'], len(sev['advisory_shapes']))} | {und} |"
+        )
+    exposed = summary["pooled"].get("severity", {}).get("exposed_by_channel") or {}
+    out += [
+        "",
+        "**A severity is not a channel, and the pooled hard bound above is not a tool-channel "
+        "bound.** Trials in which each channel could have fired at all, pooled:",
+        "",
+        "| severity | channel | exposed trials |",
+        "|---|---|---|",
+    ]
+    for severity, channels in (("HARD", HARD_CHANNELS), ("advisory", ADVISORY_CHANNELS)):
+        for channel in channels:
+            n = exposed.get(channel, 0)
+            flag = "" if n else "  <-- ZERO exposure: this channel contributes NO measurement"
+            out.append(f"| {severity} | `{channel}` | {n}{flag} |")
+    out += [
+        "",
+        "`[!]` **Read the distinct-shape columns, not the trial columns.** A rate over repeats "
+        "of three scenarios is a statement about three scenarios; ADR-0041's detection arm "
+        "carries the same discount and `examples/roles.json` already prices this set by "
+        "scenario count. ADR-0042 D3/D4.",
+        "",
+    ]
+    return out
+
+
 def render(summary: dict) -> list[str]:
     out: list[str] = []
     if summary.get("provenance"):
@@ -297,6 +483,7 @@ def render(summary: dict) -> list[str]:
                 f"engine `{p['source_git_sha']}` -> `{p['git_sha']}`)"
             )
         out.append("")
+    out += _render_severity(summary)
     out += ["### Surfaces", ""]
     out.append(
         "| surface | artifact | candidate (judge) | temp | runs x repeats | attempted | "
@@ -371,6 +558,14 @@ def main() -> None:
     for line in render(summary):
         print(line)
     if args.json:
+        # The severity tally carries SETS of scenario ids (the n_eff denominators). `default=str`
+        # would serialise them as a Python repr, which is not readable back -- and this file is
+        # what tests and future readers consume. Convert explicitly.
+        for surface in [*summary["surfaces"], summary["pooled"]]:
+            sev = surface.get("severity")
+            if sev:
+                for key in _SEVERITY_SETS:
+                    sev[key] = sorted(sev[key])
         with open(args.json, "w", encoding="utf-8") as fh:
             json.dump(summary, fh, indent=1, ensure_ascii=False, default=str)
         print(f"\nwrote {args.json}")

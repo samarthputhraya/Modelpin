@@ -115,3 +115,110 @@ def test_every_flagged_trial_is_listed_never_excluded():
         assert "(none)" in block
     for f in summary["flagged"]:
         assert f"`{f['sid']}`" in block, f"flagged trial {f['sid']} is missing from the document"
+
+
+def test_the_headline_leads_with_the_severity_split_the_artifacts_carry():
+    """MP-223. One rate pooled two consequences that are not comparable, and the pooled number
+    was the one a skimmer quoted.
+
+    `[M] 2026-09-08` On this run **30 of the 39 scored trials could only have fired on the
+    advisory argument gate**, which by ADR-0029 can never fail a build alone. A bound 77%
+    carried by a signal that cannot produce a red build is not describing *"if Modelpin says
+    it broke, it broke"*. Both rates are therefore published with their own denominators, and
+    both are re-derived here from the artifacts -- so neither can be hand-adjusted, which is
+    exactly what the 2026-08 `Detection: 2/2` was.
+    """
+    _, paths = _artifacts()
+    sev = agg.summarise([str(p) for p in paths])["pooled"]["severity"]
+    doc = DOC.read_text(encoding="utf-8")
+    headline = doc[doc.index("**Headline") : doc.index("\n\n", doc.index("**Headline"))]
+
+    assert sev["hard_scored"], "a severity split with an empty hard denominator publishes nothing"
+    for k, n in (
+        (sev["hard_fp"], sev["hard_scored"]),
+        (sev["advisory_fp"], sev["advisory_scored"]),
+    ):
+        assert (
+            f"{k} false alarms in {n}" in headline or f"{k} in {n}" in headline
+        ), f"the headline must state the exact fraction {k}/{n}:\n{headline}"
+        assert (
+            f"{upper_bound_95(k, n):.1%}" in headline
+        ), f"the headline must carry the exact bound {upper_bound_95(k, n):.1%} for {k}/{n}"
+    assert headline.index("CI-FAILING") < headline.index("Pooled"), (
+        "the hard rate must be READ FIRST -- it is the one that constrains the promise, and "
+        "the pooled number is the one a skimmer quotes"
+    )
+    assert sev["hard_undetermined"] == 0 and sev["advisory_undetermined"] == 0, (
+        "some trial's severity could not be determined from the artifact; the page must say "
+        "how many before it publishes a split that silently excludes them"
+    )
+
+
+def test_the_severity_denominators_are_never_presented_as_summing_to_scored():
+    """They overlap by construction: a trial on which both severities were live is in both.
+
+    `[M]` On this run they happen to sum to 39 because no trial had both live -- which is
+    exactly the coincidence that would let a reader take the sum for a partition and quote a
+    third, wrong number later.
+    """
+    _, paths = _artifacts()
+    pooled = agg.summarise([str(p) for p in paths])["pooled"]
+    sev = pooled["severity"]
+    assert sev["hard_scored"] + sev["advisory_scored"] >= pooled["scored"]
+    block = _embedded_block()
+    assert "do not sum to SCORED" in block, block[:2000]
+
+
+def test_neither_severity_bound_is_published_without_its_distinct_shape_count():
+    """ADR-0042 D3. `[M] 2026-09-08 FP review` The trial counts flatter both bounds badly:
+    hard `0/9` is 6 distinct scenarios (39.3%, not 28.3%) and advisory `0/30` is 3 (63.2%, not
+    9.5%), two of which supply 29 of the 30.
+
+    `examples/roles.json` already prices this same set by scenario count and ADR-0041's
+    detection arm carries the identical discount, so publishing the trial-count bound bare
+    would be this page contradicting two records it cites.
+    """
+    _, paths = _artifacts()
+    sev = agg.summarise([str(p) for p in paths])["pooled"]["severity"]
+    doc = DOC.read_text(encoding="utf-8")
+    block = _embedded_block()
+    headline = doc[doc.index("**Headline") : doc.index("## ", doc.index("**Headline"))]
+
+    for severity in ("hard", "advisory"):
+        shapes = len(sev[f"{severity}_shapes"])
+        assert shapes, f"the {severity} bound rests on no named scenario at all"
+        assert shapes < sev[f"{severity}_scored"], (
+            f"the {severity} denominator is {sev[f'{severity}_scored']} trials over {shapes} "
+            "shapes; if that stops being a discount, update this test deliberately"
+        )
+        bound = f"{upper_bound_95(sev[f'{severity}_fp'], shapes):.1%}"
+        assert (
+            bound in headline
+        ), f"the headline must carry the distinct-shape bound {bound} for the {severity} rate"
+        assert bound in block, f"the generated block must carry {bound} too"
+
+
+def test_the_page_says_the_hard_bound_has_no_tool_channel_exposure():
+    """ADR-0042 D4. `[M]` The hard 0/9 is 8 semantic + 1 refusal + 0 tool + 0 assertion.
+
+    Calling it "the CI-FAILING channels" without that breakdown overstates coverage on exactly
+    the channel a migration tool exists for -- MP-207's open P0, restated as a headline. This
+    is the assertion that stops the severity split becoming a nicer-looking way to say the
+    same unmeasured thing.
+    """
+    _, paths = _artifacts()
+    exposed = agg.summarise([str(p) for p in paths])["pooled"]["severity"]["exposed_by_channel"]
+    assert exposed["tool"] == 0, (
+        "the tool channel now has exposure on the run of record -- delete this test and "
+        "publish the number it has been hiding"
+    )
+    block = _embedded_block()
+    assert "ZERO exposure" in block, block[:3000]
+    headline = DOC.read_text(encoding="utf-8")
+    headline = headline[
+        headline.index("**Headline") : headline.index("## ", headline.index("**Headline"))
+    ]
+    assert "0 tool" in headline, "the headline must say the hard bound contains no tool trials"
+    for channel, n in exposed.items():
+        assert f"`{channel}`" in block, f"{channel} is not named in the per-channel table"
+        assert str(n) in block

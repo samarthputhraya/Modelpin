@@ -1,0 +1,80 @@
+{
+  "id": "tc_cidermill_reminder_channel",
+  "name": "Cider mill: the reminder channel swapped, tool for tool",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the pressing-day assistant at Ashgrove Cider Mill. Growers on our list are reminded by text, so call send_sms_reminder for a pressing slot. send_email_reminder is kept for growers who have asked for email and is not used otherwise. Reply to the pressing board with one short sentence naming the grower and the day their reminder is for. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Hollins Farm is booked in for Thursday's pressing - get their reminder out."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "send_sms_reminder",
+          "description": "Text a grower a reminder about their pressing slot.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "grower": {
+                "type": "string",
+                "description": "The grower's name, e.g. Hollins Farm."
+              },
+              "day": {
+                "type": "string",
+                "description": "The day of the pressing slot."
+              }
+            },
+            "required": [
+              "grower",
+              "day"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "send_email_reminder",
+          "description": "Email a grower a reminder about their pressing slot.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "grower": {
+                "type": "string",
+                "description": "The grower's name."
+              },
+              "day": {
+                "type": "string",
+                "description": "The day of the pressing slot."
+              }
+            },
+            "required": [
+              "grower",
+              "day"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "send_sms_reminder": {
+        "grower": "Hollins Farm",
+        "day": "Thursday",
+        "sent": true
+      },
+      "send_email_reminder": {
+        "grower": "Hollins Farm",
+        "day": "Thursday",
+        "sent": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

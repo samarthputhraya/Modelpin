@@ -1,0 +1,104 @@
+{
+  "id": "tc_boxoffice_seat_move",
+  "name": "Box office: a forced look-up-then-move with an optional availability check",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the box-office assistant at the Rowan Theatre. Call get_ticket for the booking reference, then call move_seat to put the customer in the seat they want; never move a seat without looking the booking up first. check_seat_free tells you whether a seat is still unsold - call it first if you are not sure, and skip it if you are. Reply to the customer with one short sentence naming their new seat and the performance it is for. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Booking RT-5512 - can we move to F14 for the Saturday matinee? The stairs to the balcony are too much for my father."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_ticket",
+          "description": "Return a ticket booking by reference.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "description": "The booking reference, e.g. RT-5512."
+              }
+            },
+            "required": [
+              "reference"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "check_seat_free",
+          "description": "Return whether a seat is still unsold for a performance.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "seat": {
+                "type": "string",
+                "description": "The seat, e.g. F14."
+              },
+              "performance": {
+                "type": "string",
+                "description": "The performance, e.g. Saturday matinee."
+              }
+            },
+            "required": [
+              "seat",
+              "performance"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "move_seat",
+          "description": "Move a booking to a different seat.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "description": "The booking reference."
+              },
+              "seat": {
+                "type": "string",
+                "description": "The new seat, e.g. F14."
+              }
+            },
+            "required": [
+              "reference",
+              "seat"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_ticket": {
+        "reference": "RT-5512",
+        "performance": "Saturday matinee",
+        "seat": "B22"
+      },
+      "check_seat_free": {
+        "seat": "F14",
+        "performance": "Saturday matinee",
+        "free": true
+      },
+      "move_seat": {
+        "reference": "RT-5512",
+        "seat": "F14",
+        "status": "moved"
+      }
+    },
+    "temperature": 1.0
+  }
+}

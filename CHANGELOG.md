@@ -85,6 +85,32 @@ those ended in a confident verdict; two of them spent your API key first.
   skip outside a checkout.
 
 ### Added
+- **A scenario can pin its own tool-call match mode.** `"match": "strict" | "unordered" |
+  "subset" | "superset"` in a scenario file overrides the run's `--match` for that scenario
+  alone; scenarios that declare nothing keep using the flag, so nothing changes for anyone who
+  does not opt in. The run header and the published Report both name every scenario that
+  overrode the flag, so a run that used two modes never publishes one.
+
+  This exists because `--match` was global and some prompts make a tool call *optional*.
+  `[M]` On a same-model, same-prompt null, a scenario whose system prompt says of its second
+  tool *"use it when it would be useful"* had the model send the courtesy email on 4 of 5
+  baseline samples and 0 of 5 candidate samples, and Modelpin published `regression` at
+  confidence 0.952 and exit `1` — a red build for a model using discretion the prompt handed
+  it. `[M]` Under `subset` that comparison does not fire at all, and `[M]` a global `subset`
+  default would silence the tool channel on 7 of the 10 tool-channel detection rows in our
+  recall arm (those 7 are still caught by the semantic judge, so no detection loss is
+  measured — over only 4 distinct scenarios, 95% upper bound 52.7%) — so the relation belongs
+  to the scenario that holds it, not to a global default. The engine's thresholds are unchanged and `modelpin/diff/` is
+  untouched; the underlying tool-channel false positive remains open — measured on its own
+  corpus at 1 in 26 scored tool-exposed trials, one-sided 95% upper bound 17.0%, which is a
+  different run from the false-positive rate of record below and is never pooled with it —
+  and its published bound is unmoved.
+
+  **Adding `"match"` does not invalidate a baseline you already paid to record.** The scenario
+  fingerprint introduced in this version deliberately excludes it: the field changes how two
+  recordings are compared and cannot change a byte sent to a provider, so a baseline recorded
+  before the declaration still describes the scenario exactly.
+
 - **The false-positive rate of record is bounded for the first time.** `[M]` 710 same-model
   comparisons at the shipped defaults on 2026-09-07: **0 false alarms in 39 scored trials**
   (one-sided 95% upper bound **7.4%**), and 0 in the 710 that reached a verdict (upper bound
@@ -92,7 +118,9 @@ those ended in a confident verdict; two of them spent your API key first.
   — on two OpenAI models plus a 12-trial single-repeat sanity arm on Groq that constrains
   nothing, with the semantic judge on. The bound is carried by 9 of 27 scenario shapes, and
   **30 of its 39 trials could only have fired on the argument gate, which is advisory and can
-  never fail a build on its own**; the tool-call and assertion channels saw no exposure at all.
+  never fail a build on its own**; **on this run** the tool-call and assertion channels saw no exposure at all — both have
+  since been measured on their own corpora, and each produced one false alarm; see the two
+  entries below.
   Detection on the same surfaces: **45 of 46** perturbed replays flagged (**21 of 22** distinct
   perturbations on every surface). Until this release the document the README pointed to for this number read
   *"0 false alarms in 0 scored trials"*: every set that had ever been run ran at temperature 0,
@@ -104,6 +132,35 @@ those ended in a confident verdict; two of them spent your API key first.
   say — including that 30 of the 39 scored trials sat on the advisory argument gate, that the
   detection increase is partly in-sample, and that the new semantic rule's safety is conditional
   on judge leniency and not yet priced.
+- **The published false-positive rate is split by severity, and the hard one is read first
+  (ADR-0042).** `[M]` One pooled rate covered two verdicts whose consequences are not
+  comparable: `scripts/fp_measurement.py` counts an advisory `changed_minor` on a same-model
+  null exactly like a red build, and **30 of the run of record's 39 scored trials could only
+  ever have fired on the advisory argument gate**, which can never exit `1`. So 77% of the
+  denominator behind the number quoted for *"if Modelpin says it broke, it broke"* was a
+  channel a user's CI never sees. The page now leads with **0 in 9 hard-exposed trials, upper
+  bound 28.3% — 6 distinct scenarios, so 39.3%** — beside the advisory **0 in 30 (9.5%; 3
+  shapes, 63.2%)** and the unchanged pooled **0 in 39 (7.4%)**. `[M]` The hard bound's 9 trials
+  are **8 semantic + 1 refusal + 0 tool + 0 assertion**: it constrains the tool trajectory not
+  at all, and the split makes that visible in the headline. **The classifier is unchanged and
+  no verdict, exit code or pooled number moves** — reclassifying `changed_minor` as clean would
+  hand every future channel a way out of the north-star metric. The split is re-derived offline
+  from the committed artifacts, never recorded by the engine (`modelpin/diff/` is frozen), and
+  `tests/test_fp_severity.py` pins each channel's severity behaviourally. The two denominators
+  overlap and are never summed.
+- **The format/assertion channel has a false-positive bound for the first time, in either
+  direction — and it is not zero.** `[M]` **1 false alarm in 30 scored assertion-exposed trials
+  = 3.3%, one-sided 95% upper bound 14.9%**; over **7 distinct scenarios** that is `1/7`, upper
+  bound **52.1%**, and per ADR-0042 the shape figure is the one that constrains. 312 same-model
+  trials on `examples/fp-suite-v3`, two OpenAI models each judged by the other, both anchors
+  quiet; artifacts under `reports/channel-exposure/2026-09-08/`, reproducible offline with
+  `python scripts/channel_exposure.py reports/channel-exposure/2026-09-08/v3[abcd]-*.jsonl`.
+  The flagged trial is published as a false positive with its traces
+  (`standup_digest_keeps_the_ids#6`, `changed_minor @ 0.996`) — it is advisory and could not
+  have failed a build, which is a fact about severity, not a reason to discount it. `[M]` The
+  run is 312 trials, not the 400 pre-registered: one of four surfaces returned a provider error
+  on 88 of its 100 trials. Both models and both judges are OpenAI; no scenario in this corpus
+  declares `tools`, so it says nothing about the tool trajectory.
 - **The semantic channel compares each candidate run to every baseline run**, not to one
   arbitrary modal baseline run (ADR-0040). `[M]` It fixes two *measured* false negatives — a
   candidate that answered differently on 5 of 5 runs read `unchanged` because the judge also
@@ -1074,7 +1131,7 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.2.1...HEAD
+[0.3.0]: https://github.com/samarthputhraya/modelpin/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/samarthputhraya/modelpin/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/samarthputhraya/modelpin/compare/v0.1.1...v0.1.2

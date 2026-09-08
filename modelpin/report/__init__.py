@@ -8,7 +8,7 @@ Matches the target UX in spec section 7. Framing stays measurement/opinion
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Optional
 
 from rich.markup import escape
@@ -461,10 +461,18 @@ def render_pr_comment(
     census: Optional[ChannelCensus] = None,
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
+    match_overrides: Optional[Mapping[str, str]] = None,
 ) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
-    doesn't contradict its own "safe to adopt" line."""
+    doesn't contradict its own "safe to adopt" line.
+
+    ``match_overrides`` is ``{scenario_id: mode}`` for every scenario NOT compared under the
+    run's global ``--match`` (MP-227). `[M] 2026-09-08`, first-run review: without it, a
+    scenario could be given a LOOSER comparison relation and move from ``REGRESSION`` to
+    ``unchanged`` with no trace of it on this surface — and this surface is the one
+    ``action.yml`` posts, so it is the only thing most reviewers ever see. The console
+    printed the note and `action.yml` never reads the console."""
     _b = _bucket(results)
     regs = _b[DiffVerdict.regression]
     minors = _b[DiffVerdict.changed_minor]
@@ -541,6 +549,18 @@ def render_pr_comment(
         + ("; " + "; ".join(_gaps) + "." if _gaps else "."),
         "",
     ]
+    if match_overrides:
+        # Above every verdict bucket, for the same reason `rejected` is: this changes what
+        # the verdicts below MEAN. A looser relation on one scenario can turn a red build
+        # green, and a reviewer who cannot see that cannot review it.
+        lines.append(
+            f"**COMPARISON RELAXED OR CHANGED ({len(match_overrides)})** - these scenarios "
+            "declare their own tool-call `match` mode, so they were NOT compared under the "
+            "run's `--match`. A looser relation can turn a regression into `unchanged`."
+        )
+        for sid, mode in sorted(match_overrides.items()):
+            lines.append(f"⚙️ `{_md_inline(sid)}` — compared under `{_md_inline(mode)}`")
+        lines.append("")
     if rejected:
         # Before every verdict bucket: what was NOT measured changes how the measured
         # numbers should be read, so a reviewer must meet it first.
@@ -890,6 +910,21 @@ class ReportMeta:
     #: Scenario ids compared at a run count where NO signal could reach ALPHA (MP-55/MP-123).
     #: The run-count axis of the same disclosure; ``census`` prices channel availability.
     underpowered: list[str] = field(default_factory=list)
+    #: MP-227. ``scenario_id -> match mode`` for every scenario NOT diffed under
+    #: ``match_mode``, because it declared its own. Empty on every run where the global flag
+    #: governed everything, which is every run written before MP-227.
+    #:
+    #: This exists because ``match_mode`` alone became a FALSE claim the moment a scenario
+    #: could override it: the settings table publishes one mode over a run that used two, and
+    #: the Report is an ADR-0009 surface where "under these settings, we observed..." is the
+    #: whole framing. It rides on the meta for MP-140's reason -- ``to_report_sidecar``
+    #: serialises ``asdict(meta)``, so the Markdown and the JSON audit trail cannot disagree.
+    #:
+    #: `[M]` It also carries information the suite hash no longer does: ``compute_suite_hash``
+    #: excludes ``Scenario.match`` so that declaring it does not invalidate a paid-for
+    #: baseline (see that function), which means two runs differing only in a declaration
+    #: share a hash. This field is what keeps the Report reproducible across that exclusion.
+    match_overrides: dict[str, str] = field(default_factory=dict)
 
 
 def _fmt(value: Optional[float], spec: str, *, none: str = "—") -> str:
@@ -900,6 +935,23 @@ def _fmt(value: Optional[float], spec: str, *, none: str = "—") -> str:
 def _cell(text: Any) -> str:
     """Escape a value so it is safe inside a Markdown table cell."""
     return str(text).replace("|", "\\|").replace("\r", "").replace("\n", " ").strip()
+
+
+def _match_override_cell(meta: ReportMeta) -> str:
+    """The `, except <id> (<mode>)` tail of the settings table's match-mode row (MP-227).
+
+    Empty when nothing overrode the global flag, so an ordinary Report is byte-identical to
+    the one this repo published before per-scenario `match` existed. When something DID
+    override it, every id is named: a Report that said `strict` while three scenarios ran
+    `subset` would be a false statement about the settings a public measurement was taken
+    under, which is the one thing ADR-0009's framing cannot survive.
+    """
+    if not meta.match_overrides:
+        return ""
+    named = ", ".join(
+        f"`{_cell(sid)}` (`{_cell(mode)}`)" for sid, mode in sorted(meta.match_overrides.items())
+    )
+    return f", except {named}"
 
 
 def _report_header(meta: ReportMeta, results: list[DiffResult]) -> list[str]:
@@ -1129,7 +1181,7 @@ def _report_settings(meta: ReportMeta, n_scenarios: int) -> list[str]:
         f"| Reference model | `{_cell(meta.reference_model)}` |",
         f"| Provider | `{_cell(meta.provider)}` |",
         f"| Runs per scenario | {meta.runs} |",
-        f"| Tool-call match mode | `{_cell(meta.match_mode)}` |",
+        f"| Tool-call match mode | `{_cell(meta.match_mode)}`{_match_override_cell(meta)} |",
         f"| Semantic judge | `{_cell(meta.judge_model)}` |",
         f"| Decision thresholds | {thresholds} |",
         f"| Engine version | modelpin {_cell(meta.modelpin_version)} |",
@@ -1145,7 +1197,16 @@ def _report_methodology(meta: ReportMeta) -> list[str]:
         "own API key. A verdict comes from the *distribution* of runs, not a single sample: "
         f"a two-sample permutation test (p ≤ {meta.diff_thresholds['alpha']}) gated by a "
         "minimum effect size. We compare five behavioral signals — tool-call trajectory match "
-        f"({meta.match_mode}), tool-call ARGUMENT match, refusal-rate change, output-format / "
+        # MP-227: name the global mode AND say that it was not universal, so this sentence
+        # cannot be read as a claim about every scenario. The ids themselves are in the
+        # settings table directly above rather than repeated into a prose paragraph.
+        f"({meta.match_mode}"
+        + (
+            ", except where a scenario declares its own — see the settings table above"
+            if meta.match_overrides
+            else ""
+        )
+        + "), tool-call ARGUMENT match, refusal-rate change, output-format / "
         "assertion drift, and (when a judge runs) calibrated LLM-as-judge semantic "
         "equivalence. The argument signal is **advisory**: its effect-size floor is not yet "
         "calibrated on a labelled set, so it can raise a scenario to *minor* but never to a "

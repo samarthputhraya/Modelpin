@@ -1,0 +1,102 @@
+{
+  "id": "tc_dentallab_case_setup",
+  "name": "Dental lab: a forced first call then two calls in free order",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the scheduling assistant at Ardent Dental Laboratory. Call get_case first for the case number. After that, assign_technician and set_due_date both need doing, and the order between those two does not matter. Reply to the lab manager with one short sentence naming the case, the technician and the due date. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Case DL-2214, the zirconia crown - put it with Ines and promise it for the 19th."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_case",
+          "description": "Return a laboratory case by number.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "case_number": {
+                "type": "string",
+                "description": "The case number, e.g. DL-2214."
+              }
+            },
+            "required": [
+              "case_number"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "assign_technician",
+          "description": "Assign a case to a technician.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "case_number": {
+                "type": "string",
+                "description": "The case number."
+              },
+              "technician": {
+                "type": "string",
+                "description": "The technician's name."
+              }
+            },
+            "required": [
+              "case_number",
+              "technician"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "set_due_date",
+          "description": "Set the promised date on a case.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "case_number": {
+                "type": "string",
+                "description": "The case number."
+              },
+              "due_date": {
+                "type": "string",
+                "description": "The promised date in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "case_number",
+              "due_date"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_case": {
+        "case_number": "DL-2214",
+        "work": "zirconia crown",
+        "practice": "Ardgour"
+      },
+      "assign_technician": {
+        "case_number": "DL-2214",
+        "technician": "Ines"
+      },
+      "set_due_date": {
+        "case_number": "DL-2214",
+        "due_date": "2026-10-19"
+      }
+    },
+    "temperature": 1.0
+  }
+}

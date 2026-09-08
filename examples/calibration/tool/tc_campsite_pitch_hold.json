@@ -1,0 +1,109 @@
+{
+  "id": "tc_campsite_pitch_hold",
+  "name": "Campsite: one required hold with two independently optional calls",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the bookings assistant at Trellyn Farm campsite. reserve_pitch holds a pitch. get_pitch reports a pitch's size and hook-up - call it first if you want to be sure the pitch fits, or go straight ahead if you do not. add_to_arrivals_board puts the party on the warden's board for the day; use it when you judge it would help. Reply to the warden with one short sentence naming the party, the pitch and the arrival date. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Hold pitch 12 for the Okonjo party arriving 3 August, one campervan with an awning."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_pitch",
+          "description": "Return a pitch's size and whether it has an electric hook-up.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pitch": {
+                "type": "string",
+                "description": "The pitch number, e.g. 12."
+              }
+            },
+            "required": [
+              "pitch"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "reserve_pitch",
+          "description": "Hold a pitch for a party on a given date.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pitch": {
+                "type": "string",
+                "description": "The pitch number."
+              },
+              "party_name": {
+                "type": "string",
+                "description": "The party's surname."
+              },
+              "arrival_date": {
+                "type": "string",
+                "description": "Arrival date in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "pitch",
+              "party_name",
+              "arrival_date"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "add_to_arrivals_board",
+          "description": "Put a party on the warden's arrivals board for a day.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "party_name": {
+                "type": "string",
+                "description": "The party's surname."
+              },
+              "arrival_date": {
+                "type": "string",
+                "description": "Arrival date in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "party_name",
+              "arrival_date"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_pitch": {
+        "pitch": "12",
+        "length_m": 8,
+        "hook_up": true
+      },
+      "reserve_pitch": {
+        "pitch": "12",
+        "party_name": "Okonjo",
+        "arrival_date": "2026-08-03",
+        "status": "held"
+      },
+      "add_to_arrivals_board": {
+        "party_name": "Okonjo",
+        "arrival_date": "2026-08-03"
+      }
+    },
+    "temperature": 1.0
+  }
+}

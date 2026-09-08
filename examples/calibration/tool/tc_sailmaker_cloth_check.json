@@ -1,0 +1,98 @@
+{
+  "id": "tc_sailmaker_cloth_check",
+  "name": "Sailmakers: a discretionary stock check removed before scheduling",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the loft assistant at Trevose Sailmakers. Call get_sail first for the sail's record. book_repair puts a repair into the loft schedule. check_cloth_stock tells you whether we hold the cloth a repair needs; call it before booking when you judge the cloth might not be in. Reply to the loft schedule with one short sentence naming the sail and the week the repair is booked for. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Sail TR-482, the number two genoa - the leech tape has gone along a metre. Book the repair for the week after next. That is the heavy Dacron, which we do not always carry."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_sail",
+          "description": "Return a sail's record by its number.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "sail": {
+                "type": "string",
+                "description": "The sail number, e.g. TR-482."
+              }
+            },
+            "required": [
+              "sail"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "check_cloth_stock",
+          "description": "Return whether the loft holds a cloth in stock.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cloth": {
+                "type": "string",
+                "description": "The cloth, e.g. heavy Dacron."
+              }
+            },
+            "required": [
+              "cloth"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "book_repair",
+          "description": "Put a sail repair into the loft schedule for a week.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "sail": {
+                "type": "string",
+                "description": "The sail number."
+              },
+              "week": {
+                "type": "string",
+                "description": "The week the repair is booked for."
+              }
+            },
+            "required": [
+              "sail",
+              "week"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_sail": {
+        "sail": "TR-482",
+        "type": "number two genoa",
+        "cloth": "heavy Dacron"
+      },
+      "check_cloth_stock": {
+        "cloth": "heavy Dacron",
+        "in_stock": true
+      },
+      "book_repair": {
+        "sail": "TR-482",
+        "week": "the week after next",
+        "status": "booked"
+      }
+    },
+    "temperature": 1.0
+  }
+}

@@ -20,7 +20,16 @@ class ScenarioError(Exception):
 #: Reserved filenames in a scenarios/suite directory that are NOT scenarios (e.g. the public
 #: report suite's manifest, or the examples tree's fit/score role declaration). Skipped so they
 #: don't fail validation as malformed scenarios.
-_RESERVED_FILES = {"manifest.json", "roles.json"}
+#: `labels.json` joins them for MP-224: a labelled calibration set carries its ground truth
+#: beside the scenarios it labels, for the same reason `manifest.json` sits beside the suite it
+#: describes -- a label that lives in a script is a label that drifts from its corpus. `[M]`
+#: Without this, `load_scenarios` parses it as a scenario and raises `ScenarioError: labels.json
+#: is not a valid scenario`, which would have been found after the run was paid for.
+#:
+#: Enumerated, never inferred from shape, for the reason `_RESERVED_DIRS` gives below: "skip any
+#: JSON that does not look like a scenario" would silently swallow a scenario with a typo'd
+#: field, which is the exact silence MP-199 exists to remove.
+_RESERVED_FILES = {"manifest.json", "roles.json", "labels.json"}
 
 #: Directory names under a scenarios dir that hold OUTPUTS, not scenarios. Skipped when
 #: recursing (MP-199).

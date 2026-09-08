@@ -1,0 +1,71 @@
+{
+  "id": "tc_kennel_boarding_clearance",
+  "name": "Kennels: two independent look-ups in free order",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the front-desk assistant at Whinfell Boarding Kennels. get_booking returns a boarding booking. get_vaccination_record returns what is on file for a dog. You need both before you answer, and the order is up to you. Reply to the owner with one short sentence saying whether the dog is cleared to board on the date asked about. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Is Bramble all set to come in on the 14th? Booking WK-806."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_booking",
+          "description": "Return a boarding booking by reference.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "description": "The booking reference, e.g. WK-806."
+              }
+            },
+            "required": [
+              "reference"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_vaccination_record",
+          "description": "Return the vaccination record held for a dog.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "dog_name": {
+                "type": "string",
+                "description": "The dog's name as it appears on the booking."
+              }
+            },
+            "required": [
+              "dog_name"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_booking": {
+        "reference": "WK-806",
+        "dog_name": "Bramble",
+        "start_date": "2026-10-14",
+        "nights": 5
+      },
+      "get_vaccination_record": {
+        "dog_name": "Bramble",
+        "kennel_cough_valid_until": "2027-03-02",
+        "clear": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

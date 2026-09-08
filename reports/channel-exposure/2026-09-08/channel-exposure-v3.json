@@ -1,0 +1,137 @@
+{
+  "surfaces": [
+    {
+      "artifact": "v3a-fp-suite-v3-gpt-4o-mini.jsonl",
+      "model": "gpt-4o-mini",
+      "judge": "gpt-4.1-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "848059a"
+    },
+    {
+      "artifact": "v3b-fp-suite-v3-gpt-4.1-mini.jsonl",
+      "model": "gpt-4.1-mini",
+      "judge": "gpt-4o-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "848059a"
+    },
+    {
+      "artifact": "v3c-fp-suite-v3-gpt-4o-mini.jsonl",
+      "model": "gpt-4o-mini",
+      "judge": "gpt-4.1-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "25fdd9d"
+    },
+    {
+      "artifact": "v3d-fp-suite-v3-gpt-4.1-mini.jsonl",
+      "model": "gpt-4.1-mini",
+      "judge": "gpt-4o-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "25fdd9d"
+    }
+  ],
+  "overall": {
+    "trials": 312,
+    "scored": 32,
+    "flagged": 1
+  },
+  "tool": {
+    "exposed": 0,
+    "scored": 0,
+    "flagged": 0
+  },
+  "assertion": {
+    "exposed": 56,
+    "scored": 30,
+    "flagged": 1,
+    "in_scope": 312
+  },
+  "anchor": {
+    "trials": 0,
+    "tool_exposed": 0,
+    "assertion_exposed": 0,
+    "flagged": 0
+  },
+  "per_scenario": {
+    "anchor_echo_the_reference_line": {
+      "trials": 31,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "anchor_closed_set_label": {
+      "trials": 32,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "action_items_keep_the_owners": {
+      "trials": 32,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "dispatch_line_keeps_the_ids": {
+      "trials": 31,
+      "tool_exposed": 0,
+      "assertion_exposed": 20,
+      "flagged": 0
+    },
+    "json_null_or_omitted_key": {
+      "trials": 31,
+      "tool_exposed": 0,
+      "assertion_exposed": 1,
+      "flagged": 0
+    },
+    "handover_note_keeps_the_ids": {
+      "trials": 31,
+      "tool_exposed": 0,
+      "assertion_exposed": 10,
+      "flagged": 0
+    },
+    "slug_conjunction_stopwords": {
+      "trials": 31,
+      "tool_exposed": 0,
+      "assertion_exposed": 1,
+      "flagged": 0
+    },
+    "regex_anchors_unspecified": {
+      "trials": 32,
+      "tool_exposed": 0,
+      "assertion_exposed": 15,
+      "flagged": 0
+    },
+    "metrics_line_keeps_the_numbers": {
+      "trials": 31,
+      "tool_exposed": 0,
+      "assertion_exposed": 3,
+      "flagged": 0
+    },
+    "standup_digest_keeps_the_ids": {
+      "trials": 30,
+      "tool_exposed": 0,
+      "assertion_exposed": 6,
+      "flagged": 1
+    }
+  },
+  "flagged": [
+    {
+      "artifact": "v3b-fp-suite-v3-gpt-4.1-mini.jsonl",
+      "sid": "standup_digest_keeps_the_ids#6",
+      "verdict": "changed_minor",
+      "confidence": 0.996,
+      "channels": [
+        "assertion"
+      ],
+      "tool_call_match": 1.0,
+      "explanation": "output format drift: violates the scenario's text assertions"
+    }
+  ]
+}
