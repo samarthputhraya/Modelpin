@@ -61,14 +61,15 @@ key first.
 
 ### Added
 - **The false-positive rate of record is bounded for the first time.** `[M]` 710 same-model
-  comparisons at the shipped defaults on 2026-09-07: **0 false alarms in 82 scored trials**
-  (one-sided 95% upper bound **3.6%**), and 0 in the 710 that reached a verdict (upper bound
-  **0.4%**, reported for completeness — 628 of those 710 could not have fired at any threshold)
+  comparisons at the shipped defaults on 2026-09-07: **0 false alarms in 39 scored trials**
+  (one-sided 95% upper bound **7.4%**), and 0 in the 710 that reached a verdict (upper bound
+  **0.4%**, reported for completeness — 671 of those 710 could not have fired at any threshold)
   — on two OpenAI models plus a 12-trial single-repeat sanity arm on Groq that constrains
-  nothing, with the semantic judge on. The bound is carried by 13 of 27 scenario shapes on the
-  semantic and argument channels; the tool-call and assertion channels saw no exposure. Detection
-  on the same surfaces: **43 of 46** perturbed replays flagged (**19 of 22** distinct perturbations
-  on every surface). Until this release the document the README pointed to for this number read
+  nothing, with the semantic judge on. The bound is carried by 9 of 27 scenario shapes, and
+  **30 of its 39 trials could only have fired on the argument gate, which is advisory and can
+  never fail a build on its own**; the tool-call and assertion channels saw no exposure at all.
+  Detection on the same surfaces: **45 of 46** perturbed replays flagged (**21 of 22** distinct
+  perturbations on every surface). Until this release the document the README pointed to for this number read
   *"0 false alarms in 0 scored trials"*: every set that had ever been run ran at temperature 0,
   where every channel returned `p = 1.00` and no trial could fire (the seven `arg_*` scenarios at
   0.7 had existed since MP-54 but had never been run under the shipped engine). Every trial and

@@ -633,19 +633,74 @@ def test_a_pre_mp208_artifact_has_its_host_labelled_as_inferred_never_asserted(
     assert s["a"]["judge"] == "gpt-4o-mini @ openai (unrecorded; inferred)"
 
 
-def test_the_aggregator_refuses_to_pool_a_rejudged_artifact_with_anything(monkeypatch, tmp_path):
+def _reheaded(path: Path, dest: Path, **header_updates) -> Path:
+    """Copy an artifact, overriding header fields. For building double-count shapes."""
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        rec = json.loads(line)
+        if rec.get("kind") == "header":
+            rec.update(header_updates)
+        lines.append(json.dumps(rec))
+    dest.write_text(chr(10).join(lines) + chr(10), encoding="utf-8", newline=chr(10))
+    return dest
+
+
+def test_the_aggregator_refuses_to_read_one_sample_twice(monkeypatch, tmp_path):
     """The failure this guard prevents is silent and flattering: a glob over a directory
     holding both a run and its rejudge would count every trial twice, doubling the denominator
-    of the north-star bound while adding no new evidence. It must fail loudly."""
+    of the north-star bound while adding no new evidence. It must fail loudly.
+
+    The rule is about the SET, not about any single artifact — `[M] 2026-09-07` (MP-216) an
+    earlier version refused on the `replay_reused` FLAG alone, which also refused a set of
+    re-scores of DISTINCT sources. That made MP-206's re-scored run of record — five surfaces,
+    710 distinct trials — unaggregatable by any command, so the block `docs/fp-measurement.md`
+    publishes could not be regenerated and the page kept a bound the engine no longer produced.
+    """
     from scripts import fp_aggregate as agg
 
     src, dst = _pair(monkeypatch, tmp_path, judge_b_verdict=True, judge_b="openai/gpt-oss-120b",
                      host_b="groq")  # fmt: skip
+
     agg.summarise([str(src)])  # the source alone is still aggregable
+
+    # (1) a source pooled with a re-score OF it — the original MP-208 shape.
     with pytest.raises(SystemExit, match="double-count"):
         agg.summarise([str(src), str(dst)])
-    with pytest.raises(SystemExit, match="not a second sample"):
-        agg.summarise([str(dst)])
+
+    # (2) TWO re-scores of the SAME source: a second judge and a changed engine, say. The old
+    #     flag-based check caught this only as collateral of refusing everything.
+    twin = _reheaded(dst, tmp_path / "twin.jsonl", judge="gpt-4.1-mini")
+    with pytest.raises(SystemExit, match="double-count"):
+        agg.summarise([str(dst), str(twin)])
+
+    # (3) a re-score ALONE is legal, and is exactly how a re-scored run of record is published.
+    alone = agg.summarise([str(dst)])
+    assert alone["pooled"]["attempted"] > 0
+
+    # (4) re-scores of DISTINCT sources are separate samples and pool normally.
+    other = _reheaded(dst, tmp_path / "other.jsonl", rejudged_from="some-other-surface.jsonl")
+    both = agg.summarise([str(dst), str(other)])
+    assert both["pooled"]["attempted"] == 2 * alone["pooled"]["attempted"]
+
+
+def test_a_rescored_aggregation_says_so_before_it_shows_a_number(monkeypatch, tmp_path):
+    """A re-scored table is indistinguishable from a fresh run's, and a reader who mistakes
+    one for the other has silently doubled the evidence behind the bound. So the provenance
+    banner is printed FIRST, names each source, and says the re-score REPLACES it. ADR-0037."""
+    from scripts import fp_aggregate as agg
+
+    src, dst = _pair(monkeypatch, tmp_path, judge_b_verdict=True, judge_b="openai/gpt-oss-120b",
+                     host_b="groq")  # fmt: skip
+
+    assert agg.summarise([str(src)])["provenance"] == []
+    assert agg.render(agg.summarise([str(src)]))[0].startswith("### Surfaces")
+
+    rescored = agg.render(agg.summarise([str(dst)]))
+    banner = chr(10).join(rescored[: rescored.index("### Surfaces")])
+    assert "RE-SCORES of stored replays, not new samples" in banner
+    assert "REPLACES its source" in banner
+    assert src.name in banner, "the banner must name the source it replaces"
+    assert "a second judge" in banner, "judge changed, so the banner must say which kind"
 
 
 def test_an_arm_nobody_bought_says_so_instead_of_blaming_the_operators_key(monkeypatch, tmp_path):
