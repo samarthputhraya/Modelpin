@@ -427,6 +427,218 @@ def measurable(result) -> bool:
     return not could_not_fire
 
 
+# ---------------------------------------------------------------------------------------
+# MP-223: SEVERITY. One rate pooled two consequences that are not comparable.
+# ---------------------------------------------------------------------------------------
+
+#: Which verdict channels can independently fail a build, and which can only annotate one.
+#: Read straight off `diff/__init__.py`'s verdict block: a channel that appends to
+#: `hard_pvalues` sets `verdict = regression` unconditionally, and `cli.py` gates exit 1 on
+#: `regression` alone; a channel that appends to `minor_pvalues` is guarded by
+#: `if verdict != DiffVerdict.regression` and can reach `changed_minor` at most.
+#: `tests/test_fp_severity.py` re-derives both tuples from that file, so promoting the
+#: argument gate (ADR-0029) or the assertion gate (ADR-0032) fails a test here instead of
+#: silently re-labelling a published bound.
+HARD_CHANNELS = ("tool", "refusal", "semantic")
+ADVISORY_CHANNELS = ("argument", "assertion")
+
+#: The reason strings `diff/__init__.py` appends, by channel. Same interface-by-prose guard
+#: as `channel_exposure.CHANNEL_REASONS`, and deliberately the same strings: two spellings of
+#: one attribution is how the two disagree. `tool_relation` is the directional-mode wording of
+#: the same channel, so it maps to `tool`.
+SEVERITY_REASONS: dict[str, str] = {
+    "tool": "tool-call behavior changed",
+    "tool_relation": "tool-call trajectory now violates",
+    "refusal": "refusal rate",
+    "semantic": "semantic drift",
+    "argument": "tool-call arguments changed",
+    "assertion": "output format drift",
+}
+
+
+def _severity_of(channel: str) -> str:
+    return "hard" if channel.split("_", 1)[0] in HARD_CHANNELS else "advisory"
+
+
+def channels_that_fired(result) -> list[str]:
+    """Which channels the engine NAMED in its own explanation. Empty for `unchanged`.
+
+    Read off the explanation rather than re-derived, because the explanation is what the
+    engine actually published and what the user actually saw.
+    """
+    return [k for k, marker in SEVERITY_REASONS.items() if marker in result.explanation]
+
+
+def severity_fired(result) -> dict[str, bool]:
+    """`{"hard": bool, "advisory": bool}` - which SEVERITIES the engine actually raised.
+
+    Not the same question as the verdict. A trial can fire the advisory argument gate AND a
+    hard channel; its verdict is `regression` and the advisory misfire is invisible in it.
+    Counting by verdict alone would hide an advisory false alarm behind a hard one, which is
+    the direction that flatters the advisory rate.
+    """
+    fired = {"hard": False, "advisory": False}
+    for channel in channels_that_fired(result):
+        fired[_severity_of(channel)] = True
+    return fired
+
+
+def structural_channel_pvalues(base_traces, cand_traces, scenario, mode: str) -> dict[str, float]:
+    """The four channel p-values that need no judge, recomputed EXACTLY from stored traces.
+
+    Offline (ADR-0006): no provider, no key, no network, no spend. Each branch mirrors
+    `diff/__init__.py` line for line - including `args_compared`, whose four-way conjunction
+    decides whether the argument gate RAN at all, and the equivalence/directional dispatch,
+    whose two branches use different statistics.
+
+    This is a recomputation, not a re-derivation of a verdict: `verify_against_published`
+    below requires the result to reproduce the confidence the engine already published, and
+    raises when it does not. A silent divergence here would mis-attribute a published bound.
+    """
+    from modelpin.diff import EQUIVALENCE_MODES
+    from modelpin.diff.stats import permutation_pvalue_distribution, permutation_pvalue_mean
+    from modelpin.diff.structural import (
+        assertion_violation_flags,
+        canonical_sequence,
+        has_tool_arguments,
+        modal_arg_sequence,
+        name_trajectory_is_stable,
+        refused_flags,
+        tool_arg_sequence,
+        tool_call_sequence,
+        trajectory_match,
+    )
+
+    if mode in EQUIVALENCE_MODES:
+        bk = [canonical_sequence(tool_call_sequence(t), mode) for t in base_traces]
+        ck = [canonical_sequence(tool_call_sequence(t), mode) for t in cand_traces]
+        tool_p = permutation_pvalue_distribution(bk, ck)
+    else:
+        from modelpin.diff.structural import modal_sequence
+
+        ref_seq = modal_sequence(base_traces, mode)
+        bv = [
+            0 if trajectory_match(ref_seq, tool_call_sequence(t), mode) else 1 for t in base_traces
+        ]
+        cv = [
+            0 if trajectory_match(ref_seq, tool_call_sequence(t), mode) else 1 for t in cand_traces
+        ]
+        tool_p = permutation_pvalue_mean(bv, cv)
+
+    arg_p = 1.0
+    args_compared = (
+        len(base_traces) == len(cand_traces)
+        and has_tool_arguments(base_traces)
+        and has_tool_arguments(cand_traces)
+        and name_trajectory_is_stable(base_traces, cand_traces, mode)
+    )
+    if args_compared:
+        if mode in EQUIVALENCE_MODES:
+            bak = [canonical_sequence(tool_arg_sequence(t), mode) for t in base_traces]
+            cak = [canonical_sequence(tool_arg_sequence(t), mode) for t in cand_traces]
+            arg_p = permutation_pvalue_distribution(bak, cak)
+        else:
+            ref_aseq = modal_arg_sequence(base_traces, mode)
+            bav = [
+                0 if trajectory_match(ref_aseq, tool_arg_sequence(t), mode) else 1
+                for t in base_traces
+            ]
+            cav = [
+                0 if trajectory_match(ref_aseq, tool_arg_sequence(t), mode) else 1
+                for t in cand_traces
+            ]
+            arg_p = permutation_pvalue_mean(bav, cav)
+
+    refusal_p = permutation_pvalue_mean(refused_flags(base_traces), refused_flags(cand_traces))
+
+    fmt_p = 1.0
+    if scenario is not None and scenario.assertions:
+        a = scenario.assertions
+        bfv = assertion_violation_flags(base_traces, a.must_contain, a.must_not_contain)
+        cfv = assertion_violation_flags(cand_traces, a.must_contain, a.must_not_contain)
+        fmt_p = permutation_pvalue_mean(bfv, cfv)
+
+    return {"tool": tool_p, "argument": arg_p, "refusal": refusal_p, "assertion": fmt_p}
+
+
+def semantic_pvalue(result, structural: dict[str, float]):
+    """The judge channel's p-value, or `None` when the artifact cannot determine it.
+
+    The artifact stores no per-channel p and no `base_flags`, so this is recovered from what
+    the engine DID publish. Two exact routes, then an honest `None`:
+
+    1. `semantic_score is None` -> no judge ran on this trial, so the channel could not fire.
+    2. `semantic_score == 1.0` -> `semantic.py` defines it as `1 - mean(cand_flags)`, so every
+       candidate flag is 0. `permutation_pvalue_mean` is ONE-SIDED on a rise, and a candidate
+       mean of 0 cannot rise above a baseline mean of >= 0, so p is exactly 1.0.
+    3. Otherwise, for an `unchanged` trial the engine published
+       `confidence = round(min(tool_p, arg_p, refusal_p, fmt_p, semantic_p), 3)`. When the
+       four recomputed channels all round ABOVE that confidence, the minimum was the semantic
+       one and `semantic_p == confidence`.
+
+    `None` is returned when none of the three settles it - the trial is then reported as
+    `hard undetermined` and kept OUT of the hard denominator. That is the conservative
+    direction: a smaller denominator is a WEAKER (larger) upper bound, never a flattering one.
+    `[M] 2026-09-08` On the run of record this returns `None` for 0 of 39 scored trials.
+    """
+    score = result.signals.semantic_score
+    if score is None:
+        return 1.0
+    if score == 1.0:
+        return 1.0
+    if result.verdict == DiffVerdict.unchanged:
+        if round(min(structural.values()), 3) > result.confidence:
+            return result.confidence
+    return None
+
+
+def severity_exposure(result, channel_p: dict[str, float]) -> dict[str, object]:
+    """Could a HARD channel have fired? Could an ADVISORY one? Per trial, from the p-values.
+
+    "Exposed" is `p < 1.0` on at least one channel of that severity - the same predicate
+    ADR-0022 applies to the pooled rate (`measurable`), applied one severity at a time. A
+    channel that FIRED is exposed by definition, which is why a flagged trial can never be
+    undetermined.
+    """
+    fired = severity_fired(result)
+    out: dict[str, object] = {}
+    for severity, channels in (("hard", HARD_CHANNELS), ("advisory", ADVISORY_CHANNELS)):
+        ps = [channel_p.get(c) for c in channels if c in channel_p]
+        if fired[severity]:
+            out[severity] = True
+        elif any(p is None for p in ps):
+            out[severity] = None  # undetermined; excluded from this severity's denominator
+        else:
+            out[severity] = any(p < 1.0 for p in ps)  # type: ignore[operator]
+    return out
+
+
+def verify_against_published(result, channel_p: dict[str, float]) -> None:
+    """The recomputation must reproduce the number the engine already published, or raise.
+
+    For an `unchanged` trial the engine's confidence IS `round(min(all five p), 3)`, so this
+    is a total check on the recomputation - not a spot check. `[M]` It is what makes the
+    severity split evidence rather than a second opinion: if `structural_channel_pvalues`
+    ever drifts from `diff/__init__.py` (a new match mode, a changed statistic, a reordered
+    conjunction in `args_compared`), the published bound would be re-attributed silently.
+    This raises instead.
+    """
+    if result.verdict != DiffVerdict.unchanged:
+        return
+    known = [p for p in channel_p.values() if p is not None]
+    if len(known) != len(channel_p):
+        return  # an undetermined channel cannot pin the minimum; reported separately
+    recomputed = round(min(known), 3)
+    if recomputed != result.confidence:
+        raise SystemExit(
+            f"error: the severity split recomputed min(p) = {recomputed} for "
+            f"{result.scenario_id!r}, but the engine published confidence "
+            f"{result.confidence}. `structural_channel_pvalues` has drifted from "
+            "`modelpin/diff/__init__.py` and every severity attribution below it is "
+            "unsound. Fix the recomputation; do not publish these numbers."
+        )
+
+
 #: What each recall outcome contributes, and how it is labelled. The same shape as FP_OUTCOMES
 #: on purpose: the two arms are mirror images, so their accounting bugs are mirror images too,
 #: and a reader who has understood one table has understood both. Data, not control flow - [M]

@@ -33,16 +33,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modelpin.models import DiffResult  # noqa: E402
+from modelpin.models import DiffResult, Trace  # noqa: E402
 from scripts.fp_measurement import (  # noqa: E402
+    ADVISORY_CHANNELS,
     FP_OUTCOMES,
+    HARD_CHANNELS,
     fp_outcome,
     fp_report,
     load_artifact,
     recall_outcome,
     recall_report,
     recall_summary,
+    semantic_pvalue,
+    severity_exposure,
+    severity_fired,
+    structural_channel_pvalues,
     upper_bound_95,
+    verify_against_published,
 )
 
 
@@ -80,6 +87,81 @@ def _rate(fp: int, n: int) -> str:
     if n == 0:
         return "n/a (0 trials)"
     return f"{fp}/{n} = {fp / n:.1%}, 95% ub {upper_bound_95(fp, n):.1%}"
+
+
+def _empty_severity() -> dict[str, int]:
+    return {
+        "hard_scored": 0,
+        "hard_fp": 0,
+        "hard_undetermined": 0,
+        "advisory_scored": 0,
+        "advisory_fp": 0,
+        "advisory_undetermined": 0,
+    }
+
+
+def _severity_tally(header: dict, rows: list[dict]) -> dict[str, int]:
+    """MP-223. The false-positive rate SPLIT BY SEVERITY, each with its own denominator.
+
+    One pooled rate answered a question nobody asks. `[M] 2026-09-08` on the run of record,
+    **30 of the 39 scored trials could only ever have fired on the advisory argument gate**,
+    which by ADR-0029 escalates to `changed_minor` and can never fail a build alone
+    (`cli.py` gates exit 1 on `regression`). A bound 77% carried by a signal that cannot
+    produce a red build does not describe the product's promise -- "if Modelpin says it
+    broke, it broke" is a claim about the BUILD-FAILING channels.
+
+    **The classifier is not touched.** `_FLAGGED` still counts `changed_minor` against the
+    north-star metric, and it must: if an advisory verdict were reclassified `clean`, any
+    future channel could escape the metric permanently by shipping as "advisory", and
+    ADR-0029's argument gate is already that shape. The defect was the REPORTING, and this is
+    the reporting.
+
+    Denominators follow ADR-0038 D3's per-channel shape: a trial enters a severity's
+    denominator when a channel of that severity COULD have fired on it (`p < 1.0`), and its
+    numerator when a channel of that severity actually did. The two overlap by design -- a
+    trial where both severities were live is counted in both -- so the two denominators do
+    not sum to `scored` and are never presented as if they did.
+    """
+    from modelpin.scenarios import load_scenarios
+
+    scen_dir = header.get("scenarios_path") or header.get("scenarios_dir")
+    try:
+        scenarios = {s.id: s for s in load_scenarios(scen_dir)} if scen_dir else {}
+    except Exception:  # noqa: BLE001 - a missing suite must not silently mis-attribute
+        scenarios = {}
+    mode = header.get("match") or "strict"
+
+    tally = _empty_severity()
+    for rec in rows:
+        if rec.get("arm") != "fp" or rec.get("result") is None:
+            continue
+        result = DiffResult(**rec["result"])
+        if fp_outcome(result) in {"unmeasured", "no-effect"}:
+            continue  # ADR-0022/ADR-0018 exclusions apply unchanged, before any split
+        base = rec.get("base_traces")
+        cand = rec.get("cand_traces")
+        if base is None or cand is None:
+            # No traces means no recomputation is possible. Counted as undetermined on BOTH
+            # severities rather than guessed: a guess here re-attributes a published bound.
+            tally["hard_undetermined"] += 1
+            tally["advisory_undetermined"] += 1
+            continue
+        base_t = [Trace(**x) for x in base]
+        cand_t = [Trace(**x) for x in cand]
+        channel_p = structural_channel_pvalues(
+            base_t, cand_t, scenarios.get(rec["scenario_id"]), mode
+        )
+        channel_p["semantic"] = semantic_pvalue(result, channel_p)
+        verify_against_published(result, channel_p)
+        exposure = severity_exposure(result, channel_p)
+        fired = severity_fired(result)
+        for severity in ("hard", "advisory"):
+            if exposure[severity] is None:
+                tally[f"{severity}_undetermined"] += 1
+            elif exposure[severity]:
+                tally[f"{severity}_scored"] += 1
+                tally[f"{severity}_fp"] += int(fired[severity])
+    return tally
 
 
 def _sample_identity(header: dict, path: str) -> str:
@@ -159,6 +241,7 @@ def summarise(paths: list[str]) -> dict:
         lambda: {"attempted": 0, "scored": 0, "fp": 0, "no_effect": 0, "unmeasured": 0, "errors": 0}
     )
     flagged = []
+    pooled_severity = _empty_severity()
     loaded: list[tuple[str, dict, list]] = []
     for path in paths:
         header, rows = load_artifact(path)
@@ -204,8 +287,12 @@ def summarise(paths: list[str]) -> dict:
                     }
                 )
         reached = t["scored"] + t["no_effect"]
+        sev = _severity_tally(header, rows)
+        for k, v in sev.items():
+            pooled_severity[k] += v
         surfaces.append(
             {
+                "severity": sev,
                 "artifact": name,
                 "surface": label,
                 "model": header["model"],
@@ -255,6 +342,7 @@ def summarise(paths: list[str]) -> dict:
     return {
         "surfaces": surfaces,
         "pooled": {
+            "severity": pooled_severity,
             "attempted": len(pooled_fp_rows),
             "reached_verdict": reached,
             "scored": pt["scored"],
@@ -279,6 +367,42 @@ def summarise(paths: list[str]) -> dict:
     }
 
 
+def _render_severity(summary: dict) -> list[str]:
+    """The severity split, FIRST, above the pooled table (MP-223).
+
+    Placed above `### Surfaces` deliberately. The pooled rate is the number a skimmer quotes,
+    and `[M]` on the run of record it is 77% carried by a gate that cannot fail a build -- so
+    the split has to be read BEFORE the number it qualifies, not in a footnote under it.
+    """
+    out = ["### False-positive rate by severity (MP-223)", ""]
+    out += [
+        "A `changed_minor` counts against the north-star metric exactly like a `regression`",
+        "and must keep doing so -- otherwise a channel could escape the metric permanently by",
+        "shipping as advisory. But the two have incompatible consequences: only `regression`",
+        "exits 1 and fails a build. Each severity therefore gets its OWN denominator -- the",
+        "trials in which a channel of that severity could have fired at all (ADR-0022's",
+        "predicate, applied one severity at a time; ADR-0038 D3's shape).",
+        "",
+        f"Hard (CI-failing) channels: {', '.join(f'`{c}`' for c in HARD_CHANNELS)}. "
+        f"Advisory: {', '.join(f'`{c}`' for c in ADVISORY_CHANNELS)}.",
+        "**The two denominators overlap and do not sum to SCORED** -- a trial on which both",
+        "severities were live is in both.",
+        "",
+        "| surface | HARD (fails your build) | advisory (annotates only) | undetermined |",
+        "|---|---|---|---|",
+    ]
+    rows = summary["surfaces"] + [{**summary["pooled"], "surface": "**POOLED**"}]
+    for s in rows:
+        sev = s.get("severity") or _empty_severity()
+        und = sev["hard_undetermined"] + sev["advisory_undetermined"]
+        out.append(
+            f"| {s['surface']} | **{_rate(sev['hard_fp'], sev['hard_scored'])}** | "
+            f"{_rate(sev['advisory_fp'], sev['advisory_scored'])} | {und} |"
+        )
+    out.append("")
+    return out
+
+
 def render(summary: dict) -> list[str]:
     out: list[str] = []
     if summary.get("provenance"):
@@ -297,6 +421,7 @@ def render(summary: dict) -> list[str]:
                 f"engine `{p['source_git_sha']}` -> `{p['git_sha']}`)"
             )
         out.append("")
+    out += _render_severity(summary)
     out += ["### Surfaces", ""]
     out.append(
         "| surface | artifact | candidate (judge) | temp | runs x repeats | attempted | "

@@ -115,3 +115,55 @@ def test_every_flagged_trial_is_listed_never_excluded():
         assert "(none)" in block
     for f in summary["flagged"]:
         assert f"`{f['sid']}`" in block, f"flagged trial {f['sid']} is missing from the document"
+
+
+def test_the_headline_leads_with_the_severity_split_the_artifacts_carry():
+    """MP-223. One rate pooled two consequences that are not comparable, and the pooled number
+    was the one a skimmer quoted.
+
+    `[M] 2026-09-08` On this run **30 of the 39 scored trials could only have fired on the
+    advisory argument gate**, which by ADR-0029 can never fail a build alone. A bound 77%
+    carried by a signal that cannot produce a red build is not describing *"if Modelpin says
+    it broke, it broke"*. Both rates are therefore published with their own denominators, and
+    both are re-derived here from the artifacts -- so neither can be hand-adjusted, which is
+    exactly what the 2026-08 `Detection: 2/2` was.
+    """
+    _, paths = _artifacts()
+    sev = agg.summarise([str(p) for p in paths])["pooled"]["severity"]
+    doc = DOC.read_text(encoding="utf-8")
+    headline = doc[doc.index("**Headline") : doc.index("\n\n", doc.index("**Headline"))]
+
+    assert sev["hard_scored"], "a severity split with an empty hard denominator publishes nothing"
+    for k, n in (
+        (sev["hard_fp"], sev["hard_scored"]),
+        (sev["advisory_fp"], sev["advisory_scored"]),
+    ):
+        assert (
+            f"{k} false alarms in {n}" in headline or f"{k} in {n}" in headline
+        ), f"the headline must state the exact fraction {k}/{n}:\n{headline}"
+        assert (
+            f"{upper_bound_95(k, n):.1%}" in headline
+        ), f"the headline must carry the exact bound {upper_bound_95(k, n):.1%} for {k}/{n}"
+    assert headline.index("CI-FAILING") < headline.index("Pooled"), (
+        "the hard rate must be READ FIRST -- it is the one that constrains the promise, and "
+        "the pooled number is the one a skimmer quotes"
+    )
+    assert sev["hard_undetermined"] == 0 and sev["advisory_undetermined"] == 0, (
+        "some trial's severity could not be determined from the artifact; the page must say "
+        "how many before it publishes a split that silently excludes them"
+    )
+
+
+def test_the_severity_denominators_are_never_presented_as_summing_to_scored():
+    """They overlap by construction: a trial on which both severities were live is in both.
+
+    `[M]` On this run they happen to sum to 39 because no trial had both live -- which is
+    exactly the coincidence that would let a reader take the sum for a partition and quote a
+    third, wrong number later.
+    """
+    _, paths = _artifacts()
+    pooled = agg.summarise([str(p) for p in paths])["pooled"]
+    sev = pooled["severity"]
+    assert sev["hard_scored"] + sev["advisory_scored"] >= pooled["scored"]
+    block = _embedded_block()
+    assert "do not sum to SCORED" in block, block[:2000]

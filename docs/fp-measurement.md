@@ -95,7 +95,9 @@ python scripts/fp_measurement.py --rejudge reports/fp-runs/2026-09-07/s2a-fp-sui
 
 ## Results
 
-**Headline (run of record 2026-09-07, live, judged, same model vs itself, five surfaces, re-scored under the current engine, ADR-0040): 0 false alarms in 39 scored trials, 710 trials reached a verdict — one-sided 95% upper bound 7.4% of scored trials, 0.4% of trials that reached a verdict.**
+**Headline (run of record 2026-09-07, live, judged, same model vs itself, five surfaces, re-scored under the current engine, ADR-0040) — read the severities first (MP-223). On the CI-FAILING channels, the ones that can turn your build red: 0 false alarms in 9 exposed trials, one-sided 95% upper bound 28.3%. On the ADVISORY channels, which annotate and can never fail a build alone: 0 in 30, upper bound 9.5%. Pooled across both: 0 false alarms in 39 scored trials, 710 trials reached a verdict — upper bound 7.4% of scored trials, 0.4% of trials that reached a verdict.**
+
+`[M]` **The pooled 7.4% is the weaker claim about the product's promise, not the stronger one.** 30 of its 39 trials could only ever have fired on the advisory argument gate, which by ADR-0029 escalates to `changed_minor` and cannot exit 1 — so 77% of that denominator is a channel a user's CI never sees. *"If Modelpin says it broke, it broke"* is a promise about the build-failing channels, and the number that constrains it is **28.3% over 9 trials**, not 7.4% over 39. Both are published, per surface, in the block below; the denominators overlap and are never summed. **The classifier that produces them is unchanged**: a `changed_minor` still counts against the north-star metric exactly like a `regression`, because a channel allowed to ship as "advisory" and thereby leave the metric would leave it permanently.
 
 `[M]` 710 same-model comparisons at the shipped defaults (`runs: 5`, `--match strict`, semantic judge on), 5 artifacts, 3 candidate models across two vendors, 2,071,848/447,798 replay tokens. Every trial, with the traces its verdict was computed over, is in [`reports/fp-runs-adr0040/2026-09-07/`](../reports/fp-runs-adr0040/2026-09-07/) and the tables below are regenerated from those files by a test, so this page cannot drift from the run. Those five artifacts are the ORIGINAL replays of [`reports/fp-runs/2026-09-07/`](../reports/fp-runs/2026-09-07/) re-scored under the current engine, by the same judge; no replay was bought twice, and a re-score replaces its source's numbers rather than adding to them. Two of the five surfaces are where a false positive is actually possible, and a third is a
 cross-vendor sanity arm:
@@ -204,7 +206,6 @@ demonstrated on twenty-two distinct perturbations across five surfaces, **not ch
 That is what the harness prints, verbatim and unadjusted:
 
 <!-- fp-run-of-record:begin reports/fp-runs-adr0040/2026-09-07 -->
-
 > **These surfaces are RE-SCORES of stored replays, not new samples.** Each one
 > REPLACES its source's numbers; it never adds to them.
 
@@ -213,6 +214,28 @@ That is what the harness prints, verbatim and unadjusted:
 > - `s2a-fp-suite-gpt-4.1-mini-adr0040.jsonl` re-scores `s2a-fp-suite-gpt-4.1-mini.jsonl` under a changed engine (judge `gpt-4o-mini` -> `gpt-4o-mini`, engine `b504730` -> `b4ca88a`)
 > - `s2b-fp-suite-gpt-4o-mini-adr0040.jsonl` re-scores `s2b-fp-suite-gpt-4o-mini.jsonl` under a changed engine (judge `gpt-4.1-mini` -> `gpt-4.1-mini`, engine `b504730` -> `b4ca88a`)
 > - `s3-fp-suite-groq-gpt-oss-20b-adr0040.jsonl` re-scores `s3-fp-suite-groq-gpt-oss-20b.jsonl` under a changed engine (judge `gpt-4o-mini` -> `gpt-4o-mini`, engine `b504730` -> `b4ca88a`)
+
+### False-positive rate by severity (MP-223)
+
+A `changed_minor` counts against the north-star metric exactly like a `regression`
+and must keep doing so -- otherwise a channel could escape the metric permanently by
+shipping as advisory. But the two have incompatible consequences: only `regression`
+exits 1 and fails a build. Each severity therefore gets its OWN denominator -- the
+trials in which a channel of that severity could have fired at all (ADR-0022's
+predicate, applied one severity at a time; ADR-0038 D3's shape).
+
+Hard (CI-failing) channels: `tool`, `refusal`, `semantic`. Advisory: `argument`, `assertion`.
+**The two denominators overlap and do not sum to SCORED** -- a trial on which both
+severities were live is in both.
+
+| surface | HARD (fails your build) | advisory (annotates only) | undetermined |
+|---|---|---|---|
+| suite | **n/a (0 trials)** | n/a (0 trials) | 0 |
+| calibration (score) | **n/a (0 trials)** | 0/30 = 0.0%, 95% ub 9.5% | 0 |
+| fp-suite | **0/3 = 0.0%, 95% ub 63.2%** | n/a (0 trials) | 0 |
+| fp-suite | **0/6 = 0.0%, 95% ub 39.3%** | n/a (0 trials) | 0 |
+| fp-suite | **n/a (0 trials)** | n/a (0 trials) | 0 |
+| **POOLED** | **0/9 = 0.0%, 95% ub 28.3%** | 0/30 = 0.0%, 95% ub 9.5% | 0 |
 
 ### Surfaces
 
@@ -328,7 +351,6 @@ That is what the harness prints, verbatim and unadjusted:
 ### Cost
 
 Replay tokens in/out 2,071,848/447,798 across 5 artifact(s); 16353 judge calls implied by the traces (judge tokens not metered).
-
 <!-- fp-run-of-record:end -->
 
 > **Corrected 2026-08-24 (MP-81).** This section previously read *"Detection: every
