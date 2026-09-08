@@ -123,6 +123,11 @@ A scenario is a small JSON file (one per case) under `scenarios/`. The one `mp i
 }
 ```
 
+Optional keys: `"match"` (`strict | unordered | subset | superset`) pins how *this* scenario's
+tool-call trajectory is compared, overriding the run's `--match`. Adding it does **not**
+invalidate a baseline you have already recorded — it changes how traces are compared, never
+what is sent to the model, so nothing has to be replayed again.
+
 Scenarios can also be agent runs: set `"kind": "agent"`, add `"tools"` (and canned `"tool_results"`)
 to `input`, and Modelpin drives a multi-turn model↔tool loop so trajectories like
 `lookup_order → issue_refund` actually emerge during replay. Eight worked examples spanning tool
@@ -239,7 +244,15 @@ this qualifier; until it does, do not publish a Report from a run below `--runs 
 
 **2. Structural signals** (per run, no network, deterministic):
 - **Tool-call trajectory match** with four modes — `strict | unordered | subset | superset`
-  (`--match`) — so you choose how strict "same plan" means for your agent.
+  (`--match`) — so you choose how strict "same plan" means for your agent. A single scenario
+  can override the flag with its own `"match"` field, which is what you want when *that*
+  scenario's prompt makes a call genuinely optional (*"use it when it would be useful"*):
+  under `strict`, a model that exercises that discretion on 4 of 5 runs and 0 of 5 on the next
+  is reported as a regression, and `[M]` we have measured exactly that on a same-model null.
+  Declaring `"match": "subset"` on that one scenario fixes it without loosening anything else
+  — `[M]` making `subset` the global default would cost 7 of our 10 detections. Note the
+  default is still `strict`, so an optional call that disappears **is** flagged unless a
+  scenario says otherwise.
 - **Tool-call argument match** — the right tool called with the wrong argument is still a
   behavior change (`issue_refund(amount=49.99)` → `issue_refund(amount=4999.00)` is a 100×
   financial error that a names-only diff scores as identical). This signal is **advisory**: its
@@ -462,8 +475,9 @@ sort of divergence Modelpin exists to notice.
 | `mp report --to <new> --from <incumbent> --suite-dir <dir>` | Replay a scenario suite across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. `--suite-dir` is required: the wheel ships no scenarios, so the **open public suite** lives in the repo at `examples/report-suite/` — clone it, or point this at your own. |
 
 Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--match`
-(`strict\|unordered\|subset\|superset`), `--config`, `--scenarios-dir`, `--store-dir`, and
-`--fixtures`, which is **required** with `--provider fake` (on `report` too).
+(`strict\|unordered\|subset\|superset`; a scenario's own `"match"` field overrides it for that
+scenario, and the run header names every one that does), `--config`, `--scenarios-dir`,
+`--store-dir`, and `--fixtures`, which is **required** with `--provider fake` (on `report` too).
 
 ---
 
@@ -520,8 +534,8 @@ fired; the 2026-09-07 run measured surfaces that can); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **970 tests passing** (+2 `xfail`, pinning the
-MP-165 trajectory residual and the MP-220 tool-channel false positive, so 972 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **985 tests passing** (+2 `xfail`, pinning the
+MP-165 trajectory residual and the MP-220 tool-channel false positive, so 987 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

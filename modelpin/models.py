@@ -97,6 +97,17 @@ class Assertion(BaseModel):
     must_not_contain: Optional[list[str]] = None
 
 
+#: The tool-call trajectory match modes. **Mirrors `diff/structural.py::MatchMode`**, which
+#: cannot be imported here: `structural.py` imports `Trace` from this module, so the arrow
+#: only points one way. `test_the_three_match_mode_declarations_agree` pins this literal
+#: against both `MatchMode` and `cli.VALID_MATCH_MODES`, so the mirror cannot drift silently
+#: -- the same failure shape MP-03 (three copies of `DEFAULT_RUNS`) and MP-204 (two copies of
+#: the version) both were.
+MatchModeName = Literal["strict", "unordered", "subset", "superset"]
+
+MATCH_MODES: tuple[str, ...] = ("strict", "unordered", "subset", "superset")
+
+
 class Scenario(BaseModel):
     """A representative case for a user's app (a single prompt or an agent run)."""
 
@@ -105,6 +116,30 @@ class Scenario(BaseModel):
     kind: Literal["single", "agent"] = "single"
     input: dict[str, Any]  # { "messages": [...], "tools": [...]? }
     assertions: Optional[Assertion] = None
+    #: How this scenario's tool-call trajectory is compared, overriding the global `--match`
+    #: for this scenario alone. `None` (the default) means "use whatever the run was given",
+    #: which is how every scenario written before MP-227 behaves.
+    #:
+    #: **Why this is per-scenario and not a better global default.** `[M] 2026-09-07`,
+    #: `reports/channel-exposure/2026-09-07/v2a-*.jsonl`: `optional_notify_after_status_update`
+    #: tells the model of its second tool *"use it when it would be useful"*, the model sent
+    #: the courtesy email on 4 of 5 baseline samples and 0 of 5 candidate samples, and the
+    #: engine published `regression` @ 0.952 -- exit 1, a red build -- over a SAME-MODEL,
+    #: SAME-PROMPT null. That is the north-star promise inverted (MP-220). `[M]` Under
+    #: `subset` that trial does not fire at all. But `[M]` making `subset` the GLOBAL default
+    #: exposes only 3 of the 10 detection rows, costing 7 real detections, so the relation has
+    #: to be declared by the scenario that actually holds it, not chosen once for a whole
+    #: suite. A prompt that says "call this when useful" is *stating* a subset relation; this
+    #: field is where it gets written down.
+    #:
+    #: **It is a COMPARISON directive, not scenario content**, and that distinction is
+    #: load-bearing in two places:
+    #:   * `report/suite.py::scenario_fingerprint` excludes it, so declaring `match` does not
+    #:     invalidate a baseline the user already paid to record (ADR-0039), and
+    #:   * nothing under `replay/` or `providers/` reads it -- it cannot change a single byte
+    #:     sent to a provider, which is why it is safe outside `modelpin/diff/`'s freeze
+    #:     (ADR-0030 D1). No threshold moves and nothing is fitted on a scored corpus.
+    match: Optional[MatchModeName] = None
 
     @model_validator(mode="after")
     def _check_input_shape(self) -> "Scenario":

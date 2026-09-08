@@ -4,6 +4,33 @@ All notable changes to Modelpin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A scenario can pin its own tool-call match mode.** `"match": "strict" | "unordered" |
+  "subset" | "superset"` in a scenario file overrides the run's `--match` for that scenario
+  alone; scenarios that declare nothing keep using the flag, so nothing changes for anyone who
+  does not opt in. The run header and the published Report both name every scenario that
+  overrode the flag, so a run that used two modes never publishes one.
+
+  This exists because `--match` was global and some prompts make a tool call *optional*.
+  `[M]` On a same-model, same-prompt null, a scenario whose system prompt says of its second
+  tool *"use it when it would be useful"* had the model send the courtesy email on 4 of 5
+  baseline samples and 0 of 5 candidate samples, and Modelpin published `regression` at
+  confidence 0.952 and exit `1` — a red build for a model using discretion the prompt handed
+  it. `[M]` Under `subset` that comparison does not fire at all, and `[M]` making `subset` the
+  global default would have cost 7 of our 10 detections — so the relation belongs to the
+  scenario that holds it. The engine's thresholds are unchanged and `modelpin/diff/` is
+  untouched; the underlying tool-channel false positive (measured at 1 in 26 scored
+  tool-exposed trials, one-sided 95% upper bound 17.0%) remains open and its published bound
+  is unmoved.
+
+  **Adding `"match"` does not invalidate a baseline you already paid to record.** The scenario
+  fingerprint introduced in 0.3.0 deliberately excludes it: the field changes how two
+  recordings are compared and cannot change a byte sent to a provider, so a baseline recorded
+  before the declaration still describes the scenario exactly.
+
 ## [0.3.0] - 2026-09-08
 
 > ### ⚠️ Upgrading breaks your existing baselines. Re-run `mp baseline` once.

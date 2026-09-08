@@ -890,6 +890,21 @@ class ReportMeta:
     #: Scenario ids compared at a run count where NO signal could reach ALPHA (MP-55/MP-123).
     #: The run-count axis of the same disclosure; ``census`` prices channel availability.
     underpowered: list[str] = field(default_factory=list)
+    #: MP-227. ``scenario_id -> match mode`` for every scenario NOT diffed under
+    #: ``match_mode``, because it declared its own. Empty on every run where the global flag
+    #: governed everything, which is every run written before MP-227.
+    #:
+    #: This exists because ``match_mode`` alone became a FALSE claim the moment a scenario
+    #: could override it: the settings table publishes one mode over a run that used two, and
+    #: the Report is an ADR-0009 surface where "under these settings, we observed..." is the
+    #: whole framing. It rides on the meta for MP-140's reason -- ``to_report_sidecar``
+    #: serialises ``asdict(meta)``, so the Markdown and the JSON audit trail cannot disagree.
+    #:
+    #: `[M]` It also carries information the suite hash no longer does: ``compute_suite_hash``
+    #: excludes ``Scenario.match`` so that declaring it does not invalidate a paid-for
+    #: baseline (see that function), which means two runs differing only in a declaration
+    #: share a hash. This field is what keeps the Report reproducible across that exclusion.
+    match_overrides: dict[str, str] = field(default_factory=dict)
 
 
 def _fmt(value: Optional[float], spec: str, *, none: str = "—") -> str:
@@ -900,6 +915,23 @@ def _fmt(value: Optional[float], spec: str, *, none: str = "—") -> str:
 def _cell(text: Any) -> str:
     """Escape a value so it is safe inside a Markdown table cell."""
     return str(text).replace("|", "\\|").replace("\r", "").replace("\n", " ").strip()
+
+
+def _match_override_cell(meta: ReportMeta) -> str:
+    """The `, except <id> (<mode>)` tail of the settings table's match-mode row (MP-227).
+
+    Empty when nothing overrode the global flag, so an ordinary Report is byte-identical to
+    the one this repo published before per-scenario `match` existed. When something DID
+    override it, every id is named: a Report that said `strict` while three scenarios ran
+    `subset` would be a false statement about the settings a public measurement was taken
+    under, which is the one thing ADR-0009's framing cannot survive.
+    """
+    if not meta.match_overrides:
+        return ""
+    named = ", ".join(
+        f"`{_cell(sid)}` (`{_cell(mode)}`)" for sid, mode in sorted(meta.match_overrides.items())
+    )
+    return f", except {named}"
 
 
 def _report_header(meta: ReportMeta, results: list[DiffResult]) -> list[str]:
@@ -1129,7 +1161,7 @@ def _report_settings(meta: ReportMeta, n_scenarios: int) -> list[str]:
         f"| Reference model | `{_cell(meta.reference_model)}` |",
         f"| Provider | `{_cell(meta.provider)}` |",
         f"| Runs per scenario | {meta.runs} |",
-        f"| Tool-call match mode | `{_cell(meta.match_mode)}` |",
+        f"| Tool-call match mode | `{_cell(meta.match_mode)}`{_match_override_cell(meta)} |",
         f"| Semantic judge | `{_cell(meta.judge_model)}` |",
         f"| Decision thresholds | {thresholds} |",
         f"| Engine version | modelpin {_cell(meta.modelpin_version)} |",
@@ -1145,7 +1177,16 @@ def _report_methodology(meta: ReportMeta) -> list[str]:
         "own API key. A verdict comes from the *distribution* of runs, not a single sample: "
         f"a two-sample permutation test (p ≤ {meta.diff_thresholds['alpha']}) gated by a "
         "minimum effect size. We compare five behavioral signals — tool-call trajectory match "
-        f"({meta.match_mode}), tool-call ARGUMENT match, refusal-rate change, output-format / "
+        # MP-227: name the global mode AND say that it was not universal, so this sentence
+        # cannot be read as a claim about every scenario. The ids themselves are in the
+        # settings table directly above rather than repeated into a prose paragraph.
+        f"({meta.match_mode}"
+        + (
+            ", except where a scenario declares its own — see the settings table above"
+            if meta.match_overrides
+            else ""
+        )
+        + "), tool-call ARGUMENT match, refusal-rate change, output-format / "
         "assertion drift, and (when a judge runs) calibrated LLM-as-judge semantic "
         "equivalence. The argument signal is **advisory**: its effect-size floor is not yet "
         "calibrated on a labelled set, so it can raise a scenario to *minor* but never to a "
