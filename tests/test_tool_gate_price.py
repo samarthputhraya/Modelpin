@@ -290,3 +290,35 @@ def test_a_labelled_sets_ground_truth_file_is_not_loaded_as_a_scenario(tmp_path)
     )
     loaded = load_scenarios(tmp_path)
     assert [s.id for s in loaded] == ["only_scenario"]
+
+
+def test_the_mode_count_axis_is_the_one_a_pooled_rate_would_hide() -> None:
+    """`[M] 2026-09-08` NOVELTY's precondition is `set(cand) - set(base) != {}`, and the chance
+    of meeting it rises steeply with how many trajectories a scenario visits: exact enumeration
+    at `runs: 5` gives **6.1%** at 2 modes and **96.3%** at 8.
+
+    So NOVELTY removes 46% of the status quo's false alarms at 2 modes and **0.4%** at 8 -- its
+    entire benefit lives on low-mode scenarios, which is the mirror of ADR-0041 D2's rejection
+    of DISJOINT on multimodal baselines. A single pooled `k/n` would average the two regimes and
+    report a benefit that does not exist where MP-220's own false positive lives.
+    """
+    from scripts.tool_gate_price import MODE_BUCKETS, mode_bucket, mode_count
+
+    unimodal = (side([["a"]] * 5), side([["a"]] * 5))
+    two_mode = (side([["a", "b"], ["a"], ["a", "b"], ["a", "b"], ["a", "b"]]), side([["a"]] * 5))
+    many = (side([[f"t{i}"] for i in range(5)]), side([[f"t{i}"] for i in range(5, 10)]))
+
+    assert mode_count(*unimodal, "strict") == 1
+    assert mode_count(*two_mode, "strict") == 2
+    assert mode_count(*many, "strict") == 10
+
+    assert mode_bucket(1) == "1 (pinned)"
+    assert mode_bucket(2) == "2"
+    assert mode_bucket(4) == "3-4"
+    assert mode_bucket(10) == "5+"
+    assert set(mode_bucket(n) for n in range(1, 12)) == set(MODE_BUCKETS)
+
+    # The mechanism itself, on the two ends of the axis: at 2 modes NOVELTY suppresses the
+    # MP-220 shape; at 10 its precondition is trivially met and it suppresses nothing.
+    assert not novelty_holds(*two_mode, "strict")
+    assert novelty_holds(*many, "strict")

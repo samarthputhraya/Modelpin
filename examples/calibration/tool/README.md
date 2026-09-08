@@ -12,7 +12,7 @@
 
 ## Why this set exists
 
-`[M] 2026-09-08 fp-guardian` (ADR-0041, MP-220): the tool gate cannot be changed at all until a
+`[M] 2026-09-08 FP review` (ADR-0041, MP-220): the tool gate cannot be changed at all until a
 labelled set exists, because every candidate rule so far has been priced against
 `examples/fp-suite-v2/` — a corpus ADR-0038 declares role `score` forever. Choosing a structural
 rule *because* it takes that corpus's tool alarms from 1 to 0 is ADR-0025's own prohibition with
@@ -197,11 +197,12 @@ This is what killed `examples/fp-suite-v2`'s assertion arm twice: a null with no
 `[M]` **What that variance is worth, as a false-positive denominator.** Exact enumeration over
 the multinomial at `runs: 5`, weighting every count vector by its probability:
 
-| trajectory modes, equiprobable | P(false alarm \| null trial), status quo | +NOVELTY |
-|---|---|---|
-| 2 | 0.0215 | 0.0117 |
-| 3 | **0.0265** | 0.0225 |
-| 4 | 0.0169 | 0.0154 |
+| trajectory modes, equiprobable | P(false alarm \| null trial), status quo | +NOVELTY | NOVELTY's reduction | P(novelty precondition met) |
+|---|---|---|---|---|
+| 2 | 0.0215 | 0.0117 | **-46%** | 0.061 |
+| 3 | **0.0265** | 0.0225 | -15% | 0.334 |
+| 4 | 0.0169 | 0.0154 | -9% | 0.621 |
+| 8 | 0.0235 | 0.0234 | **-0.4%** | **0.963** |
 
 And for a two-mode scenario as a function of the per-run rate *q* of the discretionary call:
 
@@ -215,11 +216,23 @@ Three consequences, written down before any run:
 1. **The design target is `q ≈ 0.5`, and unlike the assertion channel it really is 0.5** — the
    tool gate has an effect-size floor, so the tails are not merely weaker, they are dead. At
    `q = 0.1` a null scenario fires once in two thousand trials; at `q = 0.5`, once in fifty.
-2. **Three modes is the loudest configuration, not the quietest.** That was not the expectation
-   — it says a scenario with one optional call *and* a free order is a better null than a
-   scenario with one optional call, and that NOVELTY barely helps there (0.0265 → 0.0225,
-   against 0.0215 → 0.0117 at two modes). Any rule chosen on this set must be read off the
-   three-mode scenarios as well as the two-mode ones.
+2. **A high mode count does NOT make a quiet null, and NOVELTY's protection decays to nothing
+   as the mode count rises.** `[M]` This retracts a prediction made while drafting this file --
+   that the 8-mode scenarios (`tc_campsite_pitch_hold`, `tc_windfarm_workorder`) would
+   contribute exposure but little firing power. They fire at **0.0235**, above the 4-mode rate
+   and near the 3-mode peak. The mechanism is in the last column: NOVELTY fires unless the
+   candidate's five runs are all trajectories the baseline's five runs also produced, and at 8
+   modes that precondition is met on **96.3%** of null pairs, so the rule filters **0.4%** of
+   the false alarms it filters **46%** of at two modes.
+
+   **This is a finding about option C that ADR-0041 does not contain, and it is the mirror of
+   its own D2 argument.** D2 rejects DISJOINT because multimodal baselines -- *"exactly what
+   agentic migration looks like"* -- defeat it in the DETECTION direction. `[M]` The same
+   population defeats NOVELTY in the FALSE-POSITIVE direction: option C's `7/39 reachable`
+   headline is earned on low-mode scenarios and is worth almost nothing on an agent with
+   several optional calls. It is not a reason to reject C, but any claim that C "keeps the
+   channel alive while killing the MP-220 alarm" must be **stated per mode count**, and this
+   set spans 2 to ~8 modes precisely so it can be.
 3. **Acceptance arithmetic.** 16 `equivalent` scenarios × 1 surface × `--repeats 10` = 160 null
    trials. At the corpus-average `P(fire) ≈ 0.02` that is **≈ 3 expected false alarms** under
    the status quo and **≈ 2** under NOVELTY. A run returning 0 flagged of 160 does **not**

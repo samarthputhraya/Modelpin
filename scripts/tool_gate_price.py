@@ -95,6 +95,39 @@ def disjoint_holds(base: list[Trace], cand: list[Trace], mode: str) -> bool:
     return not (set(_keys(base, mode)) & set(_keys(cand, mode)))
 
 
+def mode_count(base: list[Trace], cand: list[Trace], mode: str) -> int:
+    """Distinct trajectory keys pooled across both sides -- the axis every rate is split on.
+
+    `[M] 2026-09-08` This is not a nicety. NOVELTY's precondition is
+    `set(cand) - set(base) != {}`, and the probability of meeting it rises steeply with the
+    number of modes a scenario visits: exact multinomial enumeration at `runs: 5` with
+    equiprobable modes gives **6.1%** at 2 modes, 33.4% at 3, 62.1% at 4 and **96.3%** at 8.
+    So NOVELTY removes 46% of the status quo's false alarms at 2 modes and **0.4%** at 8.
+
+    That is the mirror image of ADR-0041 D2's own argument. D2 rejects DISJOINT because
+    multimodal baselines -- "exactly what agentic migration looks like" -- defeat it in the
+    DETECTION direction; the same population defeats NOVELTY in the FALSE-POSITIVE direction,
+    and MP-220's own false positive had that shape. A single pooled `k/n` over this set would
+    average the two regimes together and report a benefit that does not exist where it matters.
+    """
+    return len(set(_keys(base, mode)) | set(_keys(cand, mode)))
+
+
+#: Mode-count buckets. Kept coarse because the set has 35 pairs, not 3,500: a bucket per
+#: integer would publish a column of 0/1s and invite reading noise as structure.
+def mode_bucket(n: int) -> str:
+    if n <= 1:
+        return "1 (pinned)"
+    if n == 2:
+        return "2"
+    if n <= 4:
+        return "3-4"
+    return "5+"
+
+
+MODE_BUCKETS = ("1 (pinned)", "2", "3-4", "5+")
+
+
 RULES = {
     "status_quo": lambda base, cand, mode: True,
     "novelty": novelty_holds,
@@ -196,6 +229,9 @@ def summarise(paths: list[str]) -> dict:
             "masked": 0,
             "fp_scenarios": set(),
             "detect_scenarios": set(),
+            "by_mode": {
+                b: {"fp": 0, "fp_exposed": 0, "detected": 0, "changed": 0} for b in MODE_BUCKETS
+            },
         }
         for r in RULES
     }
@@ -220,20 +256,26 @@ def summarise(paths: list[str]) -> dict:
             base = [Trace(**t) for t in rec["base_traces"]]
             cand = [Trace(**t) for t in rec["cand_traces"]]
             trials += 1
+            bucket = mode_bucket(mode_count(base, cand, mode))
             for rule in RULES:
                 v, survived, masked = verdict_under(result, base, cand, mode, rule)
                 cell = per_rule[rule]
+                strat = cell["by_mode"][bucket]
                 if arm_label == "equivalent":
                     # Exposure: the tool channel COULD have raised a hard alarm under this rule.
                     if RULES[rule](base, cand, mode):
                         cell["fp_exposed"] += 1
+                        strat["fp_exposed"] += 1
                     if v == "regression":
                         cell["fp"] += 1
+                        strat["fp"] += 1
                         cell["fp_scenarios"].add(rec["scenario_id"])
                 else:
                     cell["changed_pairs"] += 1
+                    strat["changed"] += 1
                     if v in ("regression", "changed_minor"):
                         cell["detected"] += 1
+                        strat["detected"] += 1
                         cell["detect_scenarios"].add(rec["scenario_id"])
                     cell["masked"] += int(masked)
     return {"trials": trials, "rules": per_rule, "labels": labels}
@@ -263,6 +305,31 @@ def render(summary: dict) -> list[str]:
             f"| `{rule}` | {fp_cell} | {det} | "
             f"{len(c['fp_scenarios'])} / {len(c['detect_scenarios'])} | {c['masked']} |"
         )
+    out += [
+        "",
+        "### The same rules, split by trajectory-mode count",
+        "",
+        "`[M] 2026-09-08` **A pooled rate per rule is not readable and this table is why.** "
+        "NOVELTY's precondition is `set(cand) - set(base) != {}`, and the chance of meeting it "
+        "rises steeply with how many trajectories a scenario visits: exact enumeration at "
+        "`runs: 5` gives 6.1% at 2 modes and **96.3% at 8**. So NOVELTY removes **46%** of the "
+        "status quo's false alarms at 2 modes and **0.4%** at 8 -- its entire benefit lives on "
+        "low-mode scenarios. That is the mirror of ADR-0041 D2, which rejects DISJOINT because "
+        "multimodal baselines defeat it in the DETECTION direction; the same population defeats "
+        "NOVELTY in the FALSE-POSITIVE direction, and MP-220's own false positive had that "
+        "shape. **Any claim that a rule keeps the channel alive must be stated per mode count.**",
+        "",
+        "| rule | modes | FP / exposed | detections kept |",
+        "|---|---|---|---|",
+    ]
+    for rule, c in summary["rules"].items():
+        for bucket in MODE_BUCKETS:
+            s = c["by_mode"][bucket]
+            if not (s["fp_exposed"] or s["changed"] or s["fp"]):
+                continue
+            fp = f"{s['fp']}/{s['fp_exposed']}" if s["fp_exposed"] else "0/0 (no denominator)"
+            det = f"{s['detected']}/{s['changed']}" if s["changed"] else "n/a"
+            out.append(f"| `{rule}` | {bucket} | {fp} | {det} |")
     out += [
         "",
         "**Read `masked by another channel` before reading anything else.** A trial whose tool "
