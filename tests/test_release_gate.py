@@ -179,3 +179,62 @@ def test_the_gate_rejects(tmp_path: Path, label: str, mutate: object, expected: 
         f"the gate rejected {label!r} but not for the stated reason — expected {expected!r} "
         f"in its output, so the failure may be incidental.\n\n{result.stdout}{result.stderr}"
     )
+
+
+# ---------------------------------------------------------------------------------------
+# The sdist allow-list is a hand-copy of MANIFEST.in, and it has now gone stale three times.
+# ---------------------------------------------------------------------------------------
+
+
+def _sdist_allowlist_from_workflow() -> set[str]:
+    """The `_SDIST_TOP_ALLOWED` literal, read out of release.yml."""
+    workflow = _repo_root() / ".github" / "workflows" / "release.yml"
+    text = workflow.read_text(encoding="utf-8")
+    match = re.search(r"_SDIST_TOP_ALLOWED = \{(.*?)\}", text, re.S)
+    assert match is not None, (
+        "could not find `_SDIST_TOP_ALLOWED` in release.yml. If the artifact contract moved, "
+        "update this test rather than deleting it -- an unexercised release gate is how "
+        "MP-231 happened twice in one release."
+    )
+    return set(re.findall(r'"([^"]+)"', match.group(1)))
+
+
+def _manifest_top_level() -> set[str]:
+    """Top-level names MANIFEST.in deliberately puts into the sdist."""
+    manifest = (_repo_root() / "MANIFEST.in").read_text(encoding="utf-8")
+    names: set[str] = set()
+    for raw in manifest.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        verb, args = parts[0], parts[1:]
+        if verb == "graft":
+            names.update(a.strip("/").split("/")[0] for a in args)
+        elif verb == "include":
+            names.update(a.split("/")[0] for a in args)
+    return names
+
+
+def test_the_sdist_allowlist_covers_everything_manifest_in_ships() -> None:
+    """release.yml must not refuse an artifact MANIFEST.in deliberately built.
+
+    `[M] 2026-08-27` The list refused the 0.2.0 release over `scripts`, added by MP-100 after
+    the list was measured on 0.1.2. `[M] 2026-09-08` It refused the 0.3.0 release over
+    `actions`, added by MP-203 on 2026-09-07 after 0.2.1 shipped -- the same shape, two
+    releases later, discovered only by publishing a GitHub Release and watching the build job
+    fail. Both times the LIST was stale and the artifact was correct.
+
+    The hand-copy is the defect (MP-121). Until it is deleted outright, this test is the thing
+    that makes the copy fail in CI on the commit that changes MANIFEST.in, rather than during
+    a release nobody can rehearse.
+    """
+    missing = sorted(_manifest_top_level() - _sdist_allowlist_from_workflow())
+    assert not missing, (
+        "MANIFEST.in ships top-level "
+        + ", ".join(missing)
+        + " but release.yml's `_SDIST_TOP_ALLOWED` does not list "
+        + ("it" if len(missing) == 1 else "them")
+        + ". The release build job will REFUSE TO PUBLISH. Re-measure the list against "
+        "MANIFEST.in -- do not loosen the contract."
+    )
