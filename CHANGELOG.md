@@ -19,9 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tool *"use it when it would be useful"* had the model send the courtesy email on 4 of 5
   baseline samples and 0 of 5 candidate samples, and Modelpin published `regression` at
   confidence 0.952 and exit `1` — a red build for a model using discretion the prompt handed
-  it. `[M]` Under `subset` that comparison does not fire at all, and `[M]` making `subset` the
-  global default would have cost 7 of our 10 detections — so the relation belongs to the
-  scenario that holds it. The engine's thresholds are unchanged and `modelpin/diff/` is
+  it. `[M]` Under `subset` that comparison does not fire at all, and `[M]` a global `subset`
+  default would silence the tool channel on 7 of the 10 tool-channel detection rows in our
+  recall arm (those 7 are still caught by the semantic judge, so no detection loss is
+  measured — over only 4 distinct scenarios, 95% upper bound 52.7%) — so the relation belongs
+  to the scenario that holds it, not to a global default. The engine's thresholds are unchanged and `modelpin/diff/` is
   untouched; the underlying tool-channel false positive (measured at 1 in 26 scored
   tool-exposed trials, one-sided 95% upper bound 17.0%) remains open and its published bound
   is unmoved.

@@ -250,7 +250,11 @@ this qualifier; until it does, do not publish a Report from a run below `--runs 
   under `strict`, a model that exercises that discretion on 4 of 5 runs and 0 of 5 on the next
   is reported as a regression, and `[M]` we have measured exactly that on a same-model null.
   Declaring `"match": "subset"` on that one scenario fixes it without loosening anything else
-  — `[M]` making `subset` the global default would cost 7 of our 10 detections. Note the
+  — and it belongs to the scenario rather than to a new global default: `[M]` a global
+  `subset` would silence the tool channel on 7 of the 10 tool-channel detection rows in our
+  recall arm. On that corpus every one of those rows is still caught by the semantic judge, so
+  we have measured **no detection loss** — but 10 rows are only 4 distinct scenarios, so "no
+  detection cost" carries a 95% upper bound of 52.7% and is not a result we lean on. Note the
   default is still `strict`, so an optional call that disappears **is** flagged unless a
   scenario says otherwise.
 - **Tool-call argument match** — the right tool called with the wrong argument is still a
@@ -474,10 +478,12 @@ sort of divergence Modelpin exists to notice.
 | `mp version` | Print the Modelpin version. |
 | `mp report --to <new> --from <incumbent> --suite-dir <dir>` | Replay a scenario suite across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. `--suite-dir` is required: the wheel ships no scenarios, so the **open public suite** lives in the repo at `examples/report-suite/` — clone it, or point this at your own. |
 
-Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--match`
-(`strict\|unordered\|subset\|superset`; a scenario's own `"match"` field overrides it for that
-scenario, and the run header names every one that does), `--config`, `--scenarios-dir`,
-`--store-dir`, and `--fixtures`, which is **required** with `--provider fake` (on `report` too).
+Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--config`,
+`--scenarios-dir`, `--store-dir`, and `--fixtures`, which is **required** with `--provider fake`
+(on `report` too). `check` and `report` additionally take `--match`
+(`strict\|unordered\|subset\|superset`); a scenario's own `"match"` field overrides it for that
+scenario, and both name every one that does in the run header. `baseline` only records traces,
+so it has no match mode.
 
 ---
 
@@ -534,8 +540,8 @@ fired; the 2026-09-07 run measured surfaces that can); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **985 tests passing** (+2 `xfail`, pinning the
-MP-165 trajectory residual and the MP-220 tool-channel false positive, so 987 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **1010 tests passing** (+2 `xfail`, pinning the
+MP-165 trajectory residual and the MP-220 tool-channel false positive, so 1012 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 
