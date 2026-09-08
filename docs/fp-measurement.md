@@ -30,7 +30,7 @@ This file records how we measure it and the results.
   (see the corrections at the end of *Semantic-judge calibration*) — **1 scored trial in 20
   attempted, 5.0% pooled**, which was the only planning figure this document supported before
   2026-09-07 and the one the `arg_*` projection below used. `[M]` The run of record then scored
-  **82 of 710 (11.5%)** — see Results; the projection is preserved unedited with its correction
+  **39 of 710 (5.5%)** — see Results; the projection is preserved unedited with its correction
   attached. *An earlier version of this sentence counted two runs
   and pooled 1-of-14; it omitted the self-judge run, the only one of the three that would drag
   the figure down.* A run large enough to move a floor would need N≈10,
@@ -109,7 +109,7 @@ cross-vendor sanity arm:
 
 **What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios, and `[M]` **9 of them carried the bound**: 18 contributed no scored trial (four `arg_*` shapes, `classify_review_sentiment`, `format_markdown_table`, all eight of the held-out suite, and — new under this engine — `rewrite_email_polite`, `agent_reschedule_two_step`, `support_order_status` and `rag_answer_with_citation`), and two shapes — `arg_numeric_rounding` (16) and `arg_freetext_note` (13) — supply **29 of the 39**. Over distinct shapes the bound is **28.3%** (`upper_bound_95(0, 9)`). `[M]` Of the 39 scored trials, **30 could only have fired on the advisory argument gate, 8 on the semantic channel and 1 on refusal — 0 on the tool-call trajectory and 0 on format/assertion**: the structural floors saw no exposure here.
 
-**Read that last sentence before quoting the 7.4%.** Under the previous engine the bound was carried by the semantic channel (51 of 82 scored trials), which is a hard, build-failing signal. Under this one it is carried by the **argument gate — 30 of 39 — and that gate is advisory**: by ADR-0029 it escalates only to `changed_minor` and can never fail a build on its own. So most of what the conditional bound now measures is a channel that cannot produce a red build, and the two channels that can (tool trajectory, assertions) contributed **zero** scored trials here. The honest reading is that this number constrains the engine less than the same number did a week ago, on a smaller denominator, and the page says so rather than reporting an improved-looking 0/39. The tool channel has since been given a corpus and a denominator of its own — see *Channel exposure* below; the assertion channel still has neither. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. **Every judge that produced a number in the bound above is an OpenAI model** — 24 of these trials have since been re-scored by a non-OpenAI judge, whose separate figures appear under *Cross-judge agreement* below; it agreed on every verdict but *not* on how many trials were scorable at all. The bound itself is unchanged and remains OpenAI-judged. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
+**Read that last sentence before quoting the 7.4%.** Under the previous engine the bound was carried by the semantic channel (51 of 82 scored trials), which is a hard, build-failing signal. Under this one it is carried by the **argument gate — 30 of 39 — and that gate is advisory**: by ADR-0029 it escalates only to `changed_minor` and can never fail a build on its own. So most of what the conditional bound now measures is a channel that cannot produce a red build. Only **9 of the 39** scored trials sat on a channel that can independently fail one — 8 on the semantic channel, 1 on refusal — and the tool trajectory contributed **zero**. The assertion channel contributed zero too, and it could not have failed a build either: like the argument gate it escalates only to `changed_minor` (ADR-0032). The honest reading is that this number constrains the engine less than the same number did a week ago, on a smaller denominator, and the page says so rather than reporting an improved-looking 0/39. The tool channel has since been given a corpus and a denominator of its own — see *Channel exposure* below; the assertion channel still has neither. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. **Every judge that produced a number in the bound above is an OpenAI model** — 24 of these trials have since been re-scored by a non-OpenAI judge, whose separate figures appear under *Cross-judge agreement* below; it agreed on every verdict but *not* on how many trials were scorable at all. The bound itself is unchanged and remains OpenAI-judged. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
 
 > **Corrected 2026-08-23 (MP-75).** The previous run of record's headline read *"0 false alarms in 8
 > scored trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
@@ -181,7 +181,20 @@ baseline side raised the permutation p and hid a real change. ADR-0040 compares 
 to **every** baseline run rather than to one arbitrary modal run; on these same stored traces both
 are now flagged at confidence 0.996, and `[M]` the same change produced **0** new false alarms across
 all 710 FP-arm trials on both surfaces. Detection over replays moved 43/46 → 45/46 and over distinct
-perturbations 19/22 → 21/22. The remaining miss is `decline_pii`, described above. One flag needs the opposite label:
+perturbations 19/22 → 21/22. The remaining miss is `decline_pii`, described above.
+
+**Read that increase with its cost — three things work against it.** `[M]` The two recovered
+replays are **the same two trials the engine change was designed and accepted against** (ADR-0040's
+own acceptance criterion D4), so they are in-sample and the 90.1% lower bound is optimistic by an
+unquantified amount. `[M]` The check that the fix bought no false alarms is real but weak on the
+channel it changed: the semantic channel's scored exposure fell from 51 trials to 8, so zero alarms
+there bounds that channel only at **31.2%**. `[M]` And on an exact enumeration of a modelled null at
+the shipped `runs: 5`, the new rule is **1.63×–9.59× more prone to a false alarm** than the old one
+(0.275% → 2.635% at ten semantic classes); its measured safety on this run is conditional on the
+judge being lenient enough to call five differently-worded outputs equivalent, and under a
+maximally strict judge ADR-0040's own headline trial reverts to a miss. That is a property of the
+judge model, which is user configuration, and it is **not yet priced** — ADR-0040's fourth
+falsifier is open. One flag needs the opposite label:
 on `arg_numeric_rounding` the candidate resisted the pounds instruction (every stored payload is still
 kilograms) and the advisory argument gate fired on 4- versus 5-decimal rounding jitter at `p = 0.048`
 — the same mode the `arg_*` section below prices as a false positive. These are synthetic, deliberately extreme system-prompt replacements, one run each, and the
@@ -369,7 +382,7 @@ agree. (The run also surfaced + fixed two Gemini-3.x tool-loop bugs.)
 80.2% over distinct) but not characterised; the false-positive rate is not established — it is now
 *bounded*: 0 of 39 scored trials, upper bound 7.4%, on the 2026-09-07 run of record.** A zero-event
 run bounds a rate; it does not establish one. The bound covers 9 scenario shapes and two OpenAI
-models under the shipped defaults, on the argument and semantic channels only — and 30 of its 39
+models under the shipped defaults, on the argument, semantic and refusal channels only (30 / 8 / 1) — and 30 of its 39
 trials are on the argument gate, which is advisory and cannot fail a build; the previous claim
 of *"a measured 0% false-positive rate"* stays withdrawn (2026-08-23) because that is not what any
 run can show. Bounding it took a live run over `examples/fp-suite/` and
@@ -465,8 +478,9 @@ is the one the perturbation *targets*; whether the candidate's behaviour actuall
 is the measurement. A `regression` or `changed_minor` verdict scores a detection; **anything
 else, `unchanged` included, scores a miss; the only exclusion is an abstention that reached
 no verdict at all (ADR-0018)**. `[M]` On the 2026-09-07 run of
-record, 3 of 46 perturbed replays returned `unchanged` and are scored MISSES (`decline_pii`,
-`triage_ticket_json` on `gpt-4o-mini`, `summarize_standup_notes` on `gpt-4.1-mini`).
+record, 1 of 46 perturbed replays returned `unchanged` and is scored a MISS (`decline_pii` on
+`gpt-4o-mini`). Two further replays were missed under the previous engine and are caught under
+this one - see the Results section.
 
 **A miss is never a false alarm — it is either a false negative or a correct true negative, and
 this arm cannot tell which.** Either way it fails in the safe direction for this product, and
@@ -544,8 +558,10 @@ re-scored by one** (below), but the calibration set above has not been, and a ju
 still not a judge that is calibrated. **Next:** expand to ≥30 labeled pairs incl. real
 model-migration traces, and extend the cross-judge comparison beyond the 24 trials measured so
 far — `[M]` 686 of the run of record's 710 FP-arm trials remain unjudged by a second judge, of
-which the 456 in the S2a+S2b `fp-suite` arms are `[M]` 3,097 stored judge calls. `[A]` At the
-~535 tokens/call assumed in ADR-0037 (the harness does not meter judge tokens) that is ~8 days
+which the 456 in the S2a+S2b `fp-suite` arms are `[M]` **13,582** stored judge calls under the
+current engine (3,097 under the previous one — ADR-0040 raised judge calls per trial about
+**4.4×**, from 3,711 to 16,353 across the whole run). `[A]` At the
+~535 tokens/call assumed in ADR-0037 (the harness does not meter judge tokens) that is ~36 days
 of Groq's free tier (`[S] 2026-09-07` 200,000 tokens/day); the assumption falls if a metered run
 shows a different figure. No money, only calendar time. Then rely on the gate in high-stakes CI.
 
@@ -554,12 +570,12 @@ shows a different figure. No money, only calendar time. Then rely on the gate in
 `[M]` Across the run of record's **710** same-model-null trials, **0** had `tool_call_match < 1.0`
 and **0** had `format_valid == False` — while its 46 deliberately-perturbed trials produced 10
 and 7. The channels work; they had never been shown a null. So the 7.4% bound above was carried
-entirely by the semantic and argument channels, and `MIN_TOOL_TVD` — the floor protecting the
+entirely by the argument, semantic and refusal channels (30 / 8 / 1), and `MIN_TOOL_TVD` — the floor protecting the
 signal a *migration* tool exists for — had a false-positive exposure of **exactly zero trials**.
 `0/0` is not a low rate.
 
 `[M]` The scenario written for precisely this, `examples/fp-suite/agent_missing_param_ask`,
-produced **zero tool calls on both sides in all 6 of its scored FP-arm trials** (of 41 that
+produced **zero tool calls on both sides in its 1 scored FP-arm trial** (6 under the previous engine; of 41 that
 reached a verdict; its perturbed recall arm did move the channel): its prompt says *"ask
 them for it and do not call the tool"*, which is unambiguous, so nothing varied. An unambiguous
 prompt cannot produce trajectory variance however often it is run.
@@ -685,7 +701,10 @@ artifacts by `tests/test_cross_judge_agreement.py`:
 S2a `gpt-4.1-mini` surface. The prefix rule was fixed before the rejudge run but **after** the
 source artifact existed, so it is pre-specified, not pre-registered; rounds are exchangeable
 replicates, which is the argument that a prefix is unbiased, and `[M]` this one is
-scored-trial-rich against its parent arm (5/24 = 20.8% vs 28/240 = 11.7%). One non-OpenAI judge
+scored-trial-rich against its parent arm (5/24 = 20.8% vs 28/240 = 11.7%) **under the engine both
+were scored on**. `[M]` These 24 trials were scored under the pre-ADR-0040 engine and have not been
+re-scored, so their denominators are not comparable with the Results tables above, where S2b scores
+6 of 240 rather than 28. One non-OpenAI judge
 is one judge; and a rejudged artifact is the same trials scored twice, **never a second sample**
 — `fp_aggregate.py` refuses to pool it, and these numbers are not folded into the headline
 bound. Groq substitutes `1e-8` for the requested `temperature: 0` (`[S] 2026-09-07`

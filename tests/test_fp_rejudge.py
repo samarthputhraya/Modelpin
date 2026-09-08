@@ -7,7 +7,7 @@ one*: `scripts/fp_measurement.py` called `build_judge(args.judge)` with no provi
 `modelpin/judge.py` had accepted a `provider=` since MP-143. A Groq judge id
 (`openai/gpt-oss-120b` - a vendor prefix that names the model's ORIGIN, not its host) therefore
 died at preflight with `cannot tell which host should run the judge model`. That mattered
-structurally rather than cosmetically: `[M]` 51 of the 82 scored trials in the run of record
+structurally rather than cosmetically: `[M] 2026-09-07, pre-ADR-0040` 51 of the 82 scored trials in the run of record
 could only have fired on the SEMANTIC channel, so the OpenAI judge *was* the number, and its
 agreement with any other judge was unpriced.
 
@@ -236,7 +236,9 @@ def test_two_judges_over_one_recorded_replay_can_reach_different_verdicts(monkey
 
     Identical traces, identical constants, identical everything but the judge - and the verdict
     moves. That is exactly why an unpriced judge is a hole in a published false-positive rate:
-    `[M]` 51 of 82 scored trials could only have fired on this channel.
+    `[M] 2026-09-07, pre-ADR-0040` 51 of 82 scored trials could only have fired on this
+    channel; under the current engine it is 8 of 39, which makes the cross-judge question
+    smaller but not moot.
     """
     src, dst = tmp_path / "src.jsonl", tmp_path / "dst.jsonl"
     _record(monkeypatch, src, True)

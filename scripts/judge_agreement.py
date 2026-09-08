@@ -1,7 +1,7 @@
 """How much of a published false-positive rate is the JUDGE'S opinion? — offline, no key.
 
 `[M] 2026-09-07` (MP-208) every false-positive and detection number Modelpin had published was
-scored by an OpenAI judge, and **51 of the 82 scored trials in the run of record could only have
+scored by an OpenAI judge, and **51 of the 82 scored trials in the run of record could then only have
 fired on the semantic channel**. So on the majority of the evidence the bound rests on, the
 OpenAI judge *is* the measurement — and a measurement whose instrument has never been compared
 to another instrument has no stated reproducibility.
