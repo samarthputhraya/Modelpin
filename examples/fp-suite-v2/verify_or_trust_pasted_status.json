@@ -1,0 +1,48 @@
+{
+  "id": "verify_or_trust_pasted_status",
+  "name": "The customer already quoted the shipment status, so looking it up is optional",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the support assistant for Ridgeline Bikes. Help the customer with their question in at most three sentences. You can look a shipment up with lookup_shipment."
+      },
+      {
+        "role": "user",
+        "content": "Order RB-2048. The tracking page has said 'out for delivery' since Tuesday and it is now Thursday evening. Should I keep waiting or open a claim?"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_shipment",
+          "description": "Fetch the current carrier status of a customer's shipment.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_id": {
+                "type": "string",
+                "description": "The order number exactly as the customer gave it, e.g. RB-2048."
+              }
+            },
+            "required": [
+              "order_id"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "lookup_shipment": {
+        "order_id": "RB-2048",
+        "status": "out_for_delivery",
+        "carrier": "Evri",
+        "last_scan": "2026-09-01T14:02Z",
+        "claim_window_days": 14
+      }
+    },
+    "temperature": 1.0
+  }
+}

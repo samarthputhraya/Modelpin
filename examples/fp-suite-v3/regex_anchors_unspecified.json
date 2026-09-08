@@ -1,0 +1,24 @@
+{
+  "id": "regex_anchors_unspecified",
+  "name": "A generated regular expression where anchoring is idiomatic but the prompt never says full-match or search",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the config assistant for a log-ingestion pipeline. When the user describes a pattern they need, reply with the regular expression and nothing else."
+      },
+      {
+        "role": "user",
+        "content": "I need a pattern for our order references: three capital letters, a hyphen, then six digits."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "^",
+      "$"
+    ]
+  }
+}

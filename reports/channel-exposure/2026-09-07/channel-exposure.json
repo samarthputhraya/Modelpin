@@ -1,0 +1,165 @@
+{
+  "surfaces": [
+    {
+      "artifact": "v2a-fp-suite-v2-gpt-4o-mini.jsonl",
+      "model": "gpt-4o-mini",
+      "judge": "gpt-4.1-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "202274b"
+    },
+    {
+      "artifact": "v2b-fp-suite-v2-gpt-4.1-mini.jsonl",
+      "model": "gpt-4.1-mini",
+      "judge": "gpt-4o-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "202274b"
+    },
+    {
+      "artifact": "v2c-fp-suite-v2-gpt-4o-mini-rep2.jsonl",
+      "model": "gpt-4o-mini",
+      "judge": "gpt-4.1-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "202274b"
+    },
+    {
+      "artifact": "v2d-fp-suite-v2-gpt-4.1-mini-rep2.jsonl",
+      "model": "gpt-4.1-mini",
+      "judge": "gpt-4o-mini",
+      "judge_provider": "openai",
+      "runs": 5,
+      "repeats": 10,
+      "git_sha": "202274b"
+    }
+  ],
+  "overall": {
+    "trials": 480,
+    "scored": 101,
+    "flagged": 3
+  },
+  "tool": {
+    "exposed": 37,
+    "scored": 26,
+    "flagged": 1
+  },
+  "assertion": {
+    "exposed": 0,
+    "scored": 0,
+    "flagged": 0,
+    "in_scope": 160
+  },
+  "anchor": {
+    "trials": 40,
+    "tool_exposed": 0,
+    "assertion_exposed": 0,
+    "flagged": 0
+  },
+  "per_scenario": {
+    "citation_style_underspecified": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "calc_tool_or_mental_math": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "docsearch_or_general_knowledge": {
+      "trials": 40,
+      "tool_exposed": 2,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "grammar_tool_or_direct_fix": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "optional_availability_before_booking": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "optional_notify_after_status_update": {
+      "trials": 40,
+      "tool_exposed": 30,
+      "assertion_exposed": 0,
+      "flagged": 1
+    },
+    "plaintext_answer_bold_optional": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 1
+    },
+    "optional_part_stock_second_lookup": {
+      "trials": 40,
+      "tool_exposed": 5,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "total_currency_code_or_symbol": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    },
+    "sql_answer_fence_unspecified": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 1
+    },
+    "verify_or_trust_pasted_status": {
+      "trials": 40,
+      "tool_exposed": 0,
+      "assertion_exposed": 0,
+      "flagged": 0
+    }
+  },
+  "flagged": [
+    {
+      "artifact": "v2a-fp-suite-v2-gpt-4o-mini.jsonl",
+      "sid": "optional_notify_after_status_update#6",
+      "verdict": "regression",
+      "confidence": 0.952,
+      "channels": [
+        "tool"
+      ],
+      "tool_call_match": 0.2,
+      "explanation": "tool-call behavior changed: ['update_order_status', 'notify_customer'] -> ['update_order_status']"
+    },
+    {
+      "artifact": "v2b-fp-suite-v2-gpt-4.1-mini.jsonl",
+      "sid": "plaintext_answer_bold_optional#2",
+      "verdict": "regression",
+      "confidence": 0.976,
+      "channels": [
+        "semantic"
+      ],
+      "tool_call_match": 1.0,
+      "explanation": "semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%)"
+    },
+    {
+      "artifact": "v2d-fp-suite-v2-gpt-4.1-mini-rep2.jsonl",
+      "sid": "sql_answer_fence_unspecified#6",
+      "verdict": "regression",
+      "confidence": 0.976,
+      "channels": [
+        "semantic"
+      ],
+      "tool_call_match": 1.0,
+      "explanation": "semantic drift: candidate answers diverge in meaning from baseline (equivalence 0%)"
+    }
+  ]
+}

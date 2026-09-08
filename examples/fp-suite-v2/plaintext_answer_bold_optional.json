@@ -1,0 +1,23 @@
+{
+  "id": "plaintext_answer_bold_optional",
+  "name": "A short help answer rendered as plain text downstream, with markdown never forbidden",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the in-app help assistant for a bookkeeping tool used by sole traders. Answer the user's question in two or three short sentences."
+      },
+      {
+        "role": "user",
+        "content": "What is the difference between a debit note and a credit note? I keep mixing them up."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_not_contain": [
+      "**"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "format_markdown_table",
+  "name": "Markdown table only, with three fixed rows",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Answer with a Markdown table only. No prose before or after the table."
+      },
+      {
+        "role": "user",
+        "content": "Make a table of these three tasks with the columns Task, Owner and Due: deploy the hotfix (Priya, Sept 10); write the release notes (Tom, Sept 12); rotate the API keys (Ana, Sept 15)."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "|",
+      "Priya"
+    ]
+  }
+}

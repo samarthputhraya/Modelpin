@@ -1,0 +1,23 @@
+{
+  "id": "total_currency_code_or_symbol",
+  "name": "An invoice total whose currency rendering the prompt leaves to the model",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the billing assistant for a small design studio. Answer the client's question in one short sentence, giving the amount in euros."
+      },
+      {
+        "role": "user",
+        "content": "There are three line items on this invoice - 640.00, 285.50 and 1072.25. What is the total I owe?"
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "EUR"
+    ]
+  }
+}

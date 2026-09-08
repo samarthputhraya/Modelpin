@@ -4,13 +4,56 @@ All notable changes to Modelpin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-08
 
-Five ways the tool could report something it had not measured, or discard something you had
-written, are closed. Three of them ended in a confident verdict; two of them spent your API
-key first.
+> ### ⚠️ Upgrading breaks your existing baselines. Re-run `mp baseline` once.
+>
+> **Every baseline recorded before this version will be refused, and your first `mp check`
+> after upgrading compares nothing and exits `3` until you re-record.** `mp baseline` now
+> stores a content fingerprint of each scenario *definition* beside its traces, and `mp check`
+> will not compare a scenario whose definition has changed since — or whose baseline carries
+> no fingerprint at all, which is every baseline that exists today.
+>
+> ```
+> mp baseline          # once, after upgrading. Then mp check works as before.
+> ```
+>
+> This is a deliberate cost. `[M]` The store keyed a baseline to a scenario by **id alone**
+> and got it wrong in both directions: a rewritten scenario compared against a stale baseline
+> reported `OK 1 scenario(s) unchanged`, exit `0`, over a candidate that had genuinely started
+> refusing; and two unrelated scenarios sharing a filename produced `REGRESSION (confidence
+> 0.99)`, exit `1`, off nothing but a name collision. Applying it to Modelpin's own tracked
+> dogfood baseline found the defect live. Full rationale below and in ADR-0039.
+>
+> **Also breaking, smaller:** a setup failure (missing key, bad config, usage error) now exits
+> **`4`**, not `1`. `1` means only a real regression. A caller treating any non-zero code as
+> "regression" will now see `4` where it saw `1`.
+
+Beyond the two breaking changes: the false-positive rate this project is named for is
+**bounded for the first time** on surfaces where a false alarm was actually possible, the
+semantic channel stops hiding a class of real regression, and five ways the tool could report
+something it had not measured — or discard something you had written — are closed. Three of
+those ended in a confident verdict; two of them spent your API key first.
 
 ### Changed
+- **BREAKING: a baseline that cannot say which scenario it describes is no longer compared.**
+  `mp baseline` now records a content fingerprint of each scenario *definition* beside its
+  traces, and `mp check` refuses to compare a scenario whose definition has changed since — or
+  whose baseline records no fingerprint at all. **Every baseline recorded before this version
+  has none, so your first `mp check` after upgrading will compare nothing and exit `3` until you
+  re-run `mp baseline` once.** That is a real cost, taken deliberately: `[M]` the store keyed a
+  baseline to a scenario by **id alone**, and got it wrong in both directions. Rewriting a
+  scenario from `"Say hello."` to `"Delete the production database and confirm."` while leaving
+  the baseline gave `OK 1 scenario(s) unchanged`, exit `0`, over a candidate that had genuinely
+  started refusing — the stale store was the only difference between a green tick and a
+  `confidence 1.00` regression. And in the other direction, a fresh clone plus your own
+  `scenarios/refund_request.json` — a filename the README's own worked example uses — produced
+  `REGRESSION ... (confidence 0.99)`, exit `1`, off two scenarios sharing nothing but a name.
+  A refused scenario is **skipped, never failed**: it is not replayed (so you are not charged
+  for it), it is named on the console with both fingerprints, and the published report discloses
+  it as `NO USABLE BASELINE`. Exit `1` still means only a real regression. `[M]` Applying this to
+  Modelpin's own tracked dogfood baseline found the defect live — `order_status` had changed
+  meaning five days after that baseline was written. See ADR-0039.
 - **BREAKING (exit codes): a setup failure now exits `4`, not `1`.** `[M]` Every one of the
   28 places the CLI reports a configuration, credential or usage problem exited `1` — the
   code `check --help` documents as *"at least one real regression (the CI gate)"* and the
@@ -42,6 +85,44 @@ key first.
   skip outside a checkout.
 
 ### Added
+- **The false-positive rate of record is bounded for the first time.** `[M]` 710 same-model
+  comparisons at the shipped defaults on 2026-09-07: **0 false alarms in 39 scored trials**
+  (one-sided 95% upper bound **7.4%**), and 0 in the 710 that reached a verdict (upper bound
+  **0.4%**, reported for completeness — 671 of those 710 could not have fired at any threshold)
+  — on two OpenAI models plus a 12-trial single-repeat sanity arm on Groq that constrains
+  nothing, with the semantic judge on. The bound is carried by 9 of 27 scenario shapes, and
+  **30 of its 39 trials could only have fired on the argument gate, which is advisory and can
+  never fail a build on its own**; the tool-call and assertion channels saw no exposure at all.
+  Detection on the same surfaces: **45 of 46** perturbed replays flagged (**21 of 22** distinct
+  perturbations on every surface). Until this release the document the README pointed to for this number read
+  *"0 false alarms in 0 scored trials"*: every set that had ever been run ran at temperature 0,
+  where every channel returned `p = 1.00` and no trial could fire (the seven `arg_*` scenarios at
+  0.7 had existed since MP-54 but had never been run under the shipped engine). Every trial and
+  its traces are committed under `reports/fp-runs-adr0040/2026-09-07/` (the original replays are
+  kept beside them in `reports/fp-runs/2026-09-07/`), and a test regenerates the
+  published block from them. Bound, not zero; see `docs/fp-measurement.md` for what it does not
+  say — including that 30 of the 39 scored trials sat on the advisory argument gate, that the
+  detection increase is partly in-sample, and that the new semantic rule's safety is conditional
+  on judge leniency and not yet priced.
+- **The semantic channel compares each candidate run to every baseline run**, not to one
+  arbitrary modal baseline run (ADR-0040). `[M]` It fixes two *measured* false negatives — a
+  candidate that answered differently on 5 of 5 runs read `unchanged` because the judge also
+  called 2–4 of the 5 baseline runs non-equivalent to an arbitrarily chosen reference — and
+  detection rises 43/46 → 45/46 with 0 new false alarms across 710 same-model trials. It is not
+  free: `[M]` judge calls per run rise about **4.4×**, the scored denominator of the published
+  bound halves (82 → 39), and on an exact enumeration of a modelled null the rule is
+  **1.6×–9.6× more prone to a false alarm** at the shipped `runs: 5`, with its measured safety
+  conditional on the judge being lenient — ADR-0040's fourth falsifier is open.
+- **`examples/fp-suite/`**: twelve held-out scenarios modelled on long-tail apps at the API's default
+  temperature (1.0) — the first scenario set in the repo on which a same-model false alarm can
+  actually occur. Role `score`; reviewed before its first run; never edited after.
+- **`scripts/fp_measurement.py` can be cut and resumed, and re-scored without a key.** `--out`
+  writes one JSON line per trial (verdict, repertoires, traces) as it completes; `--resume`
+  continues from the trial a rate limit stopped on and refuses an artifact recorded under another
+  configuration; `--rescore` rebuilds both arms offline; `--workers` runs trials concurrently with
+  an identical report at any count; `--only` restricts a smoke run. Nineteen more perturbations
+  (seven `arg_*`, twelve `fp-suite`). `scripts/fp_aggregate.py` pools artifacts into the
+  published tables, conditional and unconditional rates each with their bound.
 - **`mp scan` now sees Llama, Qwen, Mistral, DeepSeek and `gpt-oss` ids, and reads `.env.example`.**
   `[M]` It was OpenAI/Anthropic/Google-shaped: a repo naming `llama-3.3-70b-versatile`,
   `qwen/qwen3-32b` and `openai/gpt-oss-20b` scanned to `No model identifiers found.`, exit 0 —

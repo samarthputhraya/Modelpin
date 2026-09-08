@@ -1,0 +1,69 @@
+FP measurement: provider=openai model=gpt-4o-mini runs=5 judge=gpt-4o-mini scenarios=8 repeats=1
+  roles: all 'score' (single-role directory)
+  -> 8 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+  git 5fa1d48 * 2026-09-07T10:15:37Z * workers=4 * artifact reports/fp-runs/2026-09-07/s0-suite-gpt-4o-mini.jsonl
+
+RUNNING 11 trial(s) live (0 reused from the artifact), 4 worker(s):
+  [1/11] extract_total            unchanged      conf=1.00    8.4s  [tools 1|1 args 1|1 text 1|1]
+  [2/11] classify_sentiment       unchanged      conf=1.00    9.6s  [tools 1|1 args 1|1 text 1|1]
+  [3/11] format_contact_json      unchanged      conf=1.00    9.3s  [tools 1|1 args 1|1 text 1|1]
+  [4/11] decline_pii              unchanged      conf=1.00   18.1s  [tools 1|1 args 1|1 text 2|2]
+  [5/11] cancel_subscription      unchanged      conf=1.00   23.6s  [tools 1|1 args 1|1 text 2|2]
+  [6/11] order_status             unchanged      conf=1.00   19.4s  [tools 1|1 args 1|1 text 1|3]
+  [7/11] summarize_ticket         unchanged      conf=1.00   16.0s  [tools 1|1 args 1|1 text 2|1]
+  [8/11] classify_sentiment       regression     conf=1.00   11.9s  [tools 1|1 args 1|1 text 1|1]
+  [9/11] decline_pii              unchanged      conf=1.00   17.0s  [tools 1|1 args 1|1 text 1|1]
+  [10/11] refund_request           unchanged      conf=1.00   31.0s  [tools 1|1 args 1|1 text 2|2]
+  [11/11] refund_request           regression     conf=1.00   26.2s  [tools 1|1 args 1|1 text 2|1]
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  cancel_subscription    unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  classify_sentiment     unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  decline_pii            unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  extract_total          unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  format_contact_json    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  order_status           unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|3]  <-- p=1.00 everywhere; could not have fired
+  refund_request         unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  summarize_ticket       unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|1]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/0 = n/a
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 8
+
+  *** THIS RUN MEASURED NOTHING. ***
+  No trial could have fired at ALPHA, so 0/0 is not evidence that the
+  false-positive rate is low - it is evidence that nothing was tested. Use
+  scenarios whose behaviour VARIES run to run: tools at temperature > 0
+  (examples/calibration/arg_*.json, --role score) or prose at the API's default
+  temperature (examples/fp-suite), and --repeats. See docs/fp-measurement.md.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+  classify_sentiment     regression     conf=1.00  [tools 1|1 args 1|1 text 1|1]  detected  (output format drift: violates the scenario's text asser)
+  decline_pii            unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- MISSED  (no statistically significant behavior change)
+  refund_request         regression     conf=1.00  [tools 1|1 args 1|1 text 2|1]  detected  (tool-call behavior changed: ['lookup_order', 'issue_ref)
+
+  Detection: 2/3 injected perturbations caught
+  95% lower bound on the true rate: 13.5% (one-sided Clopper-Pearson, n=3)
+  That rate is over perturbations APPLIED, not over behaviour changes; and the
+  interval treats them as exchangeable trials, which by construction they are
+  not - each targets a different signal.
+  Unmeasured (excluded): 0
+
+  NOTE: 1 perturbation(s) MISSED - counted against detection, never
+  excluded. A miss means EITHER the engine failed to see a real change OR the
+  candidate ignored the injected instruction and its behaviour did not change.
+  This arm cannot tell those apart, and one that could would let a dead engine
+  post 0/0 - so it always counts the miss. Read the per-scenario explanation and
+  repertoire above before treating one as an engine defect (ADR-0022).
+
+  This invocation: 11 trial(s) run live, 0 reused from the artifact, 1.0 min wall.
+  Replay tokens in/out over all 11 trial(s): 12,445/2,979; judge calls implied by the traces: 40 (judge tokens are not metered).
+  Artifact: reports/fp-runs/2026-09-07/s0-suite-gpt-4o-mini.jsonl  (re-read offline with --rescore; traces included)

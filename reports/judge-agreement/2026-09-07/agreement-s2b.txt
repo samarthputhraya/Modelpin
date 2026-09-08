@@ -1,0 +1,27 @@
+JUDGE AGREEMENT — one replay, two judges (MP-208)
+  A: gpt-4.1-mini @ openai (unrecorded; inferred)   [reports/fp-runs/2026-09-07/s2b-fp-suite-gpt-4o-mini.jsonl]
+  B: openai/gpt-oss-120b @ groq   [reports/judge-agreement/2026-09-07/rejudge-s2b-groq-gpt-oss-120b.jsonl]
+  model under test: gpt-4o-mini * scenarios: fp-suite * runs: 5 * repeats: 20
+
+  Paired trials (both judges reached a verdict): 24
+  Scored by only one judge, EXCLUDED from every rate below: 228 (fp:agent_missing_param_ask#10, fp:agent_missing_param_ask#11, fp:agent_missing_param_ask#12, fp:agent_missing_param_ask#13, fp:agent_missing_param_ask#14, fp:agent_missing_param_ask#15, ...)
+
+  Verdict agreement:   24/24 = 100.0%
+  Alarm agreement:     24/24 = 100.0%   (flag / no flag)
+  Identical semantic score: 19/24 = 79.2%
+  95% upper bound on the judge DISAGREEMENT rate (alarm): 11.7%  (one-sided Clopper-Pearson, 0/24)
+
+  No disagreement on any paired trial.
+
+  FALSE-POSITIVE ARM, over the paired trials only, under each judge:
+    A gpt-4.1-mini @ openai (unrecorded; inferred) 0/5 scored (ub 45.1%); 0/24 reached (ub 11.7%); 19 could not fire
+    B openai/gpt-oss-120b @ groq                   0/1 scored (ub 95.0%); 0/24 reached (ub 11.7%); 23 could not fire
+
+  !! The two judges do not agree on WHAT WAS MEASURED: 5 scored trial(s) under A, 1 under B,
+     over identical traces. A judge that finds more outputs equivalent pushes the
+     semantic channel to p = 1.00, which ADR-0022 excludes - so the judge moves the
+     bound's DENOMINATOR, not just its numerator.
+
+  NB these are the same trials twice, not two samples. Do not pool them.
+
+  wrote reports/judge-agreement/2026-09-07/agreement-s2b.json

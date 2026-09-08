@@ -1,0 +1,26 @@
+{
+  "id": "metrics_line_keeps_the_numbers",
+  "name": "A one-line metrics topic where four numbers are each free to be rounded or reformatted",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the channel-topic bot. Turn the weekly numbers into the one-line channel topic. One line, and keep it short."
+      },
+      {
+        "role": "user",
+        "content": "This week: 1,284 signups, 37 support tickets, p95 latency 412 ms, error budget 68% remaining, MRR 24,900."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "1,284",
+      "412",
+      "68%",
+      "24,900"
+    ]
+  }
+}

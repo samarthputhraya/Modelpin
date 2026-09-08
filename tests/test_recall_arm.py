@@ -1070,6 +1070,28 @@ def test_the_readmes_test_count_is_the_real_one():
         "README.md states a passing count but no longer states the xfail count. Both are "
         "required: an xfail pins an OPEN defect and must never be published as a pass."
     )
+    # `[M] 2026-09-07` The sum alone is not enough, and a first-run review caught it in the
+    # act: MP-05 landed and deleted three `xfail(strict=True)` markers, so the true state moved
+    # from 951 passing + 4 xfailed to 954 passing + 1 xfailed. Both sum to 955, so this guard
+    # stayed GREEN over a README that was wrong about both numbers -- and the xfail count is
+    # the one that matters, because it is the count of defects the project has CONCEDED. The
+    # claimed xfail count is now pinned to the tests actually marked xfail.
+    marked = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "-m", "xfail"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    ).stdout
+    m = re.search(r"(\d+)/\d+ tests collected", marked) or re.search(
+        r"(\d+) tests? collected", marked
+    )
+    assert m, "could not count xfail-marked tests: " + marked
+    assert int(xfailed.group(1)) == int(m.group(1)), (
+        f"README.md claims {xfailed.group(1)} `xfail`, but {m.group(1)} test(s) are marked "
+        "xfail. An xfail pins an OPEN defect: publishing the wrong count misstates how many "
+        "known bugs this suite has conceded, and the sum check below cannot see it because a "
+        "marker deleted alongside a test added leaves the total unmoved."
+    )
     assert int(claimed.group(1)) + int(xfailed.group(1)) == collected, (
         f"README.md claims {claimed.group(1)} passing + {xfailed.group(1)} xfailed = "
         f"{int(claimed.group(1)) + int(xfailed.group(1))}; pytest collects {collected}. "

@@ -1,0 +1,56 @@
+FP measurement: provider=openai model=gpt-4o-mini runs=5 judge=openai/gpt-oss-120b scenarios=12 repeats=2
+  roles: all 'score' (single-role directory)
+  -> 24 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+  RESCORED OFFLINE from reports/judge-agreement/2026-09-07/rejudge-s2b-groq-gpt-oss-120b.jsonl (recorded 2026-09-07T14:13:38Z @ eb20470); no provider was called.
+  git eb20470 * 2026-09-07T14:38:15Z * workers=1
+
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  agent_missing_param_ask#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|2]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#1    unchanged      conf=0.50  [tools 1|1 args 1|1 text 1|2]
+  summarize_standup_notes#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#1   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#2    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#2   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/1 = 0%
+  95% upper bound on the true rate: 95.0% (one-sided Clopper-Pearson, n=1)
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 23
+
+  NOTE: the rate is over the 1 scenario(s) in which something could have
+  fired; 23 could not, and are excluded.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+  NOT MEASURED under this judge: --arm fp excluded the detection arm, so its 12 trial(s)
+  were never planned and never bought. This is a NARROWING of what was purchased - not a
+  provider failure, and not a rate of 0. Use --arm both to measure it.
+  This invocation: 0 trial(s) re-scored (judge calls only), 24 reused from the artifact, 0.0 min wall.
+  Replay tokens in/out carried over from the source run; NO replay call was made: 45,600/14,593; judge calls implied by the traces: 163 (judge tokens are not metered).
+  Artifact: reports/judge-agreement/2026-09-07/rejudge-s2b-groq-gpt-oss-120b.jsonl  (re-read offline with --rescore; traces included)

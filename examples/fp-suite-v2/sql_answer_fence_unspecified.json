@@ -1,0 +1,23 @@
+{
+  "id": "sql_answer_fence_unspecified",
+  "name": "A SQL answer parsed verbatim downstream, with code fences never forbidden",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the SQL assistant inside a lightweight BI tool. The warehouse has one table: shipments(id, origin_country, destination_country, weight_kg, shipped_at, delivered_at). Answer the analyst's question with the PostgreSQL query that answers it."
+      },
+      {
+        "role": "user",
+        "content": "How many shipments to Germany took more than five days to deliver last month?"
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_not_contain": [
+      "```"
+    ]
+  }
+}

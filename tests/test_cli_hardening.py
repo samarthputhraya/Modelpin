@@ -197,10 +197,14 @@ def test_check_warns_about_skipped_scenarios(tmp_path):
     assert rc.exit_code == 0, rc.output
     # Parse the actual skipped-note line and assert the specific id — so this test
     # genuinely fails if item 13 (skip transparency) ever regresses.
-    note = next(
-        (ln for ln in rc.output.splitlines() if "had no baseline and were skipped" in ln), None
-    )
-    assert note is not None, rc.output
+    # Read from the UNWRAPPED output: rich hard-wraps the console at 80 columns, so an id can
+    # sit on the continuation line of the note that names it. `[M] 2026-09-07` asserting
+    # against a single wrapped line broke when the note's wording grew by four words, which
+    # tests the terminal width rather than skip transparency.
+    flat = " ".join(rc.output.split())
+    marker = "had no baseline and were skipped:"
+    assert marker in flat, rc.output
+    note = flat[flat.index(marker) : flat.index(".", flat.index(marker))]
     assert "greet_bravo" in note
     assert "greet_alpha" not in note
 

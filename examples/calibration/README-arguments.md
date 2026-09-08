@@ -34,6 +34,17 @@
 > number. It is a prior for the exclusion rate in general, not for `arg_*`. `[M]` The one live
 > `arg_*` run scored **7 of 70 (10.0%)**, all on one scenario, and the section below explains
 > why the other six were excluded.
+>
+> **`[M] 2026-09-07` The run of record now exists, and it scored 30 of 210 (14.3%).** MP-205,
+> surface S1: `gpt-4.1-mini` vs itself, judge `gpt-4o-mini` ON, `runs 5`, `--repeats 30`, the
+> shipped engine at `b504730`'s parent. **0 false alarms in 30 scored trials** (one-sided 95%
+> upper bound **9.5%**), **0 in 210 trials that reached a verdict** (upper bound **1.4%**).
+> Scored by scenario: `arg_numeric_rounding` 16, `arg_freetext_note` 13, `arg_optional_fields`
+> 1, the other four **0 of 30 each** — exactly the split the repertoire table below predicted.
+> The closest a null trial came to firing was `p = 0.087`. Artifact, transcript and the pooled
+> tables: `reports/fp-runs/2026-09-07/s1-arg-gpt-4.1-mini.{jsonl,txt}` and
+> `docs/fp-measurement.md`. Two of the three sentences above this note are therefore history:
+> this subset *did* establish a bound, because `--repeats` did what MP-89 said it would.
 
 These seven scenarios are **not** semantic discriminators like the six single-turn files
 described in [`README.md`](README.md). They exist for one job: to price the
@@ -185,8 +196,22 @@ a real false alarm, because a human calls it identical behaviour.
 ## Running it
 
 ```
-python scripts/fp_measurement.py --provider openai --model gpt-4.1-mini --runs 5     --scenarios-dir examples/calibration --role score --no-judge
+python scripts/fp_measurement.py --provider openai --model gpt-4.1-mini --judge gpt-4o-mini \
+    --runs 5 --repeats 30 --scenarios-dir examples/calibration --role score \
+    --out reports/fp-runs/<date>/s1-arg-gpt-4.1-mini.jsonl --workers 4
 ```
+
+> **`[M] 2026-09-07`** That is the run-of-record command (MP-205). The judge is ON because the
+> number being measured is the shipped stack's, not the argument channel's alone; pass
+> `--no-judge` to isolate the channel. `--out` writes every trial with its traces as it
+> completes, `--resume` continues a cut run, `--rescore <artifact>` rebuilds the report
+> offline with no key. Each perturbation in `PERTURBATIONS` changes an *argument* (a unit,
+> a discarded user value, a forced constant) and never a tool name, so the advisory
+> argument gate is the channel that has to see it; `[M]` on the run of record it did, 7 of 7
+> — with one caveat the writeup carries: on `arg_numeric_rounding` the candidate *resisted*
+> the pounds instruction (every payload is still kilograms) and the gate fired on 4- versus
+> 5-decimal rounding jitter at `p = 0.048`, the exact false-positive mode recorded below.
+> The harness counts the flag (ADR-0023); the document names the mechanism.
 
 > **`[M] 2026-08-25` Two corrections to the line above, both measured.**
 > **`--role score` is now required.** MP-89 landed the filter this section anticipated, as a
