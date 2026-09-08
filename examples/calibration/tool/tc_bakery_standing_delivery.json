@@ -1,0 +1,102 @@
+{
+  "id": "tc_bakery_standing_delivery",
+  "name": "Bakery: two per-account calls or one batch call, the model's choice",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the wholesale assistant at Marchbank Bakery. set_delivery_quantity changes one account's standing delivery. apply_standing_order applies the same change to several accounts at once. When a change applies to more than one account either route is fine - use whichever you think is tidier. Reply to the production office with one short sentence stating the new daily sourdough count and the day it starts for the two cafes named. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Both Corvie's and Pilot Street want 18 sourdough a day from Monday instead of 12."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "set_delivery_quantity",
+          "description": "Change the standing daily quantity of one item for one account.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "account": {
+                "type": "string",
+                "description": "The wholesale account name."
+              },
+              "item": {
+                "type": "string",
+                "description": "The item, e.g. sourdough."
+              },
+              "quantity": {
+                "type": "integer",
+                "description": "The new daily quantity."
+              },
+              "effective_from": {
+                "type": "string",
+                "description": "The day the change starts. Optional."
+              }
+            },
+            "required": [
+              "account",
+              "item",
+              "quantity"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apply_standing_order",
+          "description": "Apply the same standing-order change to several accounts at once.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "accounts": {
+                "type": "array",
+                "description": "The wholesale account names."
+              },
+              "item": {
+                "type": "string",
+                "description": "The item, e.g. sourdough."
+              },
+              "quantity": {
+                "type": "integer",
+                "description": "The new daily quantity."
+              },
+              "effective_from": {
+                "type": "string",
+                "description": "The day the change starts. Optional."
+              }
+            },
+            "required": [
+              "accounts",
+              "item",
+              "quantity"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "set_delivery_quantity": {
+        "item": "sourdough",
+        "quantity": 18,
+        "effective_from": "Monday"
+      },
+      "apply_standing_order": {
+        "accounts": [
+          "Corvie's",
+          "Pilot Street"
+        ],
+        "item": "sourdough",
+        "quantity": 18,
+        "effective_from": "Monday"
+      }
+    },
+    "temperature": 1.0
+  }
+}

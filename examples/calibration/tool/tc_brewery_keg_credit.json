@@ -1,0 +1,79 @@
+{
+  "id": "tc_brewery_keg_credit",
+  "name": "Brewery: an optional per-item verification before one credit",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the cellar-desk assistant at Stannary Brew Co. credit_deposit returns keg deposits to a customer's account. get_keg confirms a keg is ours and what deposit it carries - look kegs up first if you are not sure, or go on what the customer tells you if you are. Reply to the customer with one short sentence stating how many kegs were credited and the total credited. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Three kegs went back on your dray this morning - K-118, K-119 and K-140. The deposit is 30 each, so 90 back to us please."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_keg",
+          "description": "Confirm a keg belongs to the brewery and return its deposit value.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "keg_id": {
+                "type": "string",
+                "description": "The keg id, e.g. K-118."
+              }
+            },
+            "required": [
+              "keg_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "credit_deposit",
+          "description": "Credit keg deposits back to a customer's account.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "customer": {
+                "type": "string",
+                "description": "The customer account."
+              },
+              "kegs": {
+                "type": "array",
+                "description": "The keg ids being credited."
+              },
+              "total_gbp": {
+                "type": "number",
+                "description": "The total credited."
+              }
+            },
+            "required": [
+              "customer",
+              "kegs",
+              "total_gbp"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_keg": {
+        "ours": true,
+        "deposit_gbp": 30
+      },
+      "credit_deposit": {
+        "kegs": 3,
+        "total_gbp": 90,
+        "status": "credited"
+      }
+    },
+    "temperature": 1.0
+  }
+}

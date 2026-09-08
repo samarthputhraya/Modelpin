@@ -1,0 +1,78 @@
+{
+  "id": "tc_toollib_return_and_fee",
+  "name": "Tool library: a return and a fee write-off, in whichever order",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the desk assistant at the Fenwick Tool Library. check_in_item records a returned tool. clear_late_fee cancels an outstanding fee on a member's account. Both are needed here, and you may call them in whichever order you prefer. Reply to the desk log with one short sentence naming the tool that came back and confirming the member's late fee is cleared. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Marc Ihlen (M-2071) just dropped off the hedge trimmer, HT-12. He is asking for the late fee on his account to be written off - it was our closing day that made him late."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "check_in_item",
+          "description": "Record a hired tool as returned to the library.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "item_id": {
+                "type": "string",
+                "description": "The tool's item code, e.g. HT-12."
+              },
+              "condition": {
+                "type": "string",
+                "description": "Condition on return, if worth recording. Optional."
+              }
+            },
+            "required": [
+              "item_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "clear_late_fee",
+          "description": "Cancel an outstanding late fee on a member's account.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "member_id": {
+                "type": "string",
+                "description": "The member's id, e.g. M-2071."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why the fee is being cleared. Optional."
+              }
+            },
+            "required": [
+              "member_id"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "check_in_item": {
+        "item_id": "HT-12",
+        "item": "hedge trimmer",
+        "status": "checked_in"
+      },
+      "clear_late_fee": {
+        "member_id": "M-2071",
+        "fee_cleared_gbp": 4.5,
+        "balance_gbp": 0
+      }
+    },
+    "temperature": 1.0
+  }
+}

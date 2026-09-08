@@ -1,0 +1,80 @@
+{
+  "id": "tc_planthire_offhire_collection",
+  "name": "Plant hire: the collection judgement narrowed, not removed",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the hire-desk assistant at Grieve Plant Hire. end_hire closes a hire on the date the customer gives. arrange_collection sends a low-loader out for the machine; some customers drive a machine back themselves, so call arrange_collection when you judge the machine needs collecting. Reply to the hire desk with one short sentence naming the hire and the date it ended. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Hire H-3120, the 3-tonne excavator at the Whitmoor site - off-hire it on 14 October. It is a fenced site and there is no float on it."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "end_hire",
+          "description": "Close a hire on a given date.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "hire": {
+                "type": "string",
+                "description": "The hire number, e.g. H-3120."
+              },
+              "end_date": {
+                "type": "string",
+                "description": "The date the hire ends, in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "hire",
+              "end_date"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "arrange_collection",
+          "description": "Send a low-loader to collect a machine from a site.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "hire": {
+                "type": "string",
+                "description": "The hire number."
+              },
+              "site": {
+                "type": "string",
+                "description": "The site the machine is on."
+              }
+            },
+            "required": [
+              "hire",
+              "site"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "end_hire": {
+        "hire": "H-3120",
+        "end_date": "2026-10-14",
+        "status": "off_hired"
+      },
+      "arrange_collection": {
+        "hire": "H-3120",
+        "site": "Whitmoor",
+        "booked": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

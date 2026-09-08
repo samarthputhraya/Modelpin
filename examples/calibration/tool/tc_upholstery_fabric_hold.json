@@ -1,0 +1,104 @@
+{
+  "id": "tc_upholstery_fabric_hold",
+  "name": "Upholstery: a discretionary fabric hold removed before booking",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the workshop assistant at Wren Street Upholstery. Call get_job first for the job number. book_workshop puts the job in the diary. reserve_fabric holds the customer's fabric out of general stock; call it before booking when you judge the fabric might otherwise be cut for another job. Reply to the workshop diary with one short sentence naming the job and the week it is booked for. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Job WS-77, the two Ercol chairs in the teal wool - book them into the workshop for the week of the 12th. That teal is the last roll we have."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_job",
+          "description": "Return a re-upholstery job by number.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "job": {
+                "type": "string",
+                "description": "The job number, e.g. WS-77."
+              }
+            },
+            "required": [
+              "job"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "reserve_fabric",
+          "description": "Hold a length of fabric out of general stock for a job.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "job": {
+                "type": "string",
+                "description": "The job number."
+              },
+              "fabric": {
+                "type": "string",
+                "description": "The fabric, e.g. teal wool."
+              }
+            },
+            "required": [
+              "job",
+              "fabric"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "book_workshop",
+          "description": "Put a job into the workshop diary for a week.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "job": {
+                "type": "string",
+                "description": "The job number."
+              },
+              "week_of": {
+                "type": "string",
+                "description": "The week the job is booked for."
+              }
+            },
+            "required": [
+              "job",
+              "week_of"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_job": {
+        "job": "WS-77",
+        "items": "two Ercol chairs",
+        "fabric": "teal wool"
+      },
+      "reserve_fabric": {
+        "job": "WS-77",
+        "fabric": "teal wool",
+        "held": true
+      },
+      "book_workshop": {
+        "job": "WS-77",
+        "week_of": "the 12th",
+        "status": "booked"
+      }
+    },
+    "temperature": 1.0
+  }
+}

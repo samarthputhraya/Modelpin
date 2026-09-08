@@ -1,0 +1,126 @@
+{
+  "id": "tc_courier_locker_reassign",
+  "name": "Courier lockers: a four-tool move with a free-order pair and an optional text",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the operations assistant for Halcyon Lockers. get_parcel finds a parcel. release_locker frees the locker it is sitting in and assign_locker takes the new one; the porter does the physical move, so the order you record those two in does not matter. send_code texts the recipient the new door code - send it when you judge the recipient needs it. Reply to the operations log with one short sentence naming the parcel and the locker it is now in. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Parcel HP-7731 is in locker B4 and B4's door is sticking. Move it to B9."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_parcel",
+          "description": "Find a parcel and the locker it is in.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "parcel_id": {
+                "type": "string",
+                "description": "The parcel id, e.g. HP-7731."
+              }
+            },
+            "required": [
+              "parcel_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "release_locker",
+          "description": "Free a locker so it can be used again.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "locker": {
+                "type": "string",
+                "description": "The locker, e.g. B4."
+              }
+            },
+            "required": [
+              "locker"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "assign_locker",
+          "description": "Put a parcel into a locker.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "parcel_id": {
+                "type": "string",
+                "description": "The parcel id."
+              },
+              "locker": {
+                "type": "string",
+                "description": "The locker, e.g. B9."
+              }
+            },
+            "required": [
+              "parcel_id",
+              "locker"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "send_code",
+          "description": "Text the recipient the door code for their locker.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "parcel_id": {
+                "type": "string",
+                "description": "The parcel id."
+              },
+              "locker": {
+                "type": "string",
+                "description": "The locker the parcel is in."
+              }
+            },
+            "required": [
+              "parcel_id",
+              "locker"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_parcel": {
+        "parcel_id": "HP-7731",
+        "locker": "B4",
+        "recipient": "N. Ferreira"
+      },
+      "release_locker": {
+        "locker": "B4",
+        "status": "free"
+      },
+      "assign_locker": {
+        "parcel_id": "HP-7731",
+        "locker": "B9",
+        "status": "assigned"
+      },
+      "send_code": {
+        "parcel_id": "HP-7731",
+        "sent": true
+      }
+    },
+    "temperature": 1.0
+  }
+}
