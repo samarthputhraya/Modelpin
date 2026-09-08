@@ -39,7 +39,7 @@ from modelpin.cli import VALID_MATCH_MODES, _effective_match, _match_override_no
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_FROM, DEMO_TO, write_demo
 from modelpin.diff import diff_scenario
 from modelpin.diff.structural import MatchMode
-from modelpin.models import MATCH_MODES, DiffVerdict, MatchModeName, Scenario, Trace
+from modelpin.models import MATCH_MODES, DiffResult, DiffVerdict, MatchModeName, Scenario, Trace
 from modelpin.report.suite import compute_suite_hash, scenario_fingerprint
 from modelpin.scenarios import ScenarioError, load_scenarios
 
@@ -194,7 +194,13 @@ def test_the_optional_field_did_not_move_any_existing_fingerprint() -> None:
     """
     suite = load_scenarios(ROOT / "examples" / "report-suite")
     assert suite, "the public report suite must load"
-    assert all(s.match is None for s in suite)
+    # LOAD-BEARING, not incidental: `examples/report-suite/` is the public suite behind an
+    # ADR-0009 measurement surface, and a `match` declaration in it would change what every
+    # published Report measured while `compute_suite_hash` -- deliberately -- stayed put.
+    # Do not delete this as redundant with the hash pin below; it guards a different thing.
+    assert all(
+        s.match is None for s in suite
+    ), "the public report suite must never declare a per-scenario match mode"
     # The literal published for `modelpin-public-v2` v3.0.0 -- it is written into
     # `examples/report-suite/manifest.json`'s own description, cited in every Report this
     # repo has produced, and pinned independently at `tests/test_cli.py:315`. Hard-coded
@@ -368,3 +374,88 @@ def test_the_three_match_mode_declarations_agree() -> None:
     assert (
         cli.VALID_MATCH_MODES is MATCH_MODES
     ), "`cli.VALID_MATCH_MODES` must alias the single declaration, not re-list it."
+
+
+# --------------------------------------------------------------------------------------
+# The surface `action.yml` actually posts, and the three places a user looks for the field.
+# `[M] 2026-09-08` first-run review: all four were silent about it on the first pass.
+# --------------------------------------------------------------------------------------
+
+
+def test_the_pr_comment_discloses_every_override_above_the_verdicts() -> None:
+    """`.modelpin/last-report.md` is what `action.yml` posts; the console note never reaches it.
+
+    `[M]` Without this, a scenario could be given a LOOSER comparison relation and move from
+    `REGRESSION` to `unchanged` with nothing on the reviewed surface to say so -- the
+    disclosure would exist only on a terminal nobody reads in CI.
+    """
+    from modelpin.report import render_pr_comment
+
+    results = [
+        DiffResult(
+            scenario_id="angry_customer",
+            from_model="m1",
+            to_model="m2",
+            verdict=DiffVerdict.regression,
+            confidence=0.99,
+            explanation="refusal rate 0% -> 100%",
+        )
+    ]
+    plain = render_pr_comment(results, "m1", "m2", 5, "fake")
+    assert "COMPARISON RELAXED" not in plain, "an ordinary run must gain no new noise"
+
+    disclosed = render_pr_comment(
+        results, "m1", "m2", 5, "fake", match_overrides={"refund_request": "superset"}
+    )
+    assert "COMPARISON RELAXED OR CHANGED (1)" in disclosed, disclosed
+    assert "`refund_request` — compared under `superset`" in disclosed, disclosed
+    # Above the verdict buckets, for the same reason `rejected` and `skipped` are: it changes
+    # what the verdicts below MEAN, and a reviewer who stops after the first screen must see it.
+    assert disclosed.index("COMPARISON RELAXED") < disclosed.index("REGRESSIONS"), disclosed
+
+
+def test_check_and_report_help_both_name_the_scenario_level_override() -> None:
+    """`--help` is where someone goes when `--match` is not behaving as they expect."""
+    for command in ("check", "report"):
+        out = runner.invoke(app, [command, "--help"]).output
+        flat = " ".join(out.split())
+        assert "match" in flat and "key overrides this" in flat, (
+            f"`mp {command} --help` does not mention that a scenario file can override "
+            f"--match:\n{out}"
+        )
+
+
+def test_the_demo_tutorial_teaches_the_field_on_the_scenario_it_exists_for(tmp_path) -> None:
+    """The demo's own worked example is `refund_request` -- the shape this row was filed on.
+
+    `[M] 2026-09-08` first-run review: the tutorial resolved that false alarm by telling the
+    reader to hand-edit `traces.json`, so a user's first hands-on encounter with exactly this
+    failure was coached away from the fix that exists for it.
+    """
+    write_demo(tmp_path)
+    readme = (tmp_path / DEMO_DIRNAME / "README.md").read_text(encoding="utf-8")
+    assert '"match": "superset"' in readme, readme[-1500:]
+    assert "re-record your baseline" in readme
+
+
+def test_a_bad_value_in_a_file_is_told_the_same_thing_the_flag_would_say(tmp_path) -> None:
+    """One mistake, one sentence, whichever surface it arrives on."""
+    (tmp_path / "s.json").write_text(
+        json.dumps(
+            {
+                "id": "s",
+                "name": "s",
+                "input": {"messages": [{"role": "user", "content": "hi"}]},
+                "match": "loose",
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ScenarioError) as exc:
+        load_scenarios(tmp_path)
+    message = str(exc.value)
+    assert "`match` must be one of strict, unordered, subset, superset" in message
+    assert "omit it to use the run's --match flag" in message
+    assert (
+        "literal_error" not in message
+    ), "the raw pydantic literal error is what this replaced; see the CLI's own wording"

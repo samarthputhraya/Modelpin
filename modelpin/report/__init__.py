@@ -8,7 +8,7 @@ Matches the target UX in spec section 7. Framing stays measurement/opinion
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Optional
 
 from rich.markup import escape
@@ -461,10 +461,18 @@ def render_pr_comment(
     census: Optional[ChannelCensus] = None,
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
+    match_overrides: Optional[Mapping[str, str]] = None,
 ) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
-    doesn't contradict its own "safe to adopt" line."""
+    doesn't contradict its own "safe to adopt" line.
+
+    ``match_overrides`` is ``{scenario_id: mode}`` for every scenario NOT compared under the
+    run's global ``--match`` (MP-227). `[M] 2026-09-08`, first-run review: without it, a
+    scenario could be given a LOOSER comparison relation and move from ``REGRESSION`` to
+    ``unchanged`` with no trace of it on this surface — and this surface is the one
+    ``action.yml`` posts, so it is the only thing most reviewers ever see. The console
+    printed the note and `action.yml` never reads the console."""
     _b = _bucket(results)
     regs = _b[DiffVerdict.regression]
     minors = _b[DiffVerdict.changed_minor]
@@ -541,6 +549,18 @@ def render_pr_comment(
         + ("; " + "; ".join(_gaps) + "." if _gaps else "."),
         "",
     ]
+    if match_overrides:
+        # Above every verdict bucket, for the same reason `rejected` is: this changes what
+        # the verdicts below MEAN. A looser relation on one scenario can turn a red build
+        # green, and a reviewer who cannot see that cannot review it.
+        lines.append(
+            f"**COMPARISON RELAXED OR CHANGED ({len(match_overrides)})** - these scenarios "
+            "declare their own tool-call `match` mode, so they were NOT compared under the "
+            "run's `--match`. A looser relation can turn a regression into `unchanged`."
+        )
+        for sid, mode in sorted(match_overrides.items()):
+            lines.append(f"⚙️ `{_md_inline(sid)}` — compared under `{_md_inline(mode)}`")
+        lines.append("")
     if rejected:
         # Before every verdict bucket: what was NOT measured changes how the measured
         # numbers should be read, so a reviewer must meet it first.

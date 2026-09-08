@@ -1078,7 +1078,10 @@ def check(
     ),
     runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario."),
     mode: str = typer.Option(
-        "strict", "--match", help="Tool-call match mode: strict|unordered|subset|superset."
+        "strict",
+        "--match",
+        help="Tool-call match mode: strict|unordered|subset|superset. A scenario file's "
+        'own "match" key overrides this for that scenario.',
     ),
     config_path: str = typer.Option("modelpin.yaml", "--config"),
     scenarios_dir: Optional[str] = typer.Option(None, "--scenarios-dir"),
@@ -1402,7 +1405,20 @@ def check(
     # The housekeeping notes are held and printed after the summary, so reading order is
     # unchanged: verdict first, file paths after.
     markdown = render_pr_comment(
-        results, from_model, to, n, prov, underpowered, census, rejected, skipped
+        results,
+        from_model,
+        to,
+        n,
+        prov,
+        underpowered,
+        census,
+        rejected,
+        skipped,
+        # MP-227. `action.yml` posts THIS artifact and never reads the console note above,
+        # so a scenario compared under a looser relation than the run's `--match` has to say
+        # so here or the PR reviewer cannot see it at all. Read off `compared`, so a scenario
+        # that declared a mode but was never diffed does not claim to have been.
+        match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
     )
     _publish_notes = _publish_report(markdown, store_dir, from_model, to)
     console.print(_summary)
@@ -1532,7 +1548,10 @@ def report(
     ),
     runs: Optional[int] = typer.Option(None, "--runs", help="Replays per scenario per model."),
     mode: str = typer.Option(
-        "strict", "--match", help="Tool-call match mode: strict|unordered|subset|superset."
+        "strict",
+        "--match",
+        help="Tool-call match mode: strict|unordered|subset|superset. A scenario file's "
+        'own "match" key overrides this for that scenario.',
     ),
     suite_dir: str = typer.Option(
         ...,
