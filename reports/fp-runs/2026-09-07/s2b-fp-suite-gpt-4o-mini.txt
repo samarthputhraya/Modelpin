@@ -1,0 +1,548 @@
+FP measurement: provider=openai model=gpt-4o-mini runs=5 judge=gpt-4.1-mini scenarios=12 repeats=20
+  roles: all 'score' (single-role directory)
+  -> 240 trials attempted; ADR-0022 excludes those that could not have fired, so SCORED will be lower.
+  git b504730 * 2026-09-07T10:36:11Z * workers=3 * artifact reports/fp-runs/2026-09-07/s2b-fp-suite-gpt-4o-mini.jsonl
+
+RUNNING 252 trial(s) live (0 reused from the artifact), 3 worker(s):
+  [1/252] agent_missing_param_ask#1 unchanged      conf=0.50   15.0s  [tools 1|1 args 1|1 text 4|3]
+  [2/252] classify_review_sentiment#1 unchanged      conf=1.00    8.0s  [tools 1|1 args 1|1 text 1|1]
+  [3/252] borderline_medication_question#1 unchanged      conf=1.00   30.4s  [tools 1|1 args 1|1 text 5|5]
+  [4/252] extract_invoice_fields#1 unchanged      conf=1.00   12.3s  [tools 1|1 args 1|1 text 3|2]
+  [5/252] agent_reschedule_two_step#1 unchanged      conf=1.00   39.9s  [tools 1|1 args 1|1 text 5|2]
+  [6/252] rag_answer_with_citation#1 unchanged      conf=1.00   18.2s  [tools 1|1 args 1|1 text 4|5]
+  [7/252] format_markdown_table#1  unchanged      conf=1.00   24.9s  [tools 1|1 args 1|1 text 5|3]
+  [8/252] rewrite_email_polite#1   unchanged      conf=0.26   23.1s  [tools 1|1 args 1|1 text 5|5]
+  [9/252] sql_from_question#1      unchanged      conf=0.50   11.3s  [tools 1|1 args 1|1 text 1|2]
+  [10/252] summarize_standup_notes#1 unchanged      conf=0.50   25.1s  [tools 1|1 args 1|1 text 5|5]
+  [11/252] triage_ticket_json#1     unchanged      conf=1.00   20.0s  [tools 1|1 args 1|1 text 5|5]
+  [12/252] support_order_status#1   unchanged      conf=1.00   29.3s  [tools 1|1 args 1|1 text 4|5]
+  [13/252] agent_missing_param_ask#2 unchanged      conf=1.00   16.1s  [tools 1|1 args 1|1 text 4|4]
+  [14/252] classify_review_sentiment#2 unchanged      conf=1.00    7.6s  [tools 1|1 args 1|1 text 1|1]
+  [15/252] agent_reschedule_two_step#2 unchanged      conf=1.00   33.1s  [tools 1|1 args 1|1 text 3|5]
+  [16/252] borderline_medication_question#2 unchanged      conf=1.00   29.3s  [tools 1|1 args 1|1 text 5|5]
+  [17/252] extract_invoice_fields#2 unchanged      conf=1.00   21.7s  [tools 1|1 args 1|1 text 3|3]
+  [18/252] format_markdown_table#2  unchanged      conf=1.00   24.6s  [tools 1|1 args 1|1 text 5|3]
+  [19/252] sql_from_question#2      unchanged      conf=1.00   16.2s  [tools 1|1 args 1|1 text 1|1]
+  [20/252] rewrite_email_polite#2   unchanged      conf=1.00   33.2s  [tools 1|1 args 1|1 text 5|5]
+  [21/252] rag_answer_with_citation#2 unchanged      conf=1.00   37.9s  [tools 1|1 args 1|1 text 5|5]
+  [22/252] triage_ticket_json#2     unchanged      conf=1.00   20.3s  [tools 1|1 args 1|1 text 5|5]
+  [23/252] summarize_standup_notes#2 unchanged      conf=0.50   24.1s  [tools 1|1 args 1|1 text 5|5]
+  [24/252] support_order_status#2   unchanged      conf=1.00   32.7s  [tools 1|1 args 1|1 text 5|4]
+  [25/252] agent_missing_param_ask#3 unchanged      conf=0.26   17.4s  [tools 1|1 args 1|1 text 4|4]
+  [26/252] classify_review_sentiment#3 unchanged      conf=1.00    7.3s  [tools 1|1 args 1|1 text 1|1]
+  [27/252] extract_invoice_fields#3 unchanged      conf=1.00   14.4s  [tools 1|1 args 1|1 text 3|3]
+  [28/252] agent_reschedule_two_step#3 unchanged      conf=1.00   39.3s  [tools 1|1 args 1|1 text 5|3]
+  [29/252] format_markdown_table#3  unchanged      conf=1.00   17.9s  [tools 1|1 args 1|1 text 4|5]
+  [30/252] rag_answer_with_citation#3 unchanged      conf=1.00   19.0s  [tools 1|1 args 1|1 text 4|5]
+  [31/252] sql_from_question#3      unchanged      conf=1.00    9.5s  [tools 1|1 args 1|1 text 1|1]
+  [32/252] rewrite_email_polite#3   unchanged      conf=1.00   21.8s  [tools 1|1 args 1|1 text 5|5]
+  [33/252] summarize_standup_notes#3 unchanged      conf=1.00   23.4s  [tools 1|1 args 1|1 text 5|5]
+  [34/252] support_order_status#3   unchanged      conf=1.00   34.4s  [tools 1|1 args 1|1 text 5|5]
+  [35/252] triage_ticket_json#3     unchanged      conf=1.00   20.9s  [tools 1|1 args 1|1 text 5|5]
+  [36/252] agent_missing_param_ask#4 unchanged      conf=1.00   15.5s  [tools 1|1 args 1|1 text 4|4]
+  [37/252] agent_reschedule_two_step#4 unchanged      conf=1.00   38.4s  [tools 1|1 args 1|1 text 5|4]
+  [38/252] borderline_medication_question#4 unchanged      conf=1.00   29.6s  [tools 1|1 args 1|1 text 5|5]
+  [39/252] classify_review_sentiment#4 unchanged      conf=1.00    7.4s  [tools 1|1 args 1|1 text 1|1]
+  [40/252] borderline_medication_question#3 unchanged      conf=1.00  151.8s  [tools 1|1 args 1|1 text 5|5]
+  [41/252] extract_invoice_fields#4 unchanged      conf=1.00   11.3s  [tools 1|1 args 1|1 text 2|2]
+  [42/252] format_markdown_table#4  unchanged      conf=1.00   21.6s  [tools 1|1 args 1|1 text 5|5]
+  [43/252] rag_answer_with_citation#4 unchanged      conf=1.00   19.4s  [tools 1|1 args 1|1 text 5|4]
+  [44/252] rewrite_email_polite#4   unchanged      conf=1.00   22.8s  [tools 1|1 args 1|1 text 5|5]
+  [45/252] sql_from_question#4      unchanged      conf=1.00   11.4s  [tools 1|1 args 1|1 text 1|1]
+  [46/252] summarize_standup_notes#4 unchanged      conf=0.22   28.4s  [tools 1|1 args 1|1 text 5|5]
+  [47/252] triage_ticket_json#4     unchanged      conf=1.00   21.0s  [tools 1|1 args 1|1 text 5|5]
+  [48/252] support_order_status#4   unchanged      conf=1.00   33.0s  [tools 1|1 args 1|1 text 5|5]
+  [49/252] agent_missing_param_ask#5 unchanged      conf=1.00   16.8s  [tools 1|1 args 1|1 text 4|5]
+  [50/252] classify_review_sentiment#5 unchanged      conf=1.00    7.6s  [tools 1|1 args 1|1 text 1|1]
+  [51/252] extract_invoice_fields#5 unchanged      conf=1.00   13.2s  [tools 1|1 args 1|1 text 2|2]
+  [52/252] agent_reschedule_two_step#5 unchanged      conf=1.00   34.7s  [tools 1|1 args 1|1 text 4|4]
+  [53/252] borderline_medication_question#5 unchanged      conf=1.00   29.9s  [tools 1|1 args 1|1 text 5|5]
+  [54/252] format_markdown_table#5  unchanged      conf=1.00   18.7s  [tools 1|1 args 1|1 text 4|3]
+  [55/252] rag_answer_with_citation#5 unchanged      conf=1.00   21.9s  [tools 1|1 args 1|1 text 5|5]
+  [56/252] sql_from_question#5      unchanged      conf=1.00   10.1s  [tools 1|1 args 1|1 text 1|1]
+  [57/252] rewrite_email_polite#5   unchanged      conf=1.00   26.4s  [tools 1|1 args 1|1 text 5|5]
+  [58/252] summarize_standup_notes#5 unchanged      conf=1.00   23.1s  [tools 1|1 args 1|1 text 5|5]
+  [59/252] triage_ticket_json#5     unchanged      conf=1.00   19.7s  [tools 1|1 args 1|1 text 5|5]
+  [60/252] agent_missing_param_ask#6 unchanged      conf=1.00   16.2s  [tools 1|1 args 1|1 text 5|4]
+  [61/252] support_order_status#5   unchanged      conf=1.00   33.5s  [tools 1|1 args 1|1 text 5|4]
+  [62/252] classify_review_sentiment#6 unchanged      conf=1.00    8.4s  [tools 1|1 args 1|1 text 1|1]
+  [63/252] extract_invoice_fields#6 unchanged      conf=1.00   15.7s  [tools 1|1 args 1|1 text 3|3]
+  [64/252] borderline_medication_question#6 unchanged      conf=1.00   27.0s  [tools 1|1 args 1|1 text 5|5]
+  [65/252] agent_reschedule_two_step#6 unchanged      conf=1.00   45.3s  [tools 1|1 args 1|1 text 2|4]
+  [66/252] format_markdown_table#6  unchanged      conf=1.00   16.6s  [tools 1|1 args 1|1 text 3|4]
+  [67/252] rag_answer_with_citation#6 unchanged      conf=1.00   18.8s  [tools 1|1 args 1|1 text 5|5]
+  [68/252] sql_from_question#6      unchanged      conf=1.00    9.4s  [tools 1|1 args 1|1 text 1|1]
+  [69/252] rewrite_email_polite#6   unchanged      conf=1.00   22.0s  [tools 1|1 args 1|1 text 5|5]
+  [70/252] summarize_standup_notes#6 unchanged      conf=1.00   26.7s  [tools 1|1 args 1|1 text 5|5]
+  [71/252] triage_ticket_json#6     unchanged      conf=0.26   20.4s  [tools 1|1 args 1|1 text 5|5]
+  [72/252] support_order_status#6   unchanged      conf=1.00   29.6s  [tools 1|1 args 1|1 text 5|3]
+  [73/252] agent_missing_param_ask#7 unchanged      conf=1.00   17.1s  [tools 1|1 args 1|1 text 5|4]
+  [74/252] classify_review_sentiment#7 unchanged      conf=1.00    6.9s  [tools 1|1 args 1|1 text 1|1]
+  [75/252] borderline_medication_question#7 unchanged      conf=1.00   27.7s  [tools 1|1 args 1|1 text 5|5]
+  [76/252] extract_invoice_fields#7 unchanged      conf=0.50   14.4s  [tools 1|1 args 1|1 text 2|3]
+  [77/252] agent_reschedule_two_step#7 unchanged      conf=1.00   37.8s  [tools 1|1 args 1|1 text 5|4]
+  [78/252] format_markdown_table#7  unchanged      conf=1.00   19.3s  [tools 1|1 args 1|1 text 4|5]
+  [79/252] rag_answer_with_citation#7 unchanged      conf=1.00   19.7s  [tools 1|1 args 1|1 text 5|4]
+  [80/252] sql_from_question#7      unchanged      conf=1.00    9.4s  [tools 1|1 args 1|1 text 1|1]
+  [81/252] rewrite_email_polite#7   unchanged      conf=0.26   27.1s  [tools 1|1 args 1|1 text 5|5]
+  [82/252] summarize_standup_notes#7 unchanged      conf=1.00   23.3s  [tools 1|1 args 1|1 text 5|5]
+  [83/252] triage_ticket_json#7     unchanged      conf=1.00   18.7s  [tools 1|1 args 1|1 text 5|5]
+  [84/252] support_order_status#7   unchanged      conf=1.00   32.0s  [tools 1|1 args 1|1 text 5|5]
+  [85/252] agent_missing_param_ask#8 unchanged      conf=0.50   18.6s  [tools 1|1 args 1|1 text 5|5]
+  [86/252] classify_review_sentiment#8 unchanged      conf=1.00    8.7s  [tools 1|1 args 1|1 text 1|1]
+  [87/252] extract_invoice_fields#8 unchanged      conf=1.00   12.8s  [tools 1|1 args 1|1 text 2|3]
+  [88/252] agent_reschedule_two_step#8 unchanged      conf=1.00   42.1s  [tools 1|1 args 1|1 text 5|4]
+  [89/252] borderline_medication_question#8 unchanged      conf=1.00   37.9s  [tools 1|1 args 1|1 text 5|5]
+  [90/252] format_markdown_table#8  unchanged      conf=1.00   20.4s  [tools 1|1 args 1|1 text 4|5]
+  [91/252] sql_from_question#8      unchanged      conf=1.00    9.0s  [tools 1|1 args 1|1 text 1|1]
+  [92/252] rag_answer_with_citation#8 unchanged      conf=1.00   20.2s  [tools 1|1 args 1|1 text 5|5]
+  [93/252] rewrite_email_polite#8   unchanged      conf=1.00   22.4s  [tools 1|1 args 1|1 text 5|5]
+  [94/252] summarize_standup_notes#8 unchanged      conf=0.50   23.8s  [tools 1|1 args 1|1 text 5|5]
+  [95/252] triage_ticket_json#8     unchanged      conf=1.00   19.5s  [tools 1|1 args 1|1 text 5|5]
+  [96/252] support_order_status#8   unchanged      conf=1.00   31.8s  [tools 1|1 args 1|1 text 5|5]
+  [97/252] agent_missing_param_ask#9 unchanged      conf=1.00   21.4s  [tools 1|1 args 1|1 text 5|5]
+  [98/252] classify_review_sentiment#9 unchanged      conf=1.00    8.3s  [tools 1|1 args 1|1 text 1|1]
+  [99/252] agent_reschedule_two_step#9 unchanged      conf=1.00   36.1s  [tools 1|1 args 1|1 text 4|4]
+  [100/252] borderline_medication_question#9 unchanged      conf=1.00   31.4s  [tools 1|1 args 1|1 text 5|5]
+  [101/252] extract_invoice_fields#9 unchanged      conf=1.00   14.9s  [tools 1|1 args 1|1 text 2|1]
+  [102/252] format_markdown_table#9  unchanged      conf=1.00   16.3s  [tools 1|1 args 1|1 text 3|4]
+  [103/252] rag_answer_with_citation#9 unchanged      conf=1.00   18.6s  [tools 1|1 args 1|1 text 4|4]
+  [104/252] sql_from_question#9      unchanged      conf=1.00    9.1s  [tools 1|1 args 1|1 text 1|1]
+  [105/252] rewrite_email_polite#9   unchanged      conf=0.50   23.5s  [tools 1|1 args 1|1 text 5|5]
+  [106/252] summarize_standup_notes#9 unchanged      conf=0.22   26.0s  [tools 1|1 args 1|1 text 5|5]
+  [107/252] triage_ticket_json#9     unchanged      conf=1.00   22.7s  [tools 1|1 args 1|1 text 5|5]
+  [108/252] support_order_status#9   unchanged      conf=1.00   33.6s  [tools 1|1 args 1|1 text 5|5]
+  [109/252] agent_missing_param_ask#10 unchanged      conf=1.00   18.1s  [tools 1|1 args 1|1 text 5|5]
+  [110/252] classify_review_sentiment#10 unchanged      conf=1.00    8.2s  [tools 1|1 args 1|1 text 1|1]
+  [111/252] agent_reschedule_two_step#10 unchanged      conf=1.00   33.6s  [tools 1|1 args 1|1 text 3|4]
+  [112/252] borderline_medication_question#10 unchanged      conf=1.00   28.1s  [tools 1|1 args 1|1 text 5|5]
+  [113/252] extract_invoice_fields#10 unchanged      conf=1.00   16.6s  [tools 1|1 args 1|1 text 3|2]
+  [114/252] format_markdown_table#10 unchanged      conf=1.00   19.7s  [tools 1|1 args 1|1 text 5|4]
+  [115/252] rag_answer_with_citation#10 unchanged      conf=1.00   19.8s  [tools 1|1 args 1|1 text 5|4]
+  [116/252] rewrite_email_polite#10  unchanged      conf=1.00   27.1s  [tools 1|1 args 1|1 text 5|5]
+  [117/252] sql_from_question#10     unchanged      conf=1.00   10.7s  [tools 1|1 args 1|1 text 1|1]
+  [118/252] summarize_standup_notes#10 unchanged      conf=1.00   23.7s  [tools 1|1 args 1|1 text 5|5]
+  [119/252] triage_ticket_json#10    unchanged      conf=0.50   18.8s  [tools 1|1 args 1|1 text 5|5]
+  [120/252] agent_missing_param_ask#11 unchanged      conf=0.22   15.8s  [tools 1|1 args 1|1 text 4|4]
+  [121/252] support_order_status#10  unchanged      conf=1.00   31.0s  [tools 1|1 args 1|1 text 4|4]
+  [122/252] classify_review_sentiment#11 unchanged      conf=1.00    7.7s  [tools 1|1 args 1|1 text 1|1]
+  [123/252] extract_invoice_fields#11 unchanged      conf=1.00   16.2s  [tools 1|1 args 1|1 text 4|3]
+  [124/252] agent_reschedule_two_step#11 unchanged      conf=1.00   37.1s  [tools 1|1 args 1|1 text 5|3]
+  [125/252] borderline_medication_question#11 unchanged      conf=1.00   27.6s  [tools 1|1 args 1|1 text 5|5]
+  [126/252] rag_answer_with_citation#11 unchanged      conf=1.00   18.9s  [tools 1|1 args 1|1 text 4|5]
+  [127/252] format_markdown_table#11 unchanged      conf=1.00   22.1s  [tools 1|1 args 1|1 text 5|4]
+  [128/252] rewrite_email_polite#11  unchanged      conf=0.50   22.9s  [tools 1|1 args 1|1 text 5|5]
+  [129/252] sql_from_question#11     unchanged      conf=1.00    8.6s  [tools 1|1 args 1|1 text 1|1]
+  [130/252] summarize_standup_notes#11 unchanged      conf=1.00   24.0s  [tools 1|1 args 1|1 text 5|5]
+  [131/252] triage_ticket_json#11    unchanged      conf=0.26   18.3s  [tools 1|1 args 1|1 text 5|5]
+  [132/252] support_order_status#11  unchanged      conf=1.00   32.3s  [tools 1|1 args 1|1 text 5|5]
+  [133/252] agent_missing_param_ask#12 unchanged      conf=0.26   17.1s  [tools 1|1 args 1|1 text 5|4]
+  [134/252] classify_review_sentiment#12 unchanged      conf=1.00    7.4s  [tools 1|1 args 1|1 text 1|1]
+  [135/252] agent_reschedule_two_step#12 unchanged      conf=1.00   37.1s  [tools 1|1 args 1|1 text 5|3]
+  [136/252] borderline_medication_question#12 unchanged      conf=1.00   27.1s  [tools 1|1 args 1|1 text 5|5]
+  [137/252] extract_invoice_fields#12 unchanged      conf=1.00   15.2s  [tools 1|1 args 1|1 text 3|3]
+  [138/252] format_markdown_table#12 unchanged      conf=1.00   17.4s  [tools 1|1 args 1|1 text 4|4]
+  [139/252] rewrite_email_polite#12  unchanged      conf=1.00   22.1s  [tools 1|1 args 1|1 text 5|5]
+  [140/252] sql_from_question#12     unchanged      conf=1.00    9.3s  [tools 1|1 args 1|1 text 1|1]
+  [141/252] rag_answer_with_citation#12 unchanged      conf=1.00   32.2s  [tools 1|1 args 1|1 text 4|3]
+  [142/252] summarize_standup_notes#12 unchanged      conf=0.50   23.9s  [tools 1|1 args 1|1 text 5|5]
+  [143/252] triage_ticket_json#12    unchanged      conf=1.00   20.0s  [tools 1|1 args 1|1 text 5|5]
+  [144/252] support_order_status#12  unchanged      conf=1.00   31.9s  [tools 1|1 args 1|1 text 5|4]
+  [145/252] agent_missing_param_ask#13 unchanged      conf=1.00   15.5s  [tools 1|1 args 1|1 text 4|3]
+  [146/252] classify_review_sentiment#13 unchanged      conf=1.00    7.8s  [tools 1|1 args 1|1 text 1|1]
+  [147/252] extract_invoice_fields#13 unchanged      conf=1.00   14.4s  [tools 1|1 args 1|1 text 2|2]
+  [148/252] borderline_medication_question#13 unchanged      conf=1.00   27.5s  [tools 1|1 args 1|1 text 5|5]
+  [149/252] agent_reschedule_two_step#13 unchanged      conf=1.00   36.9s  [tools 1|1 args 1|1 text 5|5]
+  [150/252] format_markdown_table#13 unchanged      conf=1.00   18.5s  [tools 1|1 args 1|1 text 4|4]
+  [151/252] rag_answer_with_citation#13 unchanged      conf=1.00   19.6s  [tools 1|1 args 1|1 text 5|5]
+  [152/252] rewrite_email_polite#13  unchanged      conf=1.00   21.0s  [tools 1|1 args 1|1 text 5|5]
+  [153/252] sql_from_question#13     unchanged      conf=1.00    8.4s  [tools 1|1 args 1|1 text 1|1]
+  [154/252] summarize_standup_notes#13 unchanged      conf=0.50   22.0s  [tools 1|1 args 1|1 text 5|5]
+  [155/252] triage_ticket_json#13    unchanged      conf=1.00   18.9s  [tools 1|1 args 1|1 text 5|5]
+  [156/252] support_order_status#13  unchanged      conf=1.00   31.8s  [tools 1|1 args 1|1 text 4|5]
+  [157/252] agent_missing_param_ask#14 unchanged      conf=1.00   15.4s  [tools 1|1 args 1|1 text 4|5]
+  [158/252] classify_review_sentiment#14 unchanged      conf=1.00    7.5s  [tools 1|1 args 1|1 text 1|1]
+  [159/252] agent_reschedule_two_step#14 unchanged      conf=1.00   36.1s  [tools 1|1 args 1|1 text 4|5]
+  [160/252] borderline_medication_question#14 unchanged      conf=0.50   28.6s  [tools 1|1 args 1|1 text 5|5]
+  [161/252] extract_invoice_fields#14 unchanged      conf=1.00   22.5s  [tools 1|1 args 1|1 text 3|3]
+  [162/252] format_markdown_table#14 unchanged      conf=1.00   19.1s  [tools 1|1 args 1|1 text 5|4]
+  [163/252] rag_answer_with_citation#14 unchanged      conf=1.00   20.2s  [tools 1|1 args 1|1 text 3|5]
+  [164/252] sql_from_question#14     unchanged      conf=1.00    8.9s  [tools 1|1 args 1|1 text 1|1]
+  [165/252] rewrite_email_polite#14  unchanged      conf=0.50   22.4s  [tools 1|1 args 1|1 text 5|5]
+  [166/252] summarize_standup_notes#14 unchanged      conf=0.22   23.1s  [tools 1|1 args 1|1 text 5|5]
+  [167/252] triage_ticket_json#14    unchanged      conf=1.00   19.9s  [tools 1|1 args 1|1 text 5|5]
+  [168/252] support_order_status#14  unchanged      conf=1.00   33.1s  [tools 1|1 args 1|1 text 4|5]
+  [169/252] agent_missing_param_ask#15 unchanged      conf=0.50   18.1s  [tools 1|1 args 1|1 text 5|4]
+  [170/252] classify_review_sentiment#15 unchanged      conf=1.00    8.3s  [tools 1|1 args 1|1 text 1|1]
+  [171/252] agent_reschedule_two_step#15 unchanged      conf=1.00   37.0s  [tools 1|1 args 1|1 text 4|5]
+  [172/252] extract_invoice_fields#15 unchanged      conf=1.00   13.6s  [tools 1|1 args 1|1 text 3|2]
+  [173/252] borderline_medication_question#15 unchanged      conf=1.00   27.2s  [tools 1|1 args 1|1 text 5|5]
+  [174/252] format_markdown_table#15 unchanged      conf=1.00   17.0s  [tools 1|1 args 1|1 text 2|4]
+  [175/252] rag_answer_with_citation#15 unchanged      conf=1.00   20.5s  [tools 1|1 args 1|1 text 5|4]
+  [176/252] rewrite_email_polite#15  unchanged      conf=1.00   21.5s  [tools 1|1 args 1|1 text 5|5]
+  [177/252] sql_from_question#15     unchanged      conf=1.00   11.4s  [tools 1|1 args 1|1 text 1|1]
+  [178/252] triage_ticket_json#15    unchanged      conf=1.00   20.5s  [tools 1|1 args 1|1 text 5|5]
+  [179/252] summarize_standup_notes#15 unchanged      conf=0.50   27.1s  [tools 1|1 args 1|1 text 5|5]
+  [180/252] support_order_status#15  unchanged      conf=1.00   33.6s  [tools 1|1 args 1|1 text 5|4]
+  [181/252] agent_missing_param_ask#16 unchanged      conf=1.00   18.3s  [tools 1|1 args 1|1 text 4|5]
+  [182/252] classify_review_sentiment#16 unchanged      conf=1.00    9.1s  [tools 1|1 args 1|1 text 1|1]
+  [183/252] agent_reschedule_two_step#16 unchanged      conf=1.00   34.1s  [tools 1|1 args 1|1 text 4|3]
+  [184/252] borderline_medication_question#16 unchanged      conf=1.00   30.1s  [tools 1|1 args 1|1 text 5|5]
+  [185/252] extract_invoice_fields#16 unchanged      conf=1.00   13.3s  [tools 1|1 args 1|1 text 2|2]
+  [186/252] format_markdown_table#16 unchanged      conf=1.00   17.9s  [tools 1|1 args 1|1 text 3|3]
+  [187/252] rag_answer_with_citation#16 unchanged      conf=1.00   16.7s  [tools 1|1 args 1|1 text 5|4]
+  [188/252] sql_from_question#16     unchanged      conf=1.00    9.8s  [tools 1|1 args 1|1 text 1|1]
+  [189/252] rewrite_email_polite#16  unchanged      conf=1.00   23.1s  [tools 1|1 args 1|1 text 5|5]
+  [190/252] summarize_standup_notes#16 unchanged      conf=1.00   22.1s  [tools 1|1 args 1|1 text 5|5]
+  [191/252] triage_ticket_json#16    unchanged      conf=1.00   18.4s  [tools 1|1 args 1|1 text 4|5]
+  [192/252] support_order_status#16  unchanged      conf=1.00   29.8s  [tools 1|1 args 1|1 text 5|5]
+  [193/252] agent_missing_param_ask#17 unchanged      conf=1.00   16.8s  [tools 1|1 args 1|1 text 5|4]
+  [194/252] classify_review_sentiment#17 unchanged      conf=1.00    7.1s  [tools 1|1 args 1|1 text 1|1]
+  [195/252] agent_reschedule_two_step#17 unchanged      conf=1.00   32.2s  [tools 1|1 args 1|1 text 3|4]
+  [196/252] borderline_medication_question#17 unchanged      conf=1.00   27.0s  [tools 1|1 args 1|1 text 5|5]
+  [197/252] extract_invoice_fields#17 unchanged      conf=1.00   17.4s  [tools 1|1 args 1|1 text 4|4]
+  [198/252] format_markdown_table#17 unchanged      conf=1.00   18.0s  [tools 1|1 args 1|1 text 3|5]
+  [199/252] rag_answer_with_citation#17 unchanged      conf=1.00   19.5s  [tools 1|1 args 1|1 text 5|4]
+  [200/252] sql_from_question#17     unchanged      conf=1.00   10.5s  [tools 1|1 args 1|1 text 1|1]
+  [201/252] rewrite_email_polite#17  unchanged      conf=1.00   25.1s  [tools 1|1 args 1|1 text 5|5]
+  [202/252] summarize_standup_notes#17 unchanged      conf=1.00   25.8s  [tools 1|1 args 1|1 text 5|5]
+  [203/252] triage_ticket_json#17    unchanged      conf=1.00   21.3s  [tools 1|1 args 1|1 text 5|5]
+  [204/252] support_order_status#17  unchanged      conf=1.00   34.8s  [tools 1|1 args 1|1 text 5|4]
+  [205/252] agent_missing_param_ask#18 unchanged      conf=1.00   19.3s  [tools 1|1 args 1|1 text 5|4]
+  [206/252] classify_review_sentiment#18 unchanged      conf=1.00    7.5s  [tools 1|1 args 1|1 text 1|1]
+  [207/252] extract_invoice_fields#18 unchanged      conf=1.00   15.0s  [tools 1|1 args 1|1 text 1|3]
+  [208/252] agent_reschedule_two_step#18 unchanged      conf=1.00   40.1s  [tools 1|1 args 1|1 text 5|5]
+  [209/252] borderline_medication_question#18 unchanged      conf=1.00   28.3s  [tools 1|1 args 1|1 text 5|5]
+  [210/252] format_markdown_table#18 unchanged      conf=1.00   19.7s  [tools 1|1 args 1|1 text 4|4]
+  [211/252] rag_answer_with_citation#18 unchanged      conf=1.00   22.5s  [tools 1|1 args 1|1 text 5|3]
+  [212/252] rewrite_email_polite#18  unchanged      conf=1.00   22.5s  [tools 1|1 args 1|1 text 5|5]
+  [213/252] sql_from_question#18     unchanged      conf=1.00   11.3s  [tools 1|1 args 1|1 text 1|1]
+  [214/252] summarize_standup_notes#18 unchanged      conf=0.08   23.5s  [tools 1|1 args 1|1 text 5|5]
+  [215/252] triage_ticket_json#18    unchanged      conf=1.00   19.6s  [tools 1|1 args 1|1 text 5|5]
+  [216/252] support_order_status#18  unchanged      conf=1.00   33.5s  [tools 1|1 args 1|1 text 5|4]
+  [217/252] agent_missing_param_ask#19 unchanged      conf=1.00   17.0s  [tools 1|1 args 1|1 text 5|5]
+  [218/252] classify_review_sentiment#19 unchanged      conf=1.00    7.3s  [tools 1|1 args 1|1 text 1|1]
+  [219/252] borderline_medication_question#19 unchanged      conf=1.00   29.5s  [tools 1|1 args 1|1 text 5|5]
+  [220/252] extract_invoice_fields#19 unchanged      conf=1.00   20.1s  [tools 1|1 args 1|1 text 3|1]
+  [221/252] agent_reschedule_two_step#19 unchanged      conf=1.00   46.6s  [tools 1|1 args 1|1 text 4|5]
+  [222/252] format_markdown_table#19 unchanged      conf=1.00   18.9s  [tools 1|1 args 1|1 text 4|5]
+  [223/252] sql_from_question#19     unchanged      conf=1.00    9.4s  [tools 1|1 args 1|1 text 1|1]
+  [224/252] rag_answer_with_citation#19 unchanged      conf=1.00   26.3s  [tools 1|1 args 1|1 text 5|5]
+  [225/252] rewrite_email_polite#19  unchanged      conf=1.00   25.1s  [tools 1|1 args 1|1 text 5|5]
+  [226/252] summarize_standup_notes#19 unchanged      conf=1.00   22.3s  [tools 1|1 args 1|1 text 5|5]
+  [227/252] triage_ticket_json#19    unchanged      conf=1.00   21.6s  [tools 1|1 args 1|1 text 5|5]
+  [228/252] support_order_status#19  unchanged      conf=1.00   30.5s  [tools 1|1 args 1|1 text 5|4]
+  [229/252] agent_missing_param_ask#20 unchanged      conf=1.00   14.7s  [tools 1|1 args 1|1 text 4|5]
+  [230/252] classify_review_sentiment#20 unchanged      conf=1.00    8.1s  [tools 1|1 args 1|1 text 1|1]
+  [231/252] extract_invoice_fields#20 unchanged      conf=1.00   12.5s  [tools 1|1 args 1|1 text 1|3]
+  [232/252] agent_reschedule_two_step#20 unchanged      conf=1.00   30.5s  [tools 1|1 args 1|1 text 3|2]
+  [233/252] borderline_medication_question#20 unchanged      conf=1.00   32.5s  [tools 1|1 args 1|1 text 5|5]
+  [234/252] format_markdown_table#20 unchanged      conf=1.00   20.0s  [tools 1|1 args 1|1 text 5|4]
+  [235/252] rag_answer_with_citation#20 unchanged      conf=1.00   17.6s  [tools 1|1 args 1|1 text 3|5]
+  [236/252] rewrite_email_polite#20  unchanged      conf=1.00   23.2s  [tools 1|1 args 1|1 text 5|5]
+  [237/252] sql_from_question#20     unchanged      conf=1.00   11.8s  [tools 1|1 args 1|1 text 1|1]
+  [238/252] summarize_standup_notes#20 unchanged      conf=0.50   26.8s  [tools 1|1 args 1|1 text 5|5]
+  [239/252] triage_ticket_json#20    unchanged      conf=1.00   21.4s  [tools 1|1 args 1|1 text 5|5]
+  [240/252] support_order_status#20  unchanged      conf=1.00   30.4s  [tools 1|1 args 1|1 text 4|5]
+  [241/252] agent_missing_param_ask  regression     conf=1.00   22.3s  [tools 1|1 args 1|1 text 5|3]
+  [242/252] classify_review_sentiment regression     conf=1.00   13.5s  [tools 1|1 args 1|1 text 1|1]
+  [243/252] agent_reschedule_two_step regression     conf=1.00   32.4s  [tools 1|1 args 1|1 text 3|4]
+  [244/252] borderline_medication_question regression     conf=1.00   25.7s  [tools 1|1 args 1|1 text 5|1]
+  [245/252] extract_invoice_fields   regression     conf=1.00   17.6s  [tools 1|1 args 1|1 text 2|1]
+  [246/252] format_markdown_table    regression     conf=1.00   23.1s  [tools 1|1 args 1|1 text 5|5]
+  [247/252] rag_answer_with_citation changed_minor  conf=1.00   22.3s  [tools 1|1 args 1|1 text 4|5]
+  [248/252] sql_from_question        regression     conf=1.00   15.6s  [tools 1|1 args 1|1 text 1|1]
+  [249/252] rewrite_email_polite     regression     conf=1.00   26.6s  [tools 1|1 args 1|1 text 5|5]
+  [250/252] summarize_standup_notes  regression     conf=1.00   21.7s  [tools 1|1 args 1|1 text 5|5]
+  [251/252] triage_ticket_json       unchanged      conf=0.08   18.5s  [tools 1|1 args 1|1 text 5|4]
+  [252/252] support_order_status     regression     conf=1.00   25.9s  [tools 1|1 args 1|1 text 5|3]
+
+EQUIVALENT PAIRS (same model vs itself) -- any non-`unchanged` is a false alarm
+  repertoire = DISTINCT behaviours observed, base|cand (diagnostic, not the test).
+  A trial is EXCLUDED when every channel returned p = 1.00 - it could not have
+  fired at any ALPHA < 1. Anything the engine flagged is always scored.
+  agent_missing_param_ask#1 unchanged      conf=0.50  [tools 1|1 args 1|1 text 4|3]
+  agent_reschedule_two_step#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|2]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#1 unchanged      conf=0.26  [tools 1|1 args 1|1 text 5|5]
+  sql_from_question#1    unchanged      conf=0.50  [tools 1|1 args 1|1 text 1|2]
+  summarize_standup_notes#1 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#1 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#1   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#2    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#2 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#2 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#2   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#3 unchanged      conf=0.26  [tools 1|1 args 1|1 text 4|4]
+  agent_reschedule_two_step#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#3    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#3 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#3   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#4    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#4 unchanged      conf=0.22  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#4 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#4   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#5    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#5 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#5   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#6    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#6 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#6   unchanged      conf=0.26  [tools 1|1 args 1|1 text 5|5]
+  agent_missing_param_ask#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#7 unchanged      conf=0.50  [tools 1|1 args 1|1 text 2|3]
+  format_markdown_table#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#7 unchanged      conf=0.26  [tools 1|1 args 1|1 text 5|5]
+  sql_from_question#7    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#7 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#7   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#8 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  agent_reschedule_two_step#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#8    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#8 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#8 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#8   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|1]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#9 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  sql_from_question#9    unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#9 unchanged      conf=0.22  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#9 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#9   unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#10   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#10 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#10  unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  agent_missing_param_ask#11 unchanged      conf=0.22  [tools 1|1 args 1|1 text 4|4]
+  agent_reschedule_two_step#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#11 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  sql_from_question#11   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#11 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#11  unchanged      conf=0.26  [tools 1|1 args 1|1 text 5|5]
+  agent_missing_param_ask#12 unchanged      conf=0.26  [tools 1|1 args 1|1 text 5|4]
+  agent_reschedule_two_step#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#12   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#12 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#12 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#12  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#13   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#13 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#13 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#13  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#14 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#14 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#14 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  classify_review_sentiment#14 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#14 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#14 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#14 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#14 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  sql_from_question#14   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#14 unchanged      conf=0.22  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#14 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#14  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#15 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|4]
+  agent_reschedule_two_step#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#15   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#15 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#15 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#15  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|3]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 2|2]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|3]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#16   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#16 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#16  unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|4]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|5]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#17   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#17 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#17  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|3]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#18   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#18 unchanged      conf=0.08  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#18 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#18  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|1]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#19   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  support_order_status#19 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#19  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  agent_missing_param_ask#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  agent_reschedule_two_step#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|2]  <-- p=1.00 everywhere; could not have fired
+  borderline_medication_question#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  classify_review_sentiment#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  extract_invoice_fields#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|3]  <-- p=1.00 everywhere; could not have fired
+  format_markdown_table#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|4]  <-- p=1.00 everywhere; could not have fired
+  rag_answer_with_citation#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 3|5]  <-- p=1.00 everywhere; could not have fired
+  rewrite_email_polite#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+  sql_from_question#20   unchanged      conf=1.00  [tools 1|1 args 1|1 text 1|1]  <-- p=1.00 everywhere; could not have fired
+  summarize_standup_notes#20 unchanged      conf=0.50  [tools 1|1 args 1|1 text 5|5]
+  support_order_status#20 unchanged      conf=1.00  [tools 1|1 args 1|1 text 4|5]  <-- p=1.00 everywhere; could not have fired
+  triage_ticket_json#20  unchanged      conf=1.00  [tools 1|1 args 1|1 text 5|5]  <-- p=1.00 everywhere; could not have fired
+
+  False-positive rate: 0/28 = 0%
+  95% upper bound on the true rate: 10.1% (one-sided Clopper-Pearson, n=28)
+  Unmeasured (excluded from the rate): 0
+  Could not have fired at ALPHA (excluded from the rate): 212
+
+  NOTE: the rate is over the 28 scenario(s) in which something could have
+  fired; 212 could not, and are excluded.
+
+INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and
+  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the
+  candidate may have resisted the injected instruction. Read the explanations.
+  Nothing is excluded here but an abstention: a candidate that still reads
+  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted
+  instruction from a dead engine, so it never excludes on that basis.
+  agent_missing_param_ask regression     conf=1.00  [tools 1|1 args 1|1 text 5|3]  detected  (tool-call behavior changed: [] -> ['send_statement']; s)
+  agent_reschedule_two_step regression     conf=1.00  [tools 1|1 args 1|1 text 3|4]  detected  (tool-call behavior changed: ['get_appointment', 'resche)
+  borderline_medication_question regression     conf=1.00  [tools 1|1 args 1|1 text 5|1]  detected  (refusal rate 0% -> 100%; semantic drift: candidate answ)
+  classify_review_sentiment regression     conf=1.00  [tools 1|1 args 1|1 text 1|1]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  extract_invoice_fields regression     conf=1.00  [tools 1|1 args 1|1 text 2|1]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  format_markdown_table  regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (output format drift: violates the scenario's text asser)
+  rag_answer_with_citation changed_minor  conf=1.00  [tools 1|1 args 1|1 text 4|5]  detected  (output format drift: violates the scenario's text asser)
+  rewrite_email_polite   regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  sql_from_question      regression     conf=1.00  [tools 1|1 args 1|1 text 1|1]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  summarize_standup_notes regression     conf=1.00  [tools 1|1 args 1|1 text 5|5]  detected  (semantic drift: candidate answers diverge in meaning fr)
+  support_order_status   regression     conf=1.00  [tools 1|1 args 1|1 text 5|3]  detected  (tool-call behavior changed: ['lookup_order'] -> []; sem)
+  triage_ticket_json     unchanged      conf=0.08  [tools 1|1 args 1|1 text 5|4]  <-- MISSED  (no statistically significant behavior change)
+
+  Detection: 11/12 injected perturbations caught
+  95% lower bound on the true rate: 66.1% (one-sided Clopper-Pearson, n=12)
+  That rate is over perturbations APPLIED, not over behaviour changes; and the
+  interval treats them as exchangeable trials, which by construction they are
+  not - each targets a different signal.
+  Unmeasured (excluded): 0
+
+  NOTE: 1 perturbation(s) MISSED - counted against detection, never
+  excluded. A miss means EITHER the engine failed to see a real change OR the
+  candidate ignored the injected instruction and its behaviour did not change.
+  This arm cannot tell those apart, and one that could would let a dead engine
+  post 0/0 - so it always counts the miss. Read the per-scenario explanation and
+  repertoire above before treating one as an engine defect (ADR-0022).
+
+  This invocation: 252 trial(s) run live, 0 reused from the artifact, 31.0 min wall.
+  Replay tokens in/out over all 252 trial(s): 477,045/150,107; judge calls implied by the traces: 1704 (judge tokens are not metered).
+  Artifact: reports/fp-runs/2026-09-07/s2b-fp-suite-gpt-4o-mini.jsonl  (re-read offline with --rescore; traces included)

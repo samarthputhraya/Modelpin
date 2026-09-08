@@ -1,0 +1,23 @@
+{
+  "id": "anchor_closed_set_label",
+  "name": "NEGATIVE CONTROL - one label from a closed set, spelled out in the prompt, on an unambiguous message",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You route incoming support messages. Reply with exactly one of these labels, spelled exactly as written here and in capitals, and nothing else: BILLING, TECHNICAL, ACCOUNT."
+      },
+      {
+        "role": "user",
+        "content": "I was charged twice for June and the second charge still hasn't been refunded."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "BILLING"
+    ]
+  }
+}

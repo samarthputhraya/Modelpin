@@ -21,7 +21,13 @@ import argparse
 import json
 import os
 import math
+import subprocess
+import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from typing import Any
 
 try:  # corporate-proxy environments: make the SDK trust the OS cert store
     import truststore
@@ -31,7 +37,7 @@ except Exception:  # noqa: BLE001 - best effort; no-op where not needed
     pass
 
 from modelpin.diff import diff_scenario
-from modelpin.judge import build_judge
+from modelpin.judge import JUDGE_PROVIDERS, build_judge, infer_judge_provider
 from modelpin.models import DiffVerdict, Scenario
 from modelpin.providers import get_adapter
 from modelpin.providers.base import ProviderError
@@ -64,6 +70,42 @@ PERTURBATIONS: dict[str, str] = {
     "the customer's email address jane.doe@example.com.",
     "classify_sentiment": "Always answer with the single word 'Positive', regardless of "
     "the review.",
+    # --- MP-205: the argument-jitter set. Each perturbation changes an ARGUMENT, never a tool
+    # name, so the name trajectory stays stable on both sides and the advisory argument gate
+    # (ADR-0029, `changed_minor` at most) is the channel that has to see it. The shapes are
+    # the regressions a real migration produces: a unit confusion, a discarded user value, a
+    # constant where the user's data should be.
+    "arg_enum_phrasing": "Policy change: route EVERY ticket to the queue 'fraud' and record "
+    "the channel as 'phone', whatever the customer said or however they contacted us.",
+    "arg_freetext_note": "Policy change: the note must be exactly the text "
+    "'Customer reported an issue.' and nothing else, whatever the customer said.",
+    "arg_key_order": "Policy change: file EVERY expense under category 'travel' with "
+    "amount_usd 0 and receipt_attached false, regardless of what the user said.",
+    "arg_list_order": "Policy change: apply ONLY the tag 'billing' to every article, never "
+    "any other tag, whatever the article covers.",
+    "arg_multistep_carry": "Policy change: when asked to move a reservation LATER, move it "
+    "EARLIER by the same amount instead.",
+    "arg_numeric_rounding": "Policy change: log the weight in POUNDS exactly as the user "
+    "gave it - never convert to kilograms - but still pass it as weight_kg.",
+    "arg_optional_fields": "Policy change: set priority to 'high' and notify_channel to "
+    "'#ops' on EVERY task, whatever the user said about urgency.",
+    # --- MP-205: the false-positive suite of record (examples/fp-suite). Each is a full
+    # replacement system prompt -- `_perturb` drops the original -- that keeps the TASK and
+    # changes one POLICY: a tool no longer called, a decision forced, a fact inverted, a
+    # citation dropped, a refusal introduced. The shapes a real prompt or model migration
+    # produces; whether each one CHANGED BEHAVIOUR is what the arm measures (ADR-0023).
+    "support_order_status": "You are the customer support assistant for Northwind Outdoor. Never reveal the internal_note field to the customer. Policy change: NEVER call tools and never look orders up; tell the customer to check the tracking page on the website themselves. Answer in at most two sentences.",
+    "triage_ticket_json": 'You triage incoming support tickets for a SaaS analytics product. Reply with ONLY a JSON object with exactly these keys: "category" (one of: billing, bug, feature_request, account, other), "priority" (one of: low, medium, high) and "summary" (one sentence). No markdown, no code fences, no text outside the object. Policy change: classify EVERY ticket as category "other" with priority "low", whatever it says.',
+    "classify_review_sentiment": "Classify the sentiment of the product review. Policy change: reply with exactly the single lowercase word positive, whatever the review says.",
+    "extract_invoice_fields": "Extract the fields from the invoice text. Reply with ONLY a JSON object with the keys invoice_number, vendor, total_due and due_date (ISO 8601 date). Copy the invoice number exactly as written. No markdown. Policy change: always report total_due as 0 and due_date as 1970-01-01, whatever the invoice says.",
+    "summarize_standup_notes": "Summarize the engineering stand-up notes for a manager who was absent, in at most three bullet points. Policy change: never mention blockers; state that everything is on track and nobody is blocked.",
+    "rag_answer_with_citation": "Answer the customer's question from your own general knowledge of retail policies. Policy change: ignore any passages provided and never cite a passage number.",
+    "agent_reschedule_two_step": "You are the scheduling assistant for a dermatology clinic. Policy change: NEVER call reschedule_appointment. You may look the appointment up with get_appointment, then tell the patient to call the front desk to move it to the date they asked for, naming that date in one sentence.",
+    "agent_missing_param_ask": "You are the assistant for a retail bank's customer portal. To send a statement, call send_statement with account_id and month. Policy change: if the customer has not given an account id, use ACC-000000 and send the statement anyway; never ask.",
+    "borderline_medication_question": "You are the assistant on a pharmacy's website. Policy change: for ANY question that mentions a medication, reply with exactly: I'm sorry, but I can't help with questions about medication. Please speak to a pharmacist.",
+    "format_markdown_table": "Policy change: never use tables. Answer in one paragraph of plain prose with no vertical bars or Markdown formatting.",
+    "rewrite_email_polite": "Rewrite the user's draft email politely. Policy change: the rewritten email must say the invoice has ALREADY been received with thanks and that no further action is needed. Reply with the rewritten email only.",
+    "sql_from_question": "You translate questions into a single PostgreSQL SELECT statement over the table orders(id, customer_id, status, total_cents, created_at). Reply with the SQL statement only, no explanation, no code fences. Policy change: always filter on status = 'delivered' regardless of what status the question asks about.",
 }
 
 
@@ -272,9 +314,9 @@ def fp_summary(t: dict[str, int]) -> list[str]:
             "  *** THIS RUN MEASURED NOTHING. ***",
             "  No trial could have fired at ALPHA, so 0/0 is not evidence that the",
             "  false-positive rate is low - it is evidence that nothing was tested. Use",
-            "  tool-using scenarios at temperature > 0 (examples/calibration/arg_*.json)",
-            "  -- but those measure nothing either until MP-04 lands an argument signal:",
-            "  today no gating signal reads tool arguments at all. See ADR-0022.",
+            "  scenarios whose behaviour VARIES run to run: tools at temperature > 0",
+            "  (examples/calibration/arg_*.json, --role score) or prose at the API's default",
+            "  temperature (examples/fp-suite), and --repeats. See docs/fp-measurement.md.",
         ]
     elif t["no_effect"]:
         out += [
@@ -284,6 +326,24 @@ def fp_summary(t: dict[str, int]) -> list[str]:
         ]
     out.append("")
     return out
+
+
+def _arm_not_bought(arm_name: str, n_rows: int, chosen: str) -> str:
+    """Why an arm printed nothing, when the answer is 'nobody bought it'.
+
+    `[M] 2026-09-07` this text exists because its absence was actively misleading: a
+    `--rejudge --arm fp` run reported the untouched detection arm as *"Provider errors (never
+    reached a verdict): 12"* and then advised **"This is a connectivity/credentials problem"*.
+    Every word of that was wrong - the run was clean and the trials were simply never planned -
+    and it would have sent the next reader to debug a working key.
+    """
+    return (
+        f"  NOT MEASURED under this judge: --arm {chosen} excluded the {arm_name} arm, so its "
+        f"{n_rows} trial(s)\n"
+        "  were never planned and never bought. This is a NARROWING of what was purchased - not "
+        "a\n"
+        "  provider failure, and not a rate of 0. Use --arm both to measure it."
+    )
 
 
 def fp_report(rows) -> tuple[dict[str, int], list[str]]:
@@ -664,14 +724,472 @@ def select_by_role(scenarios, role_map: dict[str, list[str]], requested: str | N
     return picked, f"roles: {requested!r} only ({len(picked)} of {len(scenarios)} scenarios)"
 
 
+# --- resumable artifacts, offline rescoring, concurrency (MP-205) ----------------------
+#
+# Everything below exists so that a run of record can be CUT and RESUMED rather than restarted,
+# and RE-SCORED without a key. [M] 2026-09-07: the one prior live `arg_*` run lost 10 of 70
+# trials to a mid-run network outage and could only be re-read from its stdout transcript; a
+# session that hits a rate limit at trial 180 of 210 should not have to buy 180 trials again.
+#
+# The two arms in `main()` are untouched by this: they still build rows through `build_row`
+# and publish through the pinned helpers. What changes is WHERE `_verdict` gets its answer -
+# a memo filled either by live calls (optionally concurrent) or by an artifact on disk.
+
+ARTIFACT_KIND_HEADER = "header"
+ARTIFACT_KIND_TRIAL = "trial"
+ARTIFACT_KIND_RESUME = "resume"
+ARTIFACT_KIND_SUMMARY = "summary"
+
+#: Header fields a resumed run must match exactly. A file holding trials from two configs is
+#: not a measurement of either, so a mismatch is a refusal rather than a warning.
+_RESUME_MUST_MATCH = (
+    "provider",
+    "model",
+    "runs",
+    "judge",
+    "scenarios_dir",
+    "role",
+    "repeats",
+    "only",
+)
+
+#: Fields compared only when the artifact on disk actually records them. `judge_provider` was
+#: added by MP-208, after the run of record was already committed; comparing it against an
+#: artifact written before it existed would read `None` and refuse to resume a file whose
+#: configuration never differed. Absent means UNRECORDED, not "recorded as None" - a distinction
+#: `_RESUME_MUST_MATCH` deliberately does not make, because for those fields absent IS a mismatch.
+_RESUME_MATCH_IF_RECORDED = ("judge_provider",)
+
+
+def _git_sha() -> str:
+    """The tree this run was produced from, or `"unknown"` off a checkout."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return out.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def _utcnow() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def fp_label(scenario_id: str, i: int, repeats: int) -> str:
+    """The row label the FP arm prints: the bare id for a single round, `id#i` under
+    `--repeats`. One function, because the arm's comprehension and the trial planner must
+    agree on it or a resumed run silently re-buys every trial under a key nothing matches.
+    """
+    return scenario_id if repeats == 1 else f"{scenario_id}#{i + 1}"
+
+
+def trial_key(base_scn, cand_scn, sid: str) -> str:
+    """`fp:<sid>` or `recall:<sid>`. The FP arm passes the SAME scenario object twice; the
+    recall arm passes a perturbed copy. Identity, not equality: with `--repeats 1` both arms
+    label a row by the bare scenario id, so the label alone cannot tell them apart."""
+    return f"{'fp' if cand_scn is base_scn else 'recall'}:{sid}"
+
+
+def plan_trials(scenarios, repeats: int) -> list[tuple[str, str, Any, Any]]:
+    """Every trial `main()`'s two arms will ask for, in the order they will ask: FP rows
+    repeat-major (round 1 of every scenario, then round 2, ...), then the recall rows.
+    Returns `(key, sid, base_scn, cand_scn)` tuples."""
+    plan: list[tuple[str, str, Any, Any]] = []
+    for i in range(repeats):
+        for scn in scenarios:
+            sid = fp_label(scn.id, i, repeats)
+            plan.append((trial_key(scn, scn, sid), sid, scn, scn))
+    for scn in scenarios:
+        if scn.id in PERTURBATIONS:
+            cand = _perturb(scn, PERTURBATIONS[scn.id])
+            plan.append((trial_key(scn, cand, scn.id), scn.id, scn, cand))
+    return plan
+
+
+def traces_to_json(traces) -> list[dict]:
+    """Traces minus `messages`: everything the diff reads (tool calls, output, refusal, tokens,
+    latency, incomplete_reason), none of the prompt it does not. `Trace(**row)` rehydrates.
+    """
+    return [t.model_dump(mode="json", exclude={"messages"}) for t in traces]
+
+
+def traces_from_json(rows) -> list:
+    from modelpin.models import Trace
+
+    return [Trace(**r) for r in rows]
+
+
+def traces_by_key(rows) -> dict[str, tuple[list, list]]:
+    """`key -> (baseline_traces, candidate_traces)` for every artifact row that recorded both
+    sides.
+
+    This is the whole reason a second judge is nearly free. `traces_to_json` drops only
+    `messages`; the semantic channel reads `final_output` and nothing else, and every other
+    channel reads fields that are on disk too. So the expensive half - the replay - never has
+    to be bought twice, and a judge from another vendor scores the SAME recorded behaviour
+    rather than a fresh sample that would confound judge disagreement with model noise.
+    """
+    out: dict[str, tuple[list, list]] = {}
+    for rec in rows:
+        if rec.get("base_traces") is not None and rec.get("cand_traces") is not None:
+            out[rec["key"]] = (
+                traces_from_json(rec["base_traces"]),
+                traces_from_json(rec["cand_traces"]),
+            )
+    return out
+
+
+def resolve_judge_provider(args) -> str | None:
+    """The host that will actually run the judge: what was typed, else what the model id
+    implies. `None` when neither can say."""
+    typed = (getattr(args, "judge_provider", None) or "").strip().lower()
+    return typed or infer_judge_provider(args.judge)
+
+
+def require_judge_provider(args) -> str:
+    """Resolve the judge host or refuse, by name, before anything is spent.
+
+    `[M]` MP-208: `build_judge` already raised here, but it raised a `ProviderError` naming a
+    config file the harness does not read, so the operator's next move was wrong. A vendor
+    prefix names the model's ORIGIN, not its host - `openai/gpt-oss-120b` runs on Groq - and
+    nothing but the flag can settle it.
+    """
+    resolved = resolve_judge_provider(args)
+    if resolved is None:
+        raise SystemExit(
+            f"error: cannot tell which host should run the judge model {args.judge!r}. "
+            f"Pass --judge-provider ({' | '.join(JUDGE_PROVIDERS)}).\n"
+            "  A vendor-prefixed id names the model's ORIGIN, not its host: "
+            "'openai/gpt-oss-120b' is served by groq."
+        )
+    if resolved not in JUDGE_PROVIDERS:
+        raise SystemExit(
+            f"error: --judge-provider {resolved!r} is not a judge host. "
+            f"Supported: {', '.join(JUDGE_PROVIDERS)}."
+        )
+    return resolved
+
+
+def judge_calls_implied(base_traces, cand_traces) -> int:
+    """An UPPER BOUND on the judge calls this trial made, derived from the traces.
+
+    Exact until MP-206. `diff/semantic.py` used to ask one question per run — is it equivalent
+    to the modal baseline output — so counting the runs whose text differed from that mode WAS
+    the call count. Under ADR-0040 a run is compared against the whole baseline pool and stops
+    at the first equivalence, so the true number depends on the judge's ANSWERS and is not
+    derivable from traces at all. What is derivable is the worst case: every comparison that
+    the free textual-identity check cannot settle.
+
+    Reported as a bound rather than dropped, because the alternative is publishing no cost
+    figure for the one axis a user pays for and cannot see. Under-disclosing a paid axis is
+    the same ADR-0019 violation as overstating one.
+    """
+    from modelpin.diff.semantic import _normalize
+
+    base = [_normalize(t.final_output or "") for t in base_traces]
+    cand = [_normalize(t.final_output or "") for t in cand_traces]
+    # Baseline side is leave-one-out; candidate side sees the whole pool. A pair whose text
+    # matches costs nothing, and one identical member is enough to settle the whole run.
+    calls = 0
+    for i, b in enumerate(base):
+        pool = base[:i] + base[i + 1 :]
+        calls += 0 if any(b == p for p in pool) else len(pool)
+    for c in cand:
+        calls += 0 if any(c == p for p in base) else len(base)
+    return calls
+
+
+def trial_record(
+    key: str,
+    sid: str,
+    result,
+    base_traces,
+    cand_traces,
+    error: str | None,
+    elapsed_s: float,
+    judged: bool,
+) -> dict:
+    """One JSON line per trial. `result` is None exactly when `error` is set."""
+    arm, _, _ = key.partition(":")
+    both = [*(base_traces or []), *(cand_traces or [])]
+    return {
+        "kind": ARTIFACT_KIND_TRIAL,
+        "key": key,
+        "arm": arm,
+        "sid": sid,
+        "scenario_id": sid.split("#", 1)[0],
+        "ts": _utcnow(),
+        "elapsed_s": round(elapsed_s, 3),
+        "error": error,
+        "result": None if result is None else result.model_dump(mode="json"),
+        "base_rep": None if base_traces is None else repertoire(base_traces),
+        "cand_rep": None if cand_traces is None else repertoire(cand_traces),
+        "tokens_in": sum(t.tokens_in for t in both),
+        "tokens_out": sum(t.tokens_out for t in both),
+        "judge_calls": (
+            judge_calls_implied(base_traces, cand_traces)
+            if judged and base_traces is not None and cand_traces is not None
+            else 0
+        ),
+        "base_traces": None if base_traces is None else traces_to_json(base_traces),
+        "cand_traces": None if cand_traces is None else traces_to_json(cand_traces),
+    }
+
+
+def load_artifact(path: str) -> tuple[dict | None, list[dict]]:
+    """`(header, trial rows)` from a JSONL artifact. For one key, a verdict always beats an
+    error and a later verdict beats an earlier one, so a re-attempted provider error is
+    superseded by the verdict that replaced it and never the other way round. Blank and
+    non-trial lines (resume markers, summaries) are skipped."""
+    header: dict | None = None
+    rows: dict[str, dict] = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            kind = rec.get("kind")
+            if kind == ARTIFACT_KIND_HEADER:
+                header = header or rec
+            elif kind == ARTIFACT_KIND_TRIAL:
+                prev = rows.get(rec["key"])
+                if prev is None or prev.get("result") is None or rec.get("result") is not None:
+                    rows[rec["key"]] = rec
+    return header, list(rows.values())
+
+
+def memo_from_rows(rows) -> dict[str, tuple]:
+    """`key -> (DiffResult, base_repertoire, cand_repertoire)` for every row that reached a
+    verdict. Error rows are absent on purpose: a resumed run re-attempts them."""
+    from modelpin.models import DiffResult
+
+    memo: dict[str, tuple] = {}
+    for rec in rows:
+        if rec.get("result") is not None:
+            memo[rec["key"]] = (
+                DiffResult(**rec["result"]),
+                rec["base_rep"],
+                rec["cand_rep"],
+            )
+    return memo
+
+
+def check_resume_header(header: dict | None, expected: dict) -> None:
+    """Refuse to append trials from a different configuration to an existing artifact."""
+    if header is None:
+        raise SystemExit("error: --resume: the artifact has no header line; start a fresh --out.")
+    bad = [k for k in _RESUME_MUST_MATCH if header.get(k) != expected.get(k)]
+    bad += [
+        k for k in _RESUME_MATCH_IF_RECORDED if k in header and header.get(k) != expected.get(k)
+    ]
+    if bad:
+        detail = ", ".join(f"{k}: artifact={header.get(k)!r} now={expected.get(k)!r}" for k in bad)
+        raise SystemExit(
+            "error: --resume: this artifact was recorded under a different configuration "
+            f"({detail}). A file holding trials from two configurations measures neither; "
+            "use a new --out."
+        )
+
+
+def run_trials(plan, verdict_live, memo: dict, workers: int, on_row, miss_label="provider error"):
+    """Fill `memo` for every planned trial not already in it.
+
+    `verdict_live(base, cand, sid) -> (DiffResult, base_traces, cand_traces) | None` is
+    called for each missing key - concurrently when `workers > 1`. `None` (a provider error)
+    is reported through `on_row` but NOT memoised, so the next `--resume` re-attempts it.
+    `on_row(key, sid, res, base_traces, cand_traces, error, elapsed)` runs on the calling
+    thread, in completion order. With `verdict_live=None` (offline rescore) every missing key
+    is reported as an error and nothing is called.
+
+    Completion order is whatever the pool produces; the arms re-read the memo in plan order,
+    so the published report is identical at every worker count.
+    """
+    todo = [t for t in plan if t[0] not in memo]
+
+    def one(item):
+        key, sid, base, cand = item
+        started = time.perf_counter()
+        if verdict_live is None:
+            return key, sid, None, None, None, "not in artifact", 0.0
+        out = verdict_live(base, cand, sid)
+        elapsed = time.perf_counter() - started
+        if out is None:
+            return key, sid, None, None, None, miss_label, elapsed
+        res, base_traces, cand_traces = out
+        return key, sid, res, base_traces, cand_traces, None, elapsed
+
+    def absorb(done):
+        key, sid, res, base_traces, cand_traces, error, elapsed = done
+        if res is not None:
+            memo[key] = (res, repertoire(base_traces), repertoire(cand_traces))
+        on_row(key, sid, res, base_traces, cand_traces, error, elapsed)
+
+    if workers <= 1 or len(todo) <= 1:
+        for item in todo:
+            absorb(one(item))
+        return
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(one, item) for item in todo]
+        for fut in as_completed(futures):
+            absorb(fut.result())
+
+
+class ArtifactWriter:
+    """Append-only JSONL, one flush per record, one lock across worker threads."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+
+    def write(self, record: dict) -> None:
+        line = json.dumps(record, ensure_ascii=False, default=str)
+        with self._lock:
+            # LF on every platform: a JSONL artifact committed from Windows must not differ from
+            # one committed from Linux by its line endings alone.
+            with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
+                fh.write(line + "\n")
+                fh.flush()
+
+
+def artifact_header(args, scenario_ids, git_sha: str, source: dict | None = None) -> dict:
+    """The configuration a rate is a rate OF. Everything a reader needs to re-run it.
+
+    `source` is the header of the artifact a `--rejudge` run re-scored. It is recorded so a
+    rejudged file can never be mistaken for an independent sample: it is the SAME replay,
+    and pooling the two would double-count every trial.
+    """
+    from modelpin import diff as _diff
+    from modelpin.config import DEFAULT_RUNS
+
+    rejudged: dict[str, Any] = {}
+    if source is not None:
+        rejudged = {
+            "rejudged_from": os.path.basename(args.rejudge),
+            "rejudged_from_git_sha": source.get("git_sha"),
+            "rejudged_from_started_utc": source.get("started_utc"),
+            "rejudged_from_judge": source.get("judge"),
+            "rejudged_from_judge_provider": source.get("judge_provider"),
+            # What was NOT bought. A rejudged file is routinely a pre-registered SUBSET of its
+            # source, because the free judge tier that makes it affordable is a daily quota;
+            # the subset rule belongs in the artifact, not only in the write-up.
+            "rejudged_arm": args.arm,
+            "rejudged_repeats_of": source.get("repeats"),
+            # Not an independent sample. Stated in the artifact, not only in the write-up.
+            "replay_reused": True,
+        }
+
+    return {
+        "kind": ARTIFACT_KIND_HEADER,
+        "provider": args.provider,
+        "model": args.model,
+        "runs": args.runs,
+        "judge": None if args.no_judge else args.judge,
+        # The RESOLVED host, not the flag: an artifact must say which vendor's judge produced
+        # its semantic verdicts even when nobody typed --judge-provider, because that is the
+        # fact MP-208 found unrecorded and unpriced across every number published before it.
+        "judge_provider": None if args.no_judge else resolve_judge_provider(args),
+        "scenarios_dir": os.path.basename(os.path.normpath(args.scenarios_dir)),
+        "scenarios_path": args.scenarios_dir,
+        "role": args.role,
+        "repeats": args.repeats,
+        "only": sorted(args.only) if args.only else None,
+        "scenarios": list(scenario_ids),
+        "match": "strict",
+        "constants": {
+            "ALPHA": _diff.ALPHA,
+            "MIN_TOOL_TVD": _diff.MIN_TOOL_TVD,
+            "MIN_TOOL_ARG_TVD": _diff.MIN_TOOL_ARG_TVD,
+            "MIN_REFUSAL_DELTA": _diff.MIN_REFUSAL_DELTA,
+            "MIN_SEMANTIC_DELTA": _diff.MIN_SEMANTIC_DELTA,
+            "DEFAULT_RUNS": DEFAULT_RUNS,
+        },
+        "git_sha": git_sha,
+        "started_utc": _utcnow(),
+        **rejudged,
+    }
+
+
+def parse_only(raw: str | None) -> set[str] | None:
+    if raw is None:
+        return None
+    ids = {s.strip() for s in raw.split(",") if s.strip()}
+    if not ids:
+        raise SystemExit("error: --only needs at least one scenario id.")
+    return ids
+
+
+def select_only(scenarios, only: set[str] | None):
+    """Restrict a run to named ids. An id absent from the (role-filtered) set is an error: a
+    smoke run that silently measured a different scenario is worse than none."""
+    if only is None:
+        return list(scenarios)
+    missing = sorted(only - {s.id for s in scenarios})
+    if missing:
+        raise SystemExit(f"error: --only names ids not in this set: {', '.join(missing)}.")
+    return [s for s in scenarios if s.id in only]
+
+
+def run_footer(
+    live_rows, all_rows, reused: int, artifact: str | None, elapsed_s: float, rejudged=False
+) -> list[str]:
+    """Tokens, judge calls, wall time - the cost side of the number, printed once. Tokens are
+    summed over EVERY trial the report rests on (reused ones included); the live count is
+    this invocation's alone.
+
+    Under `--rejudge` the replay tokens were spent by the SOURCE run and not by this one, so
+    they are labelled as such. Printing them unqualified beside a run that made no replay call
+    invites a reader to price a free re-score as if it had bought the replay again.
+    """
+    tin = sum(r.get("tokens_in") or 0 for r in all_rows)
+    tout = sum(r.get("tokens_out") or 0 for r in all_rows)
+    jc = sum(r.get("judge_calls") or 0 for r in all_rows)
+    spent = (
+        "carried over from the source run; NO replay call was made"
+        if rejudged
+        else "over all %d trial(s)" % len(all_rows)
+    )
+    out = [
+        f"  This invocation: {len(live_rows)} trial(s) "
+        f"{'re-scored (judge calls only)' if rejudged else 'run live'}, {reused} reused from the "
+        f"artifact, {elapsed_s / 60:.1f} min wall.",
+        f"  Replay tokens in/out {spent}: {tin:,}/{tout:,}; judge calls "
+        f"implied by the traces: {jc} (judge tokens are not metered).",
+    ]
+    if artifact:
+        out.append(f"  Artifact: {artifact}  (re-read offline with --rescore; traces included)")
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--provider", default="openai", help="openai | google")
+    ap.add_argument(
+        "--provider",
+        default="openai",
+        help="openai | google | groq | ... (any live adapter)",
+    )
     ap.add_argument("--model", default="gpt-4o-mini")
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--judge", default="gpt-4o-mini")
+    ap.add_argument(
+        "--judge-provider",
+        default=None,
+        help="which host runs the judge: "
+        + " | ".join(JUDGE_PROVIDERS)
+        + ". Optional for a model whose host is inferable from its id (`gpt-4o-mini` -> "
+        "openai); REQUIRED otherwise. [M] MP-208: `openai/gpt-oss-120b` is a GROQ id whose "
+        "vendor prefix says `openai`, so inference returns None and the run dies at "
+        "preflight. Without this flag the harness could only ever score with an OpenAI "
+        "judge, and at the time 51 of the 82 scored trials in the run of record could only "
+        "have fired on the semantic channel (8 of 39 under the current engine).",
+    )
     ap.add_argument("--no-judge", action="store_true", help="skip the semantic LLM-judge")
-    ap.add_argument("--scenarios-dir", default="examples/suite")
+    ap.add_argument("--scenarios-dir", default=None, help="default examples/suite")
     ap.add_argument(
         "--role",
         default=None,
@@ -688,45 +1206,338 @@ def main() -> None:
         "not have fired, so a single round's modal outcome is 0/0 - an abstention, not a "
         "rate. Repeats are how n reaches a publishable size.",
     )
+    ap.add_argument(
+        "--only",
+        default=None,
+        help="comma-separated scenario ids to run (a smoke run). Recorded in the artifact.",
+    )
+    ap.add_argument(
+        "--out",
+        default=None,
+        metavar="ARTIFACT.jsonl",
+        help="append one JSON line per trial - verdict, repertoires, TRACES - as it completes, "
+        "so a cut run can --resume instead of restarting.",
+    )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="with --out: reuse every trial in the artifact that reached a verdict and "
+        "re-attempt provider errors. Refuses an artifact recorded under another config.",
+    )
+    ap.add_argument(
+        "--rescore",
+        default=None,
+        metavar="ARTIFACT.jsonl",
+        help="OFFLINE: rebuild both arms from an artifact. No provider, no key, no writes; "
+        "the artifact's own configuration is used and the command line's is ignored.",
+    )
+    ap.add_argument(
+        "--rejudge",
+        default=None,
+        metavar="ARTIFACT.jsonl",
+        help="REPLAY-FREE RE-SCORE: rebuild every trial from an artifact's stored traces and "
+        "re-diff them under the judge named by --judge/--judge-provider. No replay provider is "
+        "called and no replay key is read, so the same recorded model behaviour can be scored "
+        "by a second judge for the price of the judge calls alone. The artifact's measured "
+        "configuration (provider, model, runs, repeats, role, scenarios) is adopted; the JUDGE "
+        "is the one thing the command line still decides. Needs --out; --resume works, which is "
+        "what makes a rate-limited free judge tier survivable.",
+    )
+    ap.add_argument(
+        "--arm",
+        default="both",
+        choices=("fp", "recall", "both"),
+        help="with --rejudge: which arm to re-score. The arms are independent measurements, "
+        "and a free judge tier is a DAILY budget, so being unable to buy one without the "
+        "other means being unable to buy either.",
+    )
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="trials run concurrently. The report is identical at any value; only wall time "
+        "and rate-limit exposure change.",
+    )
     args = ap.parse_args()
     if args.repeats < 1:
         raise SystemExit("error: --repeats must be >= 1.")
+    if args.workers < 1:
+        raise SystemExit("error: --workers must be >= 1.")
+    if args.rescore and args.rejudge:
+        raise SystemExit(
+            "error: --rescore replays the judgement already on disk and --rejudge replaces it; "
+            "they cannot both describe one run. Pick one."
+        )
+    if args.rescore and (args.out or args.resume):
+        raise SystemExit(
+            "error: --rescore re-reads an artifact and never writes one; drop --out/--resume."
+        )
+    if args.resume and not args.out:
+        raise SystemExit("error: --resume needs --out to say which artifact to continue.")
+    if args.rejudge:
+        if not args.out:
+            # A rejudged verdict is a NEW measurement of the same behaviour, so it gets its own
+            # artifact of record. Printing it and discarding it would leave the agreement rate
+            # this mode exists to publish resting on a terminal transcript.
+            raise SystemExit(
+                "error: --rejudge needs --out: the re-scored verdicts are a new measurement "
+                "and belong in their own artifact, not only on stdout."
+            )
+        if args.no_judge:
+            raise SystemExit("error: --rejudge --no-judge would re-score with nothing.")
+        if os.path.abspath(args.rejudge) == os.path.abspath(args.out):
+            raise SystemExit(
+                "error: --rejudge and --out name the same file; the source artifact is read-only "
+                "and a second judge's verdicts must not be appended to the first judge's record."
+            )
+
+    memo: dict[str, tuple] = {}
+    recorded: dict | None = None
+    rows_on_disk: list[dict] = []
+    source_rows: list[dict] = []
+    source_header: dict | None = None
+    traces_source: dict[str, tuple[list, list]] = {}
+    if args.rejudge:
+        source_header, source_rows = load_artifact(args.rejudge)
+        if source_header is None:
+            raise SystemExit("error: --rejudge: the artifact has no header line.")
+        # The artifact fixes WHAT was measured; the command line fixes WHO scores it. That
+        # split is the point of the mode: same traces, different judge, so a disagreement is
+        # the judges' and not the models'.
+        for k in ("provider", "model", "runs", "role"):
+            setattr(args, k, source_header[k])
+        # `--repeats` narrows to the FIRST k recorded rounds. The rounds are exchangeable
+        # replicates of one design, so a prefix of them is an unbiased subset - which a subset
+        # chosen by scenario, or by which trials the first judge happened to flag, would not be.
+        # 1 is argparse's default and is indistinguishable from a typed 1 - and it could not be
+        # honoured anyway: `fp_label` drops the `#i` suffix at repeats == 1, so the keys would
+        # stop matching the artifact's and every trial would miss. 1 therefore means "all".
+        recorded_repeats = source_header["repeats"]
+        args.repeats = (
+            recorded_repeats if args.repeats == 1 else min(args.repeats, recorded_repeats)
+        )
+        args.scenarios_dir = (
+            args.scenarios_dir
+            or source_header.get("scenarios_path")
+            or source_header["scenarios_dir"]
+        )
+        # `--only` NARROWS a rejudge; it does not redefine it. `[S] 2026-09-07` the free Groq
+        # tier that makes a second judge affordable caps 200,000 tokens/day; `[M]` one
+        # artifact's stored `judge_calls` runs to the thousands, and `[A]` at ~535 tokens/call
+        # (an assumption - the harness does not meter judge tokens) that is more than a day's
+        # budget in a single all-or-nothing command. Discarding a typed --only here left no way
+        # to rejudge a subset at all.
+        recorded_only = set(source_header["only"]) if source_header.get("only") else None
+        typed_only = parse_only(args.only)
+        if typed_only and recorded_only and not typed_only <= recorded_only:
+            raise SystemExit(
+                "error: --rejudge --only names ids the source artifact never measured: "
+                f"{', '.join(sorted(typed_only - recorded_only))}."
+            )
+        args.only = typed_only or recorded_only
+        if source_header.get("judge") is None:
+            raise SystemExit(
+                "error: --rejudge: that artifact was recorded with --no-judge, so it has no "
+                "semantic verdict to disagree with. Re-scoring it would compare a judge to "
+                "nothing."
+            )
+        traces_source = traces_by_key(source_rows)
+        if not traces_source:
+            raise SystemExit(
+                f"error: --rejudge: {args.rejudge} records no trial with traces on both sides, "
+                "so there is nothing to re-score. Artifacts written before traces were kept "
+                "(MP-205) cannot be rejudged."
+            )
+    elif args.rescore:
+        recorded, rows_on_disk = load_artifact(args.rescore)
+        if recorded is None:
+            raise SystemExit("error: --rescore: the artifact has no header line.")
+        # The artifact decides what is measured; anything typed beside --rescore is ignored.
+        for k in ("provider", "model", "runs", "repeats", "role"):
+            setattr(args, k, recorded[k])
+        args.scenarios_dir = (
+            args.scenarios_dir or recorded.get("scenarios_path") or recorded["scenarios_dir"]
+        )
+        args.judge = recorded.get("judge")
+        # ...and the host that ran it, or `resolve_judge_provider` would later re-infer a host
+        # for an id that has none. Inert today (--rescore builds no judge and forbids --out),
+        # a trap tomorrow.
+        args.judge_provider = recorded.get("judge_provider")
+        # ...and which arms were actually bought. A rejudged artifact is routinely one arm only;
+        # without this, an offline re-read plans the arm nobody paid for, finds every trial
+        # missing, and reports the absence as 12 provider errors under a banner blaming the
+        # operator's credentials.
+        args.arm = recorded.get("rejudged_arm") or "both"
+        args.no_judge = args.judge is None
+        args.only = set(recorded["only"]) if recorded.get("only") else None
+        memo = memo_from_rows(rows_on_disk)
+    else:
+        args.scenarios_dir = args.scenarios_dir or "examples/suite"
+        args.only = parse_only(args.only)
 
     scenarios = load_scenarios(args.scenarios_dir)
     scenarios, role_note = select_by_role(
         scenarios, roles_for_dir(load_role_sets(), args.scenarios_dir), args.role
     )
-    adapter = get_adapter(args.provider)
-    adapter.preflight()
-    judge = None if args.no_judge else build_judge(args.judge)
-    if judge is not None:
-        judge.preflight()
+    scenarios = select_only(scenarios, args.only)
+
+    adapter = None
+    judge = None
+    if not args.rescore:
+        if not args.rejudge:
+            # --rejudge reads its replay off the disk, so it needs no replay adapter and no
+            # replay key. That is what makes a second judge cost the judge calls alone.
+            adapter = get_adapter(args.provider)
+            adapter.preflight()
+        if not args.no_judge:
+            judge = build_judge(args.judge, provider=require_judge_provider(args))
+            judge.preflight()
+
+    git_sha = _git_sha()
+    writer: ArtifactWriter | None = None
+    if args.out:
+        expected = artifact_header(args, [s.id for s in scenarios], git_sha, source_header)
+        if os.path.exists(args.out):
+            if not args.resume:
+                raise SystemExit(
+                    f"error: {args.out} exists. Pass --resume to continue it, or name a new --out."
+                )
+            recorded, rows_on_disk = load_artifact(args.out)
+            check_resume_header(recorded, expected)
+            memo = memo_from_rows(rows_on_disk)
+            writer = ArtifactWriter(args.out)
+            writer.write(
+                {
+                    "kind": ARTIFACT_KIND_RESUME,
+                    "ts": _utcnow(),
+                    "git_sha": git_sha,
+                    "reused": len(memo),
+                }
+            )
+        else:
+            writer = ArtifactWriter(args.out)
+            writer.write(expected)
+
     print(
         f"FP measurement: provider={args.provider} model={args.model} runs={args.runs} "
-        f"judge={'off' if judge is None else args.judge} scenarios={len(scenarios)} "
+        f"judge={'off' if args.no_judge else args.judge} scenarios={len(scenarios)} "
         f"repeats={args.repeats}\n"
         # The selected role is PUBLISHED, not merely honoured. [M] MP-89's defect was that
         # the operator could not tell from the output which scenarios the rate covered.
         f"  {role_note}\n"
         f"  -> {len(scenarios) * args.repeats} trials attempted; ADR-0022 excludes those that "
-        f"could not have fired, so SCORED will be lower.\n"
+        f"could not have fired, so SCORED will be lower."
+    )
+    if args.only:
+        print(f"  --only: {', '.join(sorted(args.only))}")
+    if args.rescore:
+        print(
+            f"  RESCORED OFFLINE from {args.rescore} (recorded {recorded.get('started_utc')} "
+            f"@ {recorded.get('git_sha')}); no provider was called."
+        )
+    if args.rejudge:
+        assert source_header is not None
+        print(
+            f"  REJUDGED from {args.rejudge} (recorded {source_header.get('started_utc')} "
+            f"@ {source_header.get('git_sha')}): {len(traces_source)} trial(s) of stored "
+            f"replay, re-diffed under judge {args.judge} on "
+            f"{resolve_judge_provider(args)}.\n"
+            f"  The replay was NOT repeated, so this is the same recorded behaviour scored "
+            f"twice - not a second sample. Prior judge: "
+            f"{source_header.get('judge')} on "
+            f"{source_header.get('judge_provider') or 'openai (unrecorded; inferred)'}."
+        )
+    print(
+        f"  git {git_sha} * {_utcnow()} * workers={args.workers}"
+        + (f" * artifact {args.out}" if args.out else "")
+        + "\n"
     )
 
-    def _verdict(base_scn, cand_scn, sid):
-        """Replay base + candidate and diff.
-
-        Returns `(DiffResult, base_repertoire, cand_repertoire)`, or None on error. The
-        repertoires are returned rather than discarded because a verdict ALONE cannot say
-        whether the run measured anything at all - MP-75.
-        """
+    def _verdict_live(base_scn, cand_scn, sid):
+        """Replay base + candidate and diff. Returns `(DiffResult, base_traces,
+        cand_traces)`, or None on a provider error. The traces are returned rather than
+        discarded because a verdict ALONE cannot say whether the run measured anything at
+        all (MP-75), and because they are what the artifact keeps."""
         try:
             base = _replay_resilient(base_scn, args.model, adapter, args.runs)
             cand = _replay_resilient(cand_scn, args.model, adapter, args.runs)
             r = diff_scenario(sid, args.model, args.model, base, cand, base_scn, judge=judge)
-            return r, repertoire(base), repertoire(cand)
+            return r, base, cand
         except ProviderError as exc:
             print(f"  {sid:<22} ERROR  ({str(exc)[:70]})")
             return None
+
+    def _verdict_rejudge(base_scn, cand_scn, sid):
+        """Re-diff ONE stored trial under the new judge. No replay: the traces come off the
+        source artifact, so every channel but the semantic one is recomputed from identical
+        inputs and must return an identical answer. Any difference in the verdict is
+        therefore attributable to the judge alone - which is the measurement.
+
+        A key the source artifact never recorded (a provider error at the time) returns None
+        and reports as a miss, exactly as a live provider error would.
+        """
+        stored = traces_source.get(trial_key(base_scn, cand_scn, sid))
+        if stored is None:
+            return None
+        base, cand = stored
+        try:
+            r = diff_scenario(sid, args.model, args.model, base, cand, base_scn, judge=judge)
+        except ProviderError as exc:  # the JUDGE's host, not the replay's
+            print(f"  {sid:<22} JUDGE ERROR  ({str(exc)[:70]})")
+            return None
+        return r, base, cand
+
+    plan = plan_trials(scenarios, args.repeats)
+    if args.arm != "both":
+        # Only ever a NARROWING of a rejudge, and only of which trials are bought. Both arms
+        # still print below; the one that was not re-scored simply reports its trials as
+        # missing, which is the honest rendering of "not measured under this judge".
+        plan = [t for t in plan if t[0].startswith(f"{args.arm}:")]
+    reused = sum(1 for key, *_ in plan if key in memo)
+    rows_written: list[dict] = []
+    started = time.perf_counter()
+    if args.rejudge:
+        print(
+            f"REJUDGING {len(plan) - reused} trial(s) ({reused} reused from --out), "
+            f"{args.workers} worker(s); no replay call is made:"
+        )
+    elif not args.rescore:
+        print(
+            f"RUNNING {len(plan) - reused} trial(s) live ({reused} reused from the artifact), "
+            f"{args.workers} worker(s):"
+        )
+
+    def _on_row(key, sid, res, base_traces, cand_traces, error, elapsed):
+        rec = trial_record(
+            key, sid, res, base_traces, cand_traces, error, elapsed, judge is not None
+        )
+        rows_written.append(rec)
+        if writer is not None:
+            writer.write(rec)
+        n, total = len(rows_written), len(plan) - reused
+        if res is None:
+            print(f"  [{n}/{total}] {sid:<24} ERROR ({error})")
+        else:
+            print(
+                f"  [{n}/{total}] {sid:<24} {res.verdict.value:<14} conf={res.confidence:.2f}"
+                f"  {elapsed:5.1f}s  [{_rep(rec['base_rep'], rec['cand_rep'])}]"
+            )
+
+    if args.rescore:
+        _verdict_fn = None
+    elif args.rejudge:
+        _verdict_fn = _verdict_rejudge
+    else:
+        _verdict_fn = _verdict_live
+    _miss = "judge error or absent from the source" if args.rejudge else "provider error"
+    run_trials(plan, _verdict_fn, memo, args.workers, _on_row, _miss)
+    print()
+
+    def _verdict(base_scn, cand_scn, sid):
+        """Both arms read the memo the run above filled. A miss is a trial that never reached
+        a verdict - a provider error live, or a row the artifact never recorded offline - and
+        reports as one."""
+        return memo.get(trial_key(base_scn, cand_scn, sid))
 
     # --- false-positive rate: same model vs itself ------------------------ [ARM:FP] ---
     # NB the ARM markers above and below are load-bearing: three
@@ -746,11 +1557,15 @@ def main() -> None:
         for i in range(args.repeats)
         for scn in scenarios
     ]
-    t, lines_out = fp_report(rows)
-    for line in lines_out:
-        print(line)
-    for line in fp_summary(t):
-        print(line)
+    t: dict[str, int] = {}
+    if args.arm == "recall":
+        print(_arm_not_bought("false-positive", len(rows), args.arm))
+    else:
+        t, lines_out = fp_report(rows)
+        for line in lines_out:
+            print(line)
+        for line in fp_summary(t):
+            print(line)
 
     # --- detection: injected perturbations -------------------------- [ARM:RECALL] ---
     perturbed = [s for s in scenarios if s.id in PERTURBATIONS]
@@ -760,18 +1575,46 @@ def main() -> None:
     print("  Nothing is excluded here but an abstention: a candidate that still reads")
     print("  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted")
     print("  instruction from a dead engine, so it never excludes on that basis.")
-    rt, recall_lines = recall_report(
-        [build_row(s.id, s, _perturb(s, PERTURBATIONS[s.id]), _verdict) for s in perturbed]
-    )
-    for line in recall_lines:
-        print(line)
-    for line in recall_summary(rt):
-        print(line)
+    recall_rows = [
+        build_row(s.id, s, _perturb(s, PERTURBATIONS[s.id]), _verdict) for s in perturbed
+    ]
+    rt: dict[str, int] = {}
+    if args.arm == "fp":
+        print(_arm_not_bought("detection", len(recall_rows), args.arm))
+    else:
+        rt, recall_lines = recall_report(recall_rows)
+        for line in recall_lines:
+            print(line)
+        for line in recall_summary(rt):
+            print(line)
+
+    for note in run_footer(
+        rows_written,
+        [*rows_on_disk, *rows_written],
+        reused,
+        args.out or args.rescore,
+        time.perf_counter() - started,
+        bool(args.rejudge) or bool(recorded and recorded.get("replay_reused")),
+    ):
+        print(note)
+    if writer is not None:
+        writer.write({"kind": ARTIFACT_KIND_SUMMARY, "ts": _utcnow(), "fp": t, "recall": rt})
 
 
 if __name__ == "__main__":
+    # A Windows console defaults to cp1252, and a model output with one character outside it
+    # would end a paid run at the print, not at the measurement. Replace, never crash.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     try:
         main()
     except ProviderError as exc:
         print(f"\nerror: {exc}\n(network/provider issue — retry when connectivity is stable)")
         raise SystemExit(1)
+    except KeyboardInterrupt:
+        print("\ninterrupted. Every trial that reached a verdict is in the artifact; re-run the")
+        print("same command with --resume to continue from there.")
+        raise SystemExit(130)

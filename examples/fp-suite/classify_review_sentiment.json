@@ -1,0 +1,18 @@
+{
+  "id": "classify_review_sentiment",
+  "name": "One-word sentiment label for a mixed product review",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Classify the sentiment of the product review. Reply with exactly one lowercase word and nothing else: positive, negative, or mixed."
+      },
+      {
+        "role": "user",
+        "content": "The blender is powerful and crushes ice in seconds, but the lid cracked in the first week and support took ten days to reply."
+      }
+    ],
+    "temperature": 1.0
+  }
+}

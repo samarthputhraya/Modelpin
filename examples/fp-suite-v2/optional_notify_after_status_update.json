@@ -1,0 +1,80 @@
+{
+  "id": "optional_notify_after_status_update",
+  "name": "A status update whose follow-up customer email is left to the agent's judgement",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the operations assistant for Quill & Press, a print shop. update_order_status changes an order's status. notify_customer emails the customer; use it when it would be useful. Reply to the operator in one short sentence when you are done."
+      },
+      {
+        "role": "user",
+        "content": "Job PR-4410 came off the press early - mark it ready for pickup."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "update_order_status",
+          "description": "Set the status of a print job.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_id": {
+                "type": "string",
+                "description": "The job number, e.g. PR-4410."
+              },
+              "status": {
+                "type": "string",
+                "description": "One of: queued, printing, ready_for_pickup, collected."
+              }
+            },
+            "required": [
+              "order_id",
+              "status"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "notify_customer",
+          "description": "Email the customer on a print job with a short message.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_id": {
+                "type": "string",
+                "description": "The job number, e.g. PR-4410."
+              },
+              "message": {
+                "type": "string",
+                "description": "The body of the email to send."
+              }
+            },
+            "required": [
+              "order_id",
+              "message"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "update_order_status": {
+        "order_id": "PR-4410",
+        "status": "ready_for_pickup",
+        "updated_at": "2026-09-07T11:20Z"
+      },
+      "notify_customer": {
+        "order_id": "PR-4410",
+        "sent": true,
+        "to": "orders@bellamy-cafe.example"
+      }
+    },
+    "temperature": 1.0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "rewrite_email_polite",
+  "name": "Polite rewrite of an angry draft, keeping every factual point",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Rewrite the user's draft email so that it is polite and professional while keeping every factual point and the deadline. Reply with the rewritten email only."
+      },
+      {
+        "role": "user",
+        "content": "Hey, you STILL haven't sent the invoice for August, this is the third time I'm asking. Send it by Friday or we're done working together."
+      }
+    ],
+    "temperature": 1.0
+  }
+}

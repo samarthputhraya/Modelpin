@@ -43,6 +43,19 @@ def compute_suite_hash(scenarios: list[Scenario]) -> str:
     return f"{_HASH_ALGO}:{digest[:_HASH_LEN]}"
 
 
+def scenario_fingerprint(scenario: Scenario) -> str:
+    """A content fingerprint of ONE scenario definition — what a baseline records so it can
+    later say whether it describes the scenario it is being compared against (MP-05).
+
+    Deliberately `compute_suite_hash` of a one-element suite rather than a second hashing
+    routine: two ways to fingerprint the same object is how the two drift, and the property
+    that matters here is exactly the one that function already has — it hashes the VALIDATED
+    model, so reformatting a scenario file does not change the hash but editing its meaning
+    does.
+    """
+    return compute_suite_hash([scenario])
+
+
 def slug(text: str) -> str:
     """Filesystem-safe slug for building report filenames from model ids."""
     return re.sub(r"[^A-Za-z0-9._-]", "_", text)

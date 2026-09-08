@@ -1,0 +1,18 @@
+{
+  "id": "summarize_standup_notes",
+  "name": "Stand-up summary for an absent manager; every blocker must survive",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Summarize the engineering stand-up notes for a manager who was absent. At most three bullet points. Every blocker mentioned in the notes must appear in your summary."
+      },
+      {
+        "role": "user",
+        "content": "Stand-up 2026-09-07\n- Priya: finished the CSV export rewrite, PR is in review. No blockers.\n- Tom: still cannot test payments because the payment provider's sandbox has been down since Friday. Blocked.\n- Ana: rotated the staging API keys; starting on the audit log UI today.\n- Marcus: the data-processing agreement is still with Legal, so the Fabrikam onboarding cannot start. Blocked.\n- Priya also reminded everyone the release freeze starts Thursday."
+      }
+    ],
+    "temperature": 1.0
+  }
+}

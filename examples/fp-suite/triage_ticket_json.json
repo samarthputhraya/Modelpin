@@ -1,0 +1,27 @@
+{
+  "id": "triage_ticket_json",
+  "name": "Ticket triage into a strict JSON object",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You triage incoming support tickets for a SaaS analytics product. Reply with ONLY a JSON object with exactly these keys: \"category\" (one of: billing, bug, feature_request, account, other), \"priority\" (one of: low, medium, high) and \"summary\" (one sentence). No markdown, no code fences, no text outside the object."
+      },
+      {
+        "role": "user",
+        "content": "Since this morning every export I run from the Reports page downloads an empty CSV file. We have a board meeting tomorrow and need these numbers. Account: Fabrikam Ltd, plan: Business."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "\"category\"",
+      "\"priority\""
+    ],
+    "must_not_contain": [
+      "```"
+    ]
+  }
+}

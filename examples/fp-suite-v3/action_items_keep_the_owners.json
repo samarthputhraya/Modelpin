@@ -1,0 +1,26 @@
+{
+  "id": "action_items_keep_the_owners",
+  "name": "Action items under a forty-word cap, where the task tracker assigns by owner name",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the meeting-notes assistant. From the transcript excerpt, write the action items for the notes. Keep the whole thing under about forty words."
+      },
+      {
+        "role": "user",
+        "content": "Nadia: I'll get the vendor contract over to legal by Thursday.\nColm: fine - I'll redo the pricing sheet once legal comes back.\nSofia: I can chase the security questionnaire, they've had it a week.\nYusuf: and I'll book the room for the readout, probably the 14th."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "Nadia",
+      "Colm",
+      "Sofia",
+      "Yusuf"
+    ]
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "id": "optional_part_stock_second_lookup",
+  "name": "The first tool's result already answers the question, but names a part a second tool covers",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the service-desk assistant at Cog & Chain, a bicycle repair shop. get_repair_ticket returns the current state of a repair. get_part_stock tells you whether a part is in stock at the shop. Answer the customer in at most two sentences."
+      },
+      {
+        "role": "user",
+        "content": "Is repair T-2291 going to be finished this week? I need the bike for Saturday."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_repair_ticket",
+          "description": "Look up the current state of a repair ticket.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticket_id": {
+                "type": "string",
+                "description": "The repair ticket number, e.g. T-2291."
+              }
+            },
+            "required": [
+              "ticket_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_part_stock",
+          "description": "Check whether a named part is currently in stock at the shop.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "part": {
+                "type": "string",
+                "description": "The part name, e.g. 'rear brake cable'."
+              }
+            },
+            "required": [
+              "part"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_repair_ticket": {
+        "ticket": "T-2291",
+        "bike": "Kona Rove",
+        "stage": "awaiting_part",
+        "awaiting_part": "rear brake cable",
+        "part_eta": "2026-09-10",
+        "promised_by": "2026-09-11"
+      },
+      "get_part_stock": {
+        "part": "rear brake cable",
+        "in_stock": false,
+        "eta": "2026-09-10"
+      }
+    },
+    "temperature": 1.0
+  }
+}

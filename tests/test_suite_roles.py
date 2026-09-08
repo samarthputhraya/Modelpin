@@ -202,6 +202,64 @@ EXPECTED_MEMBERS: dict[tuple[str, str], frozenset[str]] = {
             "tool_missing_param",
         }
     ),
+    # MP-205: the false-positive suite of record, temperature 1.0, pre-registered in ADR-0036.
+    # A scenario here can never be fitted on or edited after scoring; moving one needs an ADR.
+    ("fp-suite", "score"): frozenset(
+        {
+            "agent_missing_param_ask",
+            "agent_reschedule_two_step",
+            "borderline_medication_question",
+            "classify_review_sentiment",
+            "extract_invoice_fields",
+            "format_markdown_table",
+            "rag_answer_with_citation",
+            "rewrite_email_polite",
+            "sql_from_question",
+            "summarize_standup_notes",
+            "support_order_status",
+            "triage_ticket_json",
+        }
+    ),
+    # MP-207: the channel-exposure set, pre-registered in ADR-0038. Same role and the same
+    # no-edit-after-scoring rule as fp-suite, and deliberately NOT a copy of it: these
+    # scenarios exist because [M] 0 of 710 same-model-null trials ever moved the tool or
+    # assertion channel, so the bound covered neither.
+    ("fp-suite-v2", "score"): frozenset(
+        {
+            "anchor_mandatory_lookup_fixed_format",
+            "calc_tool_or_mental_math",
+            "citation_style_underspecified",
+            "docsearch_or_general_knowledge",
+            "grammar_tool_or_direct_fix",
+            "optional_availability_before_booking",
+            "optional_notify_after_status_update",
+            "optional_part_stock_second_lookup",
+            "plaintext_answer_bold_optional",
+            "sql_answer_fence_unspecified",
+            "total_currency_code_or_symbol",
+            "verify_or_trust_pasted_status",
+        }
+    ),
+    # MP-222: attempt #2 at the ASSERTION channel alone, after fp-suite-v2 failed on it and
+    # published the failure. [M] The v2 traces show the models were never deterministic --
+    # three of its four assertions simply named a literal outside the output distribution
+    # (`[2]` in 0/400 runs against `Passage 2` in 400/400). These ten declare no tools, so
+    # the assertion channel is the only one they are built to move. Same no-edit-after-
+    # scoring rule as fp-suite and fp-suite-v2; moving one needs an ADR.
+    ("fp-suite-v3", "score"): frozenset(
+        {
+            "action_items_keep_the_owners",
+            "anchor_closed_set_label",
+            "anchor_echo_the_reference_line",
+            "dispatch_line_keeps_the_ids",
+            "handover_note_keeps_the_ids",
+            "json_null_or_omitted_key",
+            "metrics_line_keeps_the_numbers",
+            "regex_anchors_unspecified",
+            "slug_conjunction_stopwords",
+            "standup_digest_keeps_the_ids",
+        }
+    ),
 }
 
 #: Derived, so the path -> role pin and the membership pin cannot drift apart.

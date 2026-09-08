@@ -1,0 +1,23 @@
+{
+  "id": "citation_style_underspecified",
+  "name": "Grounded HR answer where the citation is demanded but its bracket style is not",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You answer employee questions about the company handbook using only the passages given below the question. Cite the passage you used. Answer in at most two sentences."
+      },
+      {
+        "role": "user",
+        "content": "Question: How many days of paid parental leave do I get once I have been here two years?\n\nPassage 1: Annual leave accrues at 2.08 days per completed month of service and may be carried over to a maximum of five days.\nPassage 2: Paid parental leave is 10 days in the first year of service and 25 days from the start of the second year, taken within twelve months of the birth or placement.\nPassage 3: Unpaid career breaks of up to six months may be requested after three years of continuous service."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "[2]"
+    ]
+  }
+}

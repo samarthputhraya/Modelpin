@@ -409,7 +409,7 @@ def _skipped_clearance(
         return None
     named = _named_blind(skipped, fmt or (lambda sid: f"`{_md_inline(sid)}`"))
     return (
-        f"{arrow} {len(skipped)} scenario(s) had no recorded baseline for `{from_model}` and "
+        f"{arrow} {len(skipped)} scenario(s) had no USABLE baseline for `{from_model}` — none recorded, or recorded against a different version of the scenario (MP-05) — and "
         f"were never compared, so `{to_model}` is NOT fully cleared: {named}. An unmeasured "
         f"scenario is not a passing one; record a baseline to include it."
     )
@@ -534,7 +534,7 @@ def render_pr_comment(
     if rejected:
         _gaps.append(f"{len(rejected)} could not be replayed at all")
     if skipped:
-        _gaps.append(f"{len(skipped)} scenario(s) had no baseline")
+        _gaps.append(f"{len(skipped)} scenario(s) had no usable baseline")
     lines = [
         header,
         f"Replayed {len(results)} scenario(s) ×{runs} runs {_provenance(provider)}"
@@ -555,10 +555,23 @@ def render_pr_comment(
         # this function both reach it only in the all-clean `else` branch, so a
         # clearance-shaped disclosure alone would be INERT on exactly the run a reviewer
         # most needs it -- a red verdict pronounced over a fraction of the suite.
-        lines.append(f"**NO BASELINE ({len(skipped)})** - never compared, and in no number below")
+        lines.append(
+            f"**NO USABLE BASELINE ({len(skipped)})** - never compared, and in no number "
+            "below. Either none was recorded, or the one on disk was recorded against a "
+            "different version of the scenario and would measure that edit, not the model "
+            "(MP-05)."
+        )
         for sid in skipped:
+            # `[M] 2026-09-07 first-run review` This line used to assert "no recorded baseline"
+            # for every id, flatly contradicting the header directly above it -- which lists
+            # three possible causes -- on the surface a PR reviewer actually reads, and with no
+            # self-correcting note anywhere below. It now states only what this renderer can
+            # actually know: the scenario was not compared. WHICH cause applies is on the
+            # console, with both fingerprints, and the header says the causes exist.
             lines.append(
-                f"❗ `{_md_inline(sid)}` — no recorded baseline for " f"`{_md_inline(from_model)}`"
+                f"❗ `{_md_inline(sid)}` — not compared against "
+                f"`{_md_inline(from_model)}` (see the run log for which of the causes above "
+                f"applies)"
             )
         lines.append("")
     if regs:
@@ -716,7 +729,7 @@ def render_cli(
         # `[/]` raised `MarkupError` and aborted the command AFTER the report had been
         # written -- CI publishing the artifact and then failing on a markup typo.
         lines.append(
-            f"[yellow]!![/] {len(skipped)} scenario(s) had no baseline, were never compared, "
+            f"[yellow]!![/] {len(skipped)} scenario(s) had no usable baseline, were never compared, "
             f"and are in NO number below:"
         )
         for sid in skipped:

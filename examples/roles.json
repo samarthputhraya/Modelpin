@@ -45,7 +45,7 @@
     {
       "path": "calibration",
       "role": "score",
-      "why": "The argument-jitter subset (MP-54). It shares a directory with the fit set above but not its role: README-arguments.md authored it to price the false-positive rate of the tool-call argument signal, and docs/fp-measurement.md directs the FP-establishing run here. [M] It is the only set in the repo with both tools and temperature>0, so it is the only surface an argument false positive can appear on -- which is exactly why no threshold may be fitted on it: a floor fitted on the only surface where a signal can fire, then scored on that same surface, is unfalsifiable. [M] NOTE the ceiling on what it can show, and that the likeliest outcome is no number at all: 7 scenarios give a 95% one-sided upper bound of 34.8% at zero observed false positives, but only if all 7 score. ADR-0022 excludes trials that could not have fired, and [M] across the THREE runs of record in docs/fp-measurement.md the scored fraction was 0 of 8, 1 of 6, and 0 of 6 -- 1 of 20 attempted, 5.0%. At that rate 7 scenarios project to 0.35 expected scored trials, so the modal outcome is ZERO scored trials: an abstention under ADR-0018, not a rate. One scored trial gives a 95.0% bound. This set can falsify the argument signal; it cannot establish a low rate. No rate has been measured on it -- as of 2026-08-24 the live run does not exist. See ADR-0025.",
+      "why": "The argument-jitter subset (MP-54). It shares a directory with the fit set above but not its role: README-arguments.md authored it to price the false-positive rate of the tool-call argument signal, and docs/fp-measurement.md directs the FP-establishing run here. [M] It is the only set in the repo with both tools and temperature>0, so it is the only surface an argument false positive can appear on -- which is exactly why no threshold may be fitted on it: a floor fitted on the only surface where a signal can fire, then scored on that same surface, is unfalsifiable. [M] NOTE the ceiling on what it can show, and that the likeliest outcome is no number at all: 7 scenarios give a 95% one-sided upper bound of 34.8% at zero observed false positives, but only if all 7 score. ADR-0022 excludes trials that could not have fired, and [M] across the THREE runs of record in docs/fp-measurement.md the scored fraction was 0 of 8, 1 of 6, and 0 of 6 -- 1 of 20 attempted, 5.0%. At that rate 7 scenarios project to 0.35 expected scored trials, so the modal outcome is ZERO scored trials: an abstention under ADR-0018, not a rate. One scored trial gives a 95.0% bound. This set can falsify the argument signal; it cannot establish a low rate. [M] 2026-09-07 (MP-205, ADR-0036): the run of record exists -- gpt-4.1-mini vs itself, judge on, runs 5 x 30 repeats: 30 scored of 210, 0 false alarms, 95% upper bound 9.5% of scored and 1.4% of trials reached; artifact reports/fp-runs/2026-09-07/s1-arg-gpt-4.1-mini.jsonl. The 'modal outcome is zero' projection above was wrong in the pessimistic direction: --repeats did what MP-89 said. See ADR-0025.",
       "scenarios": [
         "arg_enum_phrasing",
         "arg_freetext_note",
@@ -123,6 +123,61 @@
         "answer_paraphrase_gap",
         "cite_in_range",
         "format_one_spoken_sentence"
+      ]
+    },
+    {
+      "path": "fp-suite",
+      "role": "score",
+      "why": "MP-205. The false-positive suite of record: twelve scenarios modelled on the long-tail apps this project exists for (a support bot with a lookup tool, a JSON triage step, a classifier, an invoice extractor, a stand-up summariser, a RAG answer with a citation, a two-step scheduling agent, an agent that must ASK for a missing id, a borderline medication question, a Markdown table, an email rewrite, a text-to-SQL step), every one at temperature 1.0 -- the OpenAI API's default and therefore what a zero-config user's app actually runs at. [M] Every scenario set that existed before it runs at temperature 0 except arg_* (0.7, tools only) and the six fitted semantic files, so no set could exercise the semantic, refusal and assertion channels on a same-model null where the outputs actually VARY. Role score, pre-registered in ADR-0036 BEFORE its first run: no threshold may be fitted here, no assertion or prompt may be edited after a rate has been measured on it (a defect found later becomes a v2 suite row, as MP-186 did for voicerag-suite), and no scenario here may be moved to another role. Content-disjoint from every other set.",
+      "scenarios": [
+        "support_order_status",
+        "triage_ticket_json",
+        "classify_review_sentiment",
+        "extract_invoice_fields",
+        "summarize_standup_notes",
+        "rag_answer_with_citation",
+        "agent_reschedule_two_step",
+        "agent_missing_param_ask",
+        "borderline_medication_question",
+        "format_markdown_table",
+        "rewrite_email_polite",
+        "sql_from_question"
+      ]
+    },
+    {
+      "path": "fp-suite-v2",
+      "role": "score",
+      "why": "MP-207: the tool-trajectory and format/assertion channels, exposed to a same-model null for the first time. [M] 2026-09-07 over reports/fp-runs/2026-09-07/*.jsonl: of the 710 FP-arm trials in the run of record, ZERO had tool_call_match < 1.0 and ZERO had format_valid False -- while the 46 deliberately-perturbed recall trials produced 10 and 7 respectively. The channels work; they had simply never been shown a null, so MIN_TOOL_TVD had a measured false-positive exposure of exactly zero trials and the published 3.6% bound covered neither channel. [M] The scenario authored for precisely this in fp-suite, agent_missing_param_ask, produced zero tool calls on BOTH sides in all 6 of its scored FP-ARM trials (of 41 that reached a verdict; its perturbed recall arm did move the channel): its prompt says 'ask them for it and do not call the tool', which is unambiguous, so nothing varied. These twelve are built so a SAME model varies: four make calling the tool a genuine judgement call, three add a second tool that is optional given what the user already said (so the trajectory varies in LENGTH, not in outcome), four assert on a literal the model produces variably while staying correct, and anchor_mandatory_lookup_fixed_format is a NEGATIVE CONTROL -- mandatory tool, unambiguous format, so variance THERE means the run measured noise rather than design. score, never fit: a floor fitted on the only surface where a channel can fire and then scored on that same surface is unfalsifiable (ADR-0025). Pre-registered in ADR-0038.",
+      "scenarios": [
+        "anchor_mandatory_lookup_fixed_format",
+        "calc_tool_or_mental_math",
+        "citation_style_underspecified",
+        "docsearch_or_general_knowledge",
+        "grammar_tool_or_direct_fix",
+        "optional_availability_before_booking",
+        "optional_notify_after_status_update",
+        "optional_part_stock_second_lookup",
+        "plaintext_answer_bold_optional",
+        "sql_answer_fence_unspecified",
+        "total_currency_code_or_symbol",
+        "verify_or_trust_pasted_status"
+      ]
+    },
+    {
+      "path": "fp-suite-v3",
+      "role": "score",
+      "why": "MP-222: attempt #2 at a same-model null the FORMAT/ASSERTION channel can actually move. fp-suite-v2 failed on this channel and published the failure: [M] 2026-09-07, 0 exposed of 160 trials in scope, all four of its assertion scenarios pinned at a violation rate of 0/5 or 5/5 on BOTH sides. [M] Re-reading fp-suite-v2's own stored traces (reports/channel-exposure/2026-09-07/v2*.jsonl, 400 runs per scenario) shows WHY, and it is not what the row assumed: the models were NOT deterministic. Three of the four assertions named a literal that lies outside the model's output distribution entirely - `[2]` appeared in 0/400 runs while `Passage 2` appeared in 400/400 (gpt-4o-mini split 42.5% `(Passage 2)` / 32.0% `Passage 2:`), and `EUR` appeared in 0/400 while gpt-4o-mini split 47.0% U+20AC / 53.0% `euros`. Swapping ONLY the asserted literal on those identical stored runs turns 0/20 sides-differ into 11-17/20. The variance was always there; the instrument was pointed away from it. So v3 changes the INSTRUMENT, not the temperature: five scenarios assert on literals that are verbatim in their own prompt, so the failure mode that killed v2 - 'the model never produced the literal' - is structurally impossible, and the only remaining question is the OMISSION rate under brevity pressure; assertions are conjunctions of 3-5 elements so a scenario is dead only if EVERY element is pinned at exactly 1.0; and two anchors are quiet by construction. score, never fit: no threshold may be fitted here and no prompt or assertion may be edited after a rate has been measured (ADR-0025, ADR-0038). Content-disjoint from every other set; its rate is never pooled with the fp-suite bound and its artifacts live under reports/channel-exposure/.",
+      "scenarios": [
+        "action_items_keep_the_owners",
+        "anchor_closed_set_label",
+        "anchor_echo_the_reference_line",
+        "dispatch_line_keeps_the_ids",
+        "handover_note_keeps_the_ids",
+        "json_null_or_omitted_key",
+        "metrics_line_keeps_the_numbers",
+        "regex_anchors_unspecified",
+        "slug_conjunction_stopwords",
+        "standup_digest_keeps_the_ids"
       ]
     }
   ]

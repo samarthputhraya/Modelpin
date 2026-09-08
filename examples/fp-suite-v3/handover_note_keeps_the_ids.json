@@ -1,0 +1,27 @@
+{
+  "id": "handover_note_keeps_the_ids",
+  "name": "A shift handover whose downstream linker needs five identifiers the prompt never asks for",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the shift-handover assistant for a small platform team. The engineer going off shift pastes their raw notes; you write the handover the incoming engineer will actually read. Two or three sentences of plain prose."
+      },
+      {
+        "role": "user",
+        "content": "Notes from my shift: INC-4471 opened at 03:12. Looks like the connection pool on db-replica-07 fell over right after we shipped 2.14.3-hotfix. Priya raised max_connections to 400 as a stopgap and it has held since 04:40. Pager policy P-88 is still muted until 09:00 so nothing will page. Customer-visible impact was checkout latency in eu-west-1."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "INC-4471",
+      "db-replica-07",
+      "2.14.3-hotfix",
+      "P-88",
+      "eu-west-1"
+    ]
+  }
+}

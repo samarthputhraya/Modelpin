@@ -144,13 +144,13 @@ def test_a_skipped_scenario_is_named_in_the_report_even_on_a_red_run(tmp_path):
             f"MP-160: {skipped_id!r} had no baseline and was never compared, yet the report "
             f"CI posts does not name it. It appeared 0 times before this row.\n--- report ---\n{md}"
         )
-    assert "NO BASELINE (2)" in md
+    assert "NO USABLE BASELINE (2)" in md
 
     # `[M]` Review deleted the whole `if skipped:` block from `render_cli` and the suite
     # stayed green; so did changing its count to `len(skipped) - 1`. Half the shipped fix --
     # the surface a local user actually reads -- was asserted by nothing.
     out = _flat(r.output)
-    assert "2 scenario(s) had no baseline, were never compared" in out, out
+    assert "2 scenario(s) had no usable baseline, were never compared" in out, out
     # Assert the ids appear TWICE each -- once in the console block, once in the trailing
     # note -- so losing either surface fails. A bare `in out` was previously satisfied by the
     # scenarios-directory path that `check` echoes in its own header.
@@ -204,7 +204,7 @@ def test_the_provenance_line_states_the_gap_so_shrinkage_is_detectable(tmp_path)
     _check(store)
     md = _report(store)
     provenance = md.splitlines()[1]
-    assert "had no baseline" in provenance, provenance
+    assert "had no usable baseline" in provenance, provenance
     assert "3" in provenance, provenance
 
 
@@ -244,7 +244,7 @@ def test_the_zero_comparison_message_names_both_causes(tmp_path, monkeypatch):
     assert r.exit_code == cli.EXIT_UNMEASURED, r.output
     out = _flat(r.output)
     assert "rejected 1" in out
-    assert "had no recorded baseline" in out
+    assert "had no usable baseline" in out
     assert "angry_customer" in out
 
 
