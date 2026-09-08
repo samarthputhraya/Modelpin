@@ -671,8 +671,9 @@ produced a false positive is precisely what ADR-0022 exists to prevent.
   `regression` at **confidence 0.95**. This is the failure mode `MIN_TOOL_TVD` exists to prevent,
   and on a corpus where the channel is live it happens.
 - `[M]` **The assertion channel returned zero exposure even on a corpus built for it.** Its four
-  scenarios pinned at a violation rate of 0/5 or 5/5 on *both* sides. That is a stated limit, not
-  a bound: **the format/assertion channel remains unmeasured for false positives.**
+  scenarios pinned at a violation rate of 0/5 or 5/5 on *both* sides. That was a stated limit, not
+  a bound. **It has since been lifted — see *The assertion channel* below**, which measures it on
+  a third corpus (`examples/fp-suite-v3`) built against a diagnosis of why this one failed.
 - `[M]` **Eight of the eleven non-anchor scenarios produced no exposure on their target channel**,
   each tripping the falsifier its own file pre-registered: four of the seven tool-live scenarios
   (`calc_tool_or_mental_math`, `grammar_tool_or_direct_fix`, `verify_or_trust_pasted_status`,
@@ -701,6 +702,69 @@ trajectory 5 times and reached scoring 0 times. So **17.0% is a bound over one d
 not over tool use in general. Two models from one vendor are two models. The pooled row's 480 is
 every trial that reached a verdict, including the control's 40, which the per-channel rows
 exclude.
+
+## The assertion channel (2026-09-08) — measured for the first time, in either direction
+
+`[M]` **1 false alarm in 30 scored assertion-exposed trials = 3.3%, one-sided 95% upper bound
+14.9%.** Over **7 distinct scenarios** that is `1/7`, upper bound **52.1%** — and per ADR-0042 D3
+the shape figure is the one that constrains, not the trial figure. Both anchors held at zero
+exposure, so the run is readable. Corpus `examples/fp-suite-v3` (role `score`), artifacts under
+[`reports/channel-exposure/2026-09-08/`](../reports/channel-exposure/2026-09-08/).
+
+Until this run the format/assertion channel had **never been measured for false positives in
+either direction.** `[M]` Across the 710-trial run of record: **0** trials with
+`format_valid == False`. Across `examples/fp-suite-v2`, a corpus built specifically to move it:
+**0 exposed of 160 in scope.** The channel was not dead — the recall arm moved it seven times —
+so what was missing was a corpus, not an engine.
+
+**The premise the third attempt was filed on turned out to be false, and that is why it worked.**
+`[M]` Recomputed offline from v2's own stored traces, 400 recorded runs per scenario: the models
+were *not* deterministic. `citation_style_underspecified` never emitted the asserted `[2]`
+(**0/400**) while emitting `Passage 2` **400/400**, splitting `(Passage 2)` 42.5% against
+`Passage 2:` 32.0%. Replaying the identical stored runs against a different asserted literal —
+changing nothing but the string — turns *"the sides never differ"* into *"the sides differ most
+of the time"* (12–16 of 20 trials on three of the four scenarios). v2 did not fail because the
+models are deterministic. It failed because the author had to **guess** which string the model
+would sometimes emit, and guessed one with probability exactly zero.
+
+So v3 removes the guess: 6 of its 8 live scenarios assert only on literals copied **verbatim out
+of their own prompt**, each a 3–5 element conjunction, with a brevity constraint as the source of
+variance. A conjunction is dead only if *every* element is pinned, which is a far smaller target
+than one literal being pinned.
+
+| | trials in scope | assertion-exposed | scored | flagged | bound |
+|---|---|---|---|---|---|
+| run of record (710-trial null) | 710 | 0 | 0 | 0 | none |
+| `fp-suite-v2` (built to move it) | 160 | 0 | 0 | 0 | none |
+| **`fp-suite-v3` (this run)** | **312** | **56** | **30** | **1** | **3.3%, ub 14.9%** |
+
+**Read these five things before quoting 14.9%.**
+
+1. `[M]` **Over distinct shapes it is `1/7` and the bound is 52.1%.** Two scenarios supply 22 of
+   the 30 scored trials (`dispatch_line_keeps_the_ids` 15, `regex_anchors_unspecified` 7).
+   Repeats buy resolution on these shapes, never coverage of an eighth.
+2. `[M]` **The one flagged trial is published as a false positive whatever anyone thinks of it**
+   (ADR-0036 rule 4): `standup_digest_keeps_the_ids#6`, `changed_minor @ 0.996`, channel
+   `assertion`. It is advisory by ADR-0032 and could not have failed a build — which is a fact
+   about severity (ADR-0042), not a reason to discount it.
+3. `[M]` **The run is 312 trials, not the 400 pre-registered.** Three of four surfaces completed
+   clean (100 trials each, 0 provider errors). The fourth walled on the provider's rate/quota
+   limit and contributed 12 of its 100; a `--resume` at one worker re-attempted and failed again.
+   Provider errors never enter a rate (ADR-0036), so the bound is unaffected in kind — but the
+   denominator is a quarter smaller than bought, and that is a shortfall, not a design choice.
+4. `[M]` **Both models are OpenAI and both judges are OpenAI.** No cross-vendor arm ran on this
+   corpus at all. The free Groq pilot that gated the spend is not a measurement of these models:
+   on v2's prompts `openai/gpt-oss-20b` cites as `【Passage 2】` where both OpenAI models use
+   `(Passage 2)`. A rate measured on the pilot model transfers to neither.
+5. `[M]` **The tool channel returned zero exposure here, by design.** No file in this corpus
+   declares `tools` — one seam per scenario — so nothing in this section says anything about the
+   tool trajectory. That channel's own number is in the section above, and it is worse.
+
+**The outcomes were pre-registered before the run** (`examples/fp-suite-v3/README.md`,
+§"What failure looks like"): SUCCESS at ≥ 20 scored trials with both anchors quiet, PARTIAL at
+1–19, FAILURE at 0 — with FAILURE committing the page to a permanent stated limit and *not*
+authorising a fourth attempt. 30 scored clears SUCCESS. The prediction that came with it was
+"expect 0 or 1 false alarms, and do not read 0 as a failure"; the observed 1 is inside that.
 
 ## Cross-judge agreement (2026-09-07) — one replay, two judges
 
