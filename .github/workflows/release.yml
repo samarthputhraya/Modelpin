@@ -495,10 +495,19 @@ jobs:
           # scripts/drift_map.py`. So the gate behaved correctly and caught a real drift; the
           # remedy is to re-measure, not to loosen. MANIFEST.in is the source of truth for what
           # belongs here, and this hand-copy of it is the defect class: see MP-121.
+          # [M] 2026-09-08: and it refused the 0.3.0 release over `actions`, for the third
+          # time in the same shape. MP-203 added `graft actions` to MANIFEST.in on 2026-09-07
+          # -- after 0.2.1 shipped -- because [M] an sdist installed exactly as CONTRIBUTING.md
+          # instructs failed test_exit_code_contract.py without `actions/README.md`, the
+          # published documentation of the Action's own output contract. Re-measured, not
+          # loosened. `tests/test_release_gate.py` now derives this set from MANIFEST.in and
+          # fails when the two disagree, so the hand-copy can no longer drift silently; MP-121
+          # remains the row for deleting the hand-copy outright.
           _SDIST_TOP_ALLOWED = {
               "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LICENSE", "MANIFEST.in",
-              "PKG-INFO", "README.md", "SECURITY.md", "action.yml", "data", "docs", "examples",
-              "modelpin", "modelpin.egg-info", "pyproject.toml", "scripts", "setup.cfg", "tests",
+              "PKG-INFO", "README.md", "SECURITY.md", "action.yml", "actions", "data", "docs",
+              "examples", "modelpin", "modelpin.egg-info", "pyproject.toml", "scripts",
+              "setup.cfg", "tests",
           }
           top = {m.split("/")[0] for m in members if m}
           unexpected = sorted(top - _SDIST_TOP_ALLOWED)
