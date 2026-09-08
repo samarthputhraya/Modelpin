@@ -1,0 +1,82 @@
+{
+  "id": "tc_archive_two_box_request",
+  "name": "Archive: two per-item calls collapsed into one batch call",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the reading-room assistant at the Marlborough Estate Archive. request_box orders one box up from the store; call it once for each box a reader wants. request_transfer_batch is used only for whole-shelf transfers between stores and never for a reader request. Reply to the reading room with one short sentence naming the boxes requested and the day they will be available. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "A reader wants boxes 4102 and 4118 in the reading room for Thursday."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "request_box",
+          "description": "Order one box up from the store to the reading room.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "box": {
+                "type": "string",
+                "description": "The box number, e.g. 4102."
+              },
+              "wanted_for": {
+                "type": "string",
+                "description": "The day the reader wants it."
+              }
+            },
+            "required": [
+              "box",
+              "wanted_for"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "request_transfer_batch",
+          "description": "Move a set of boxes between stores in one transfer.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "boxes": {
+                "type": "array",
+                "description": "The box numbers."
+              },
+              "wanted_for": {
+                "type": "string",
+                "description": "The day the transfer is wanted for."
+              }
+            },
+            "required": [
+              "boxes",
+              "wanted_for"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "request_box": {
+        "status": "requested",
+        "wanted_for": "Thursday"
+      },
+      "request_transfer_batch": {
+        "boxes": [
+          "4102",
+          "4118"
+        ],
+        "wanted_for": "Thursday",
+        "status": "requested"
+      }
+    },
+    "temperature": 1.0
+  }
+}

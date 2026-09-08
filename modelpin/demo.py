@@ -229,6 +229,16 @@ Open `{DEMO_FIXTURES}` and edit the `{DEMO_TO}` trace for `refund_request` so it
 `tool_calls` match `{DEMO_FROM}` exactly. Re-run `modelpin check`. The regression disappears and
 the verdict moves to `unchanged` — the verdict is computed from the traces, not hardcoded.
 
+### When the change is one your app allows
+
+`{DEMO_TO}` calls `lookup_order` twice where `{DEMO_FROM}` called it once. Under the default
+`strict` mode that is a regression, and often it should be. But if a *redundant* lookup is
+acceptable in your app, say so in the scenario rather than editing traces or loosening the
+whole run: add `"match": "superset"` to `scenarios/refund_request.json` and re-run
+`modelpin check`. Only that scenario changes, the rest of the suite is still `strict`, and
+you do **not** have to re-record your baseline. The run header and the PR comment both name
+every scenario that overrode the flag, so a reviewer can always see it was done.
+
 Then point `scenarios/` at your own app's cases and swap `providers: [fake]` for a real
 one. That is the entire migration from demo to production use.
 """

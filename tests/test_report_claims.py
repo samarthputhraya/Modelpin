@@ -396,11 +396,29 @@ def test_every_published_recall_fraction_carries_the_bound_its_own_helper_comput
         f"`1 - upper_bound_95({n - detected}, {n})`."
     )
 
+    # `[M] 2026-09-08` The blanket "this string must not appear" version of this check was
+    # WRONG, and MP-223 is what proved it. At k = 0 the closed form and the Clopper-Pearson
+    # bound are the SAME NUMBER by mathematics -- `upper_bound_95(0, m) == 1 - 0.05 ** (1 / m)`
+    # exactly -- so a document legitimately publishing `0/6, ub 39.3%` was being told it had
+    # published the forbidden form. The defect ADR-0022 records is using the closed form at
+    # k > 0, where it is insensitive to k (flattering at 4/6, understated at 5/6). So the
+    # assertion is narrowed to what it actually means: the string is refused UNLESS it sits
+    # beside a zero-numerator fraction that produces it correctly. Same shape as the adjacency
+    # rule above, and it keeps both mutants that defeated the first version dead.
     closed_form = f"**{1 - 0.05 ** (1 / n):.1%}**"
     if closed_form != bound:
-        assert (
-            closed_form not in text
-        ), f"{where} publishes {closed_form}, the closed form ADR-0022 records as wrong at k>0."
+        for site in (m.start() for m in re.finditer(re.escape(closed_form), text)):
+            window = text[max(0, site - _ADJACENCY) : site + len(closed_form) + _ADJACENCY]
+            legitimate = any(
+                f"**{upper_bound_95(0, m):.1%}**" == closed_form
+                for m in (int(g) for g in re.findall(r"(?<![\d/])0/(\d+)", window))
+            )
+            assert legitimate, (
+                f"{where} publishes {closed_form} at offset {site} with no `0/n` fraction "
+                f"within {_ADJACENCY} characters that yields it. ADR-0022 records the closed "
+                "form `1 - alpha ** (1 / n)` as wrong at k > 0; it is only ever admissible as "
+                "the k = 0 Clopper-Pearson bound, beside the fraction it came from."
+            )
 
 
 def test_the_readme_publishes_no_relative_links():

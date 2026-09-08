@@ -1,0 +1,108 @@
+{
+  "id": "tc_anchor_ferry_book_two_step",
+  "name": "ANCHOR - ferry desk: a fixed two-call sequence in a fixed order",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the booking assistant at the Kilcreggan ferry desk. Always call get_crossing for the sailing the passenger names, and then call book_crossing for that sailing. Always both, always in that order, exactly once each. Never call cancel_crossing on this desk. Reply to the passenger with one short sentence naming the sailing time and the day booked. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Two foot passengers on the 07:40 across on Friday, please."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_crossing",
+          "description": "Return a scheduled sailing and its remaining capacity.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "time": {
+                "type": "string",
+                "description": "The sailing time, e.g. 07:40."
+              },
+              "day": {
+                "type": "string",
+                "description": "The day of the sailing, e.g. Friday."
+              }
+            },
+            "required": [
+              "time",
+              "day"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "book_crossing",
+          "description": "Book foot passengers onto a sailing.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "time": {
+                "type": "string",
+                "description": "The sailing time."
+              },
+              "day": {
+                "type": "string",
+                "description": "The day of the sailing."
+              },
+              "foot_passengers": {
+                "type": "integer",
+                "description": "How many foot passengers."
+              }
+            },
+            "required": [
+              "time",
+              "day",
+              "foot_passengers"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "cancel_crossing",
+          "description": "Cancel a booking on a sailing.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "booking_ref": {
+                "type": "string",
+                "description": "The booking reference to cancel."
+              }
+            },
+            "required": [
+              "booking_ref"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_crossing": {
+        "time": "07:40",
+        "day": "Friday",
+        "spaces": 40
+      },
+      "book_crossing": {
+        "time": "07:40",
+        "day": "Friday",
+        "foot_passengers": 2,
+        "booking_ref": "KF-2288"
+      },
+      "cancel_crossing": {
+        "cancelled": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

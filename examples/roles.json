@@ -1,184 +1,226 @@
 {
-  "version": 1,
-  "_comment": [
-    "Which scenario sets Modelpin FITS thresholds on, and which it SCORES results on.",
-    "A set that is both is train/test leakage: every out-of-sample claim measured on it is",
-    "void. This file is the machine-readable source of that split; tests/test_suite_roles.py",
-    "enforces it, and the prose in each set's README must agree with the role declared here.",
-    "Roles: fit = thresholds may be tuned here, results may NOT be claimed from here.",
-    "       score = results are measured here, NO threshold may ever be fitted here.",
-    "       public = the published Report suite; disjoint from fit and score alike.",
-    "       fixture = a frozen copy that reproduces an already-published report; it may",
-    "                 duplicate a public set by design, but never a fit or score one.",
-    "Adding a scenario file without listing it here fails the test. That is the point:",
-    "the failure MP-77 exists to prevent is a scenario landing with no declared role."
-  ],
-  "sets": [
-    {
-      "path": "suite",
-      "role": "score",
-      "why": "The held-out DoD suite. docs/fp-measurement.md measures the false-positive rate here, so nothing may ever be tuned on it. [M] All 8 run at temperature 0, so there is no run-to-run argument variance for the argument channel to score. [M] Three of them (cancel_subscription, order_status, refund_request) DO declare tools, but as bare strings, which providers/openai.py::_to_tools normalises to an empty parameters block -- a function with no arguments to fill. Either property alone makes this set unable to score the argument channel; see the calibration/arg_* entry.",
-      "scenarios": [
-        "cancel_subscription",
-        "classify_sentiment",
-        "decline_pii",
-        "extract_total",
-        "format_contact_json",
-        "order_status",
-        "refund_request",
-        "summarize_ticket"
-      ]
-    },
-    {
-      "path": "calibration",
-      "role": "fit",
-      "why": "The labeled semantic set MIN_SEMANTIC_DELTA was fitted on (modelpin/diff/__init__.py). Temperature 0.7, no tools. Tuning here is the intended use, and the direct consequence is that no false-positive rate may be claimed from it -- a threshold and the number that scores it cannot come from the same scenarios. See ADR-0025.",
-      "scenarios": [
-        "classify_topic",
-        "define_term",
-        "explain_concept",
-        "reco_decision",
-        "summarize_outcome",
-        "unit_answer"
-      ]
-    },
-    {
-      "path": "calibration",
-      "role": "score",
-      "why": "The argument-jitter subset (MP-54). It shares a directory with the fit set above but not its role: README-arguments.md authored it to price the false-positive rate of the tool-call argument signal, and docs/fp-measurement.md directs the FP-establishing run here. [M] It is the only set in the repo with both tools and temperature>0, so it is the only surface an argument false positive can appear on -- which is exactly why no threshold may be fitted on it: a floor fitted on the only surface where a signal can fire, then scored on that same surface, is unfalsifiable. [M] NOTE the ceiling on what it can show, and that the likeliest outcome is no number at all: 7 scenarios give a 95% one-sided upper bound of 34.8% at zero observed false positives, but only if all 7 score. ADR-0022 excludes trials that could not have fired, and [M] across the THREE runs of record in docs/fp-measurement.md the scored fraction was 0 of 8, 1 of 6, and 0 of 6 -- 1 of 20 attempted, 5.0%. At that rate 7 scenarios project to 0.35 expected scored trials, so the modal outcome is ZERO scored trials: an abstention under ADR-0018, not a rate. One scored trial gives a 95.0% bound. This set can falsify the argument signal; it cannot establish a low rate. [M] 2026-09-07 (MP-205, ADR-0036): the run of record exists -- gpt-4.1-mini vs itself, judge on, runs 5 x 30 repeats: 30 scored of 210, 0 false alarms, 95% upper bound 9.5% of scored and 1.4% of trials reached; artifact reports/fp-runs/2026-09-07/s1-arg-gpt-4.1-mini.jsonl. The 'modal outcome is zero' projection above was wrong in the pessimistic direction: --repeats did what MP-89 said. See ADR-0025.",
-      "scenarios": [
-        "arg_enum_phrasing",
-        "arg_freetext_note",
-        "arg_key_order",
-        "arg_list_order",
-        "arg_multistep_carry",
-        "arg_numeric_rounding",
-        "arg_optional_fields"
-      ]
-    },
-    {
-      "path": "report-suite",
-      "role": "public",
-      "why": "The open, versioned, content-hashed suite behind the public Modelpin Report (ADR-0009). Its own manifest.json claims strict disjointness from suite/ and calibration/; this file is what makes that claim testable rather than asserted.",
-      "scenarios": [
-        "ambiguous_tool_redundant",
-        "borderline_access",
-        "first_primes",
-        "multi_constraint_colors",
-        "nuanced_intent",
-        "prompt_injection",
-        "reason_machines",
-        "reason_pen_rounding",
-        "reason_snail",
-        "sarcasm_sentiment",
-        "strict_json_escape",
-        "summarize_semantic",
-        "tool_missing_param",
-        "tooluse_guarded_action"
-      ]
-    },
-    {
-      "path": "drift-suite",
-      "role": "fixture",
-      "duplicates": "report-suite",
-      "why": "The frozen 12-scenario fixture that produced The Modelpin Drift Map #1 (docs/reports/modelpin-drift-map-1.md). [M] 2026-08-24: all 12 committed files are byte-identical to their report-suite namesakes -- identical blob SHAs under `git ls-files -s`, 12 of 12 -- omitting the two breadth anchors. (.gitattributes pins `* text=auto eol=lf`, so a Windows working copy may show some pairs differing in CRLF vs LF alone; that is a checkout artifact, not a property of the repository.) The duplication is declared here so a pairwise-disjointness test cannot be satisfied by quietly deleting a published report's fixture.",
-      "scenarios": [
-        "ambiguous_tool_redundant",
-        "borderline_access",
-        "first_primes",
-        "multi_constraint_colors",
-        "nuanced_intent",
-        "prompt_injection",
-        "reason_machines",
-        "reason_pen_rounding",
-        "reason_snail",
-        "sarcasm_sentiment",
-        "strict_json_escape",
-        "tool_missing_param"
-      ]
-    },
-    {
-      "path": "refusal-suite",
-      "role": "fit",
-      "why": "The suite built to make the REFUSAL channel fire. [M] 2026-08-31: refusal had never MOVED A VERDICT on real material, so it was the last of the five verdict-bearing channels whose live behaviour was an assumption. (CORRECTED 2026-09-05, MP-187: this entry used to say refusal had never been OBSERVED -- '0 of 60 traces on the kavach dogfood, 0 of 30 on aegis'. The aegis half is false and its own artifact refutes it: [M] ops/launch/aegis-suite/baseline-openai_gpt-oss-120b.json stores refused=true on 5 of 30 traces, all five refusal_probe runs. What was true is the delta claim -- every observed decline was two-sided, 5/5 -> 5/5, and ADR-0002 makes the channel one-sided, so no verdict could move. [M] MP-178 closed that on examples/voicerag-suite: 0/5 refused on gpt-oss-20b against 5/5 on gpt-oss-120b, refusal_delta +1.0, the first refusal-driven regression on real material.) Role `fit` and not `score`, deliberately: if a live run shows real declines that REFUSAL_MARKERS misses, widening those markers is a threshold change, and it must happen on a set no rate is ever claimed from. The refusal false-positive rate belongs on the held-out examples/suite, which already carries decline_pii. Content-disjoint from every other set.",
-      "scenarios": [
-        "answer_plain_question",
-        "refuse_browse_url",
-        "refuse_private_lookup",
-        "refuse_read_local_file",
-        "refuse_realtime_price",
-        "refuse_send_email"
-      ]
-    },
-    {
-      "path": "voicerag-suite",
-      "role": "score",
-      "why": "MP-178. The first suite modelled on a real app whose CORE behaviour is a calibrated decline: VoiceRAG (the maintainer's own public repo) answers from retrieved passages or emits the sentinel ABSTAIN_TOKEN `INSUFFICIENT_CONTEXT`. Every scenario reproduces VoiceRAG's SYSTEM_PROMPT byte-for-byte and its render() user shape (`PASSAGES:` / `QUESTION:` / `ANSWER:`), so the assertions encode THAT APP's stated contract (its prompt rules 1-5) and nothing else. Role `score`, and the consequence is binding: the published run in docs/reports/modelpin-voicerag-abstention-1.md was measured here, so no threshold may ever be fitted here AND no assertion may be edited to make a result come out differently. [M] 2026-09-05: an adversarial scenario review read the suite AFTER it had been scored and found six real assertion defects; they were filed as MP-186 for a v2 suite rather than applied, precisely because editing them post-hoc is the fitting ADR-0025 forbids. [M] The tool-trajectory and tool-argument channels are dead here (no scenario declares `tools`); the live channels are refusal, text assertions and the semantic judge.",
-      "scenarios": [
-        "abstain_empty_context",
-        "abstain_topic_no_answer",
-        "abstain_unsafe_question",
-        "answer_multi_hop",
-        "answer_over_distractor",
-        "answer_paraphrase_gap",
-        "cite_in_range",
-        "format_one_spoken_sentence"
-      ]
-    },
-    {
-      "path": "fp-suite",
-      "role": "score",
-      "why": "MP-205. The false-positive suite of record: twelve scenarios modelled on the long-tail apps this project exists for (a support bot with a lookup tool, a JSON triage step, a classifier, an invoice extractor, a stand-up summariser, a RAG answer with a citation, a two-step scheduling agent, an agent that must ASK for a missing id, a borderline medication question, a Markdown table, an email rewrite, a text-to-SQL step), every one at temperature 1.0 -- the OpenAI API's default and therefore what a zero-config user's app actually runs at. [M] Every scenario set that existed before it runs at temperature 0 except arg_* (0.7, tools only) and the six fitted semantic files, so no set could exercise the semantic, refusal and assertion channels on a same-model null where the outputs actually VARY. Role score, pre-registered in ADR-0036 BEFORE its first run: no threshold may be fitted here, no assertion or prompt may be edited after a rate has been measured on it (a defect found later becomes a v2 suite row, as MP-186 did for voicerag-suite), and no scenario here may be moved to another role. Content-disjoint from every other set.",
-      "scenarios": [
-        "support_order_status",
-        "triage_ticket_json",
-        "classify_review_sentiment",
-        "extract_invoice_fields",
-        "summarize_standup_notes",
-        "rag_answer_with_citation",
-        "agent_reschedule_two_step",
-        "agent_missing_param_ask",
-        "borderline_medication_question",
-        "format_markdown_table",
-        "rewrite_email_polite",
-        "sql_from_question"
-      ]
-    },
-    {
-      "path": "fp-suite-v2",
-      "role": "score",
-      "why": "MP-207: the tool-trajectory and format/assertion channels, exposed to a same-model null for the first time. [M] 2026-09-07 over reports/fp-runs/2026-09-07/*.jsonl: of the 710 FP-arm trials in the run of record, ZERO had tool_call_match < 1.0 and ZERO had format_valid False -- while the 46 deliberately-perturbed recall trials produced 10 and 7 respectively. The channels work; they had simply never been shown a null, so MIN_TOOL_TVD had a measured false-positive exposure of exactly zero trials and the published 3.6% bound covered neither channel. [M] The scenario authored for precisely this in fp-suite, agent_missing_param_ask, produced zero tool calls on BOTH sides in all 6 of its scored FP-ARM trials (of 41 that reached a verdict; its perturbed recall arm did move the channel): its prompt says 'ask them for it and do not call the tool', which is unambiguous, so nothing varied. These twelve are built so a SAME model varies: four make calling the tool a genuine judgement call, three add a second tool that is optional given what the user already said (so the trajectory varies in LENGTH, not in outcome), four assert on a literal the model produces variably while staying correct, and anchor_mandatory_lookup_fixed_format is a NEGATIVE CONTROL -- mandatory tool, unambiguous format, so variance THERE means the run measured noise rather than design. score, never fit: a floor fitted on the only surface where a channel can fire and then scored on that same surface is unfalsifiable (ADR-0025). Pre-registered in ADR-0038.",
-      "scenarios": [
-        "anchor_mandatory_lookup_fixed_format",
-        "calc_tool_or_mental_math",
-        "citation_style_underspecified",
-        "docsearch_or_general_knowledge",
-        "grammar_tool_or_direct_fix",
-        "optional_availability_before_booking",
-        "optional_notify_after_status_update",
-        "optional_part_stock_second_lookup",
-        "plaintext_answer_bold_optional",
-        "sql_answer_fence_unspecified",
-        "total_currency_code_or_symbol",
-        "verify_or_trust_pasted_status"
-      ]
-    },
-    {
-      "path": "fp-suite-v3",
-      "role": "score",
-      "why": "MP-222: attempt #2 at a same-model null the FORMAT/ASSERTION channel can actually move. fp-suite-v2 failed on this channel and published the failure: [M] 2026-09-07, 0 exposed of 160 trials in scope, all four of its assertion scenarios pinned at a violation rate of 0/5 or 5/5 on BOTH sides. [M] Re-reading fp-suite-v2's own stored traces (reports/channel-exposure/2026-09-07/v2*.jsonl, 400 runs per scenario) shows WHY, and it is not what the row assumed: the models were NOT deterministic. Three of the four assertions named a literal that lies outside the model's output distribution entirely - `[2]` appeared in 0/400 runs while `Passage 2` appeared in 400/400 (gpt-4o-mini split 42.5% `(Passage 2)` / 32.0% `Passage 2:`), and `EUR` appeared in 0/400 while gpt-4o-mini split 47.0% U+20AC / 53.0% `euros`. Swapping ONLY the asserted literal on those identical stored runs turns 0/20 sides-differ into 11-17/20. The variance was always there; the instrument was pointed away from it. So v3 changes the INSTRUMENT, not the temperature: five scenarios assert on literals that are verbatim in their own prompt, so the failure mode that killed v2 - 'the model never produced the literal' - is structurally impossible, and the only remaining question is the OMISSION rate under brevity pressure; assertions are conjunctions of 3-5 elements so a scenario is dead only if EVERY element is pinned at exactly 1.0; and two anchors are quiet by construction. score, never fit: no threshold may be fitted here and no prompt or assertion may be edited after a rate has been measured (ADR-0025, ADR-0038). Content-disjoint from every other set; its rate is never pooled with the fp-suite bound and its artifacts live under reports/channel-exposure/.",
-      "scenarios": [
-        "action_items_keep_the_owners",
-        "anchor_closed_set_label",
-        "anchor_echo_the_reference_line",
-        "dispatch_line_keeps_the_ids",
-        "handover_note_keeps_the_ids",
-        "json_null_or_omitted_key",
-        "metrics_line_keeps_the_numbers",
-        "regex_anchors_unspecified",
-        "slug_conjunction_stopwords",
-        "standup_digest_keeps_the_ids"
-      ]
-    }
-  ]
+ "version": 1,
+ "_comment": [
+  "Which scenario sets Modelpin FITS thresholds on, and which it SCORES results on.",
+  "A set that is both is train/test leakage: every out-of-sample claim measured on it is",
+  "void. This file is the machine-readable source of that split; tests/test_suite_roles.py",
+  "enforces it, and the prose in each set's README must agree with the role declared here.",
+  "Roles: fit = thresholds may be tuned here, results may NOT be claimed from here.",
+  "       score = results are measured here, NO threshold may ever be fitted here.",
+  "       public = the published Report suite; disjoint from fit and score alike.",
+  "       fixture = a frozen copy that reproduces an already-published report; it may",
+  "                 duplicate a public set by design, but never a fit or score one.",
+  "Adding a scenario file without listing it here fails the test. That is the point:",
+  "the failure MP-77 exists to prevent is a scenario landing with no declared role."
+ ],
+ "sets": [
+  {
+   "path": "suite",
+   "role": "score",
+   "why": "The held-out DoD suite. docs/fp-measurement.md measures the false-positive rate here, so nothing may ever be tuned on it. [M] All 8 run at temperature 0, so there is no run-to-run argument variance for the argument channel to score. [M] Three of them (cancel_subscription, order_status, refund_request) DO declare tools, but as bare strings, which providers/openai.py::_to_tools normalises to an empty parameters block -- a function with no arguments to fill. Either property alone makes this set unable to score the argument channel; see the calibration/arg_* entry.",
+   "scenarios": [
+    "cancel_subscription",
+    "classify_sentiment",
+    "decline_pii",
+    "extract_total",
+    "format_contact_json",
+    "order_status",
+    "refund_request",
+    "summarize_ticket"
+   ]
+  },
+  {
+   "path": "calibration",
+   "role": "fit",
+   "why": "The labeled semantic set MIN_SEMANTIC_DELTA was fitted on (modelpin/diff/__init__.py). Temperature 0.7, no tools. Tuning here is the intended use, and the direct consequence is that no false-positive rate may be claimed from it -- a threshold and the number that scores it cannot come from the same scenarios. See ADR-0025.",
+   "scenarios": [
+    "classify_topic",
+    "define_term",
+    "explain_concept",
+    "reco_decision",
+    "summarize_outcome",
+    "unit_answer"
+   ]
+  },
+  {
+   "path": "calibration",
+   "role": "score",
+   "why": "The argument-jitter subset (MP-54). It shares a directory with the fit set above but not its role: README-arguments.md authored it to price the false-positive rate of the tool-call argument signal, and docs/fp-measurement.md directs the FP-establishing run here. [M] It is the only set in the repo with both tools and temperature>0, so it is the only surface an argument false positive can appear on -- which is exactly why no threshold may be fitted on it: a floor fitted on the only surface where a signal can fire, then scored on that same surface, is unfalsifiable. [M] NOTE the ceiling on what it can show, and that the likeliest outcome is no number at all: 7 scenarios give a 95% one-sided upper bound of 34.8% at zero observed false positives, but only if all 7 score. ADR-0022 excludes trials that could not have fired, and [M] across the THREE runs of record in docs/fp-measurement.md the scored fraction was 0 of 8, 1 of 6, and 0 of 6 -- 1 of 20 attempted, 5.0%. At that rate 7 scenarios project to 0.35 expected scored trials, so the modal outcome is ZERO scored trials: an abstention under ADR-0018, not a rate. One scored trial gives a 95.0% bound. This set can falsify the argument signal; it cannot establish a low rate. [M] 2026-09-07 (MP-205, ADR-0036): the run of record exists -- gpt-4.1-mini vs itself, judge on, runs 5 x 30 repeats: 30 scored of 210, 0 false alarms, 95% upper bound 9.5% of scored and 1.4% of trials reached; artifact reports/fp-runs/2026-09-07/s1-arg-gpt-4.1-mini.jsonl. The 'modal outcome is zero' projection above was wrong in the pessimistic direction: --repeats did what MP-89 said. See ADR-0025.",
+   "scenarios": [
+    "arg_enum_phrasing",
+    "arg_freetext_note",
+    "arg_key_order",
+    "arg_list_order",
+    "arg_multistep_carry",
+    "arg_numeric_rounding",
+    "arg_optional_fields"
+   ]
+  },
+  {
+   "path": "report-suite",
+   "role": "public",
+   "why": "The open, versioned, content-hashed suite behind the public Modelpin Report (ADR-0009). Its own manifest.json claims strict disjointness from suite/ and calibration/; this file is what makes that claim testable rather than asserted.",
+   "scenarios": [
+    "ambiguous_tool_redundant",
+    "borderline_access",
+    "first_primes",
+    "multi_constraint_colors",
+    "nuanced_intent",
+    "prompt_injection",
+    "reason_machines",
+    "reason_pen_rounding",
+    "reason_snail",
+    "sarcasm_sentiment",
+    "strict_json_escape",
+    "summarize_semantic",
+    "tool_missing_param",
+    "tooluse_guarded_action"
+   ]
+  },
+  {
+   "path": "drift-suite",
+   "role": "fixture",
+   "duplicates": "report-suite",
+   "why": "The frozen 12-scenario fixture that produced The Modelpin Drift Map #1 (docs/reports/modelpin-drift-map-1.md). [M] 2026-08-24: all 12 committed files are byte-identical to their report-suite namesakes -- identical blob SHAs under `git ls-files -s`, 12 of 12 -- omitting the two breadth anchors. (.gitattributes pins `* text=auto eol=lf`, so a Windows working copy may show some pairs differing in CRLF vs LF alone; that is a checkout artifact, not a property of the repository.) The duplication is declared here so a pairwise-disjointness test cannot be satisfied by quietly deleting a published report's fixture.",
+   "scenarios": [
+    "ambiguous_tool_redundant",
+    "borderline_access",
+    "first_primes",
+    "multi_constraint_colors",
+    "nuanced_intent",
+    "prompt_injection",
+    "reason_machines",
+    "reason_pen_rounding",
+    "reason_snail",
+    "sarcasm_sentiment",
+    "strict_json_escape",
+    "tool_missing_param"
+   ]
+  },
+  {
+   "path": "refusal-suite",
+   "role": "fit",
+   "why": "The suite built to make the REFUSAL channel fire. [M] 2026-08-31: refusal had never MOVED A VERDICT on real material, so it was the last of the five verdict-bearing channels whose live behaviour was an assumption. (CORRECTED 2026-09-05, MP-187: this entry used to say refusal had never been OBSERVED -- '0 of 60 traces on the kavach dogfood, 0 of 30 on aegis'. The aegis half is false and its own artifact refutes it: [M] ops/launch/aegis-suite/baseline-openai_gpt-oss-120b.json stores refused=true on 5 of 30 traces, all five refusal_probe runs. What was true is the delta claim -- every observed decline was two-sided, 5/5 -> 5/5, and ADR-0002 makes the channel one-sided, so no verdict could move. [M] MP-178 closed that on examples/voicerag-suite: 0/5 refused on gpt-oss-20b against 5/5 on gpt-oss-120b, refusal_delta +1.0, the first refusal-driven regression on real material.) Role `fit` and not `score`, deliberately: if a live run shows real declines that REFUSAL_MARKERS misses, widening those markers is a threshold change, and it must happen on a set no rate is ever claimed from. The refusal false-positive rate belongs on the held-out examples/suite, which already carries decline_pii. Content-disjoint from every other set.",
+   "scenarios": [
+    "answer_plain_question",
+    "refuse_browse_url",
+    "refuse_private_lookup",
+    "refuse_read_local_file",
+    "refuse_realtime_price",
+    "refuse_send_email"
+   ]
+  },
+  {
+   "path": "voicerag-suite",
+   "role": "score",
+   "why": "MP-178. The first suite modelled on a real app whose CORE behaviour is a calibrated decline: VoiceRAG (the maintainer's own public repo) answers from retrieved passages or emits the sentinel ABSTAIN_TOKEN `INSUFFICIENT_CONTEXT`. Every scenario reproduces VoiceRAG's SYSTEM_PROMPT byte-for-byte and its render() user shape (`PASSAGES:` / `QUESTION:` / `ANSWER:`), so the assertions encode THAT APP's stated contract (its prompt rules 1-5) and nothing else. Role `score`, and the consequence is binding: the published run in docs/reports/modelpin-voicerag-abstention-1.md was measured here, so no threshold may ever be fitted here AND no assertion may be edited to make a result come out differently. [M] 2026-09-05: an adversarial scenario review read the suite AFTER it had been scored and found six real assertion defects; they were filed as MP-186 for a v2 suite rather than applied, precisely because editing them post-hoc is the fitting ADR-0025 forbids. [M] The tool-trajectory and tool-argument channels are dead here (no scenario declares `tools`); the live channels are refusal, text assertions and the semantic judge.",
+   "scenarios": [
+    "abstain_empty_context",
+    "abstain_topic_no_answer",
+    "abstain_unsafe_question",
+    "answer_multi_hop",
+    "answer_over_distractor",
+    "answer_paraphrase_gap",
+    "cite_in_range",
+    "format_one_spoken_sentence"
+   ]
+  },
+  {
+   "path": "fp-suite",
+   "role": "score",
+   "why": "MP-205. The false-positive suite of record: twelve scenarios modelled on the long-tail apps this project exists for (a support bot with a lookup tool, a JSON triage step, a classifier, an invoice extractor, a stand-up summariser, a RAG answer with a citation, a two-step scheduling agent, an agent that must ASK for a missing id, a borderline medication question, a Markdown table, an email rewrite, a text-to-SQL step), every one at temperature 1.0 -- the OpenAI API's default and therefore what a zero-config user's app actually runs at. [M] Every scenario set that existed before it runs at temperature 0 except arg_* (0.7, tools only) and the six fitted semantic files, so no set could exercise the semantic, refusal and assertion channels on a same-model null where the outputs actually VARY. Role score, pre-registered in ADR-0036 BEFORE its first run: no threshold may be fitted here, no assertion or prompt may be edited after a rate has been measured on it (a defect found later becomes a v2 suite row, as MP-186 did for voicerag-suite), and no scenario here may be moved to another role. Content-disjoint from every other set.",
+   "scenarios": [
+    "support_order_status",
+    "triage_ticket_json",
+    "classify_review_sentiment",
+    "extract_invoice_fields",
+    "summarize_standup_notes",
+    "rag_answer_with_citation",
+    "agent_reschedule_two_step",
+    "agent_missing_param_ask",
+    "borderline_medication_question",
+    "format_markdown_table",
+    "rewrite_email_polite",
+    "sql_from_question"
+   ]
+  },
+  {
+   "path": "fp-suite-v2",
+   "role": "score",
+   "why": "MP-207: the tool-trajectory and format/assertion channels, exposed to a same-model null for the first time. [M] 2026-09-07 over reports/fp-runs/2026-09-07/*.jsonl: of the 710 FP-arm trials in the run of record, ZERO had tool_call_match < 1.0 and ZERO had format_valid False -- while the 46 deliberately-perturbed recall trials produced 10 and 7 respectively. The channels work; they had simply never been shown a null, so MIN_TOOL_TVD had a measured false-positive exposure of exactly zero trials and the published 3.6% bound covered neither channel. [M] The scenario authored for precisely this in fp-suite, agent_missing_param_ask, produced zero tool calls on BOTH sides in all 6 of its scored FP-ARM trials (of 41 that reached a verdict; its perturbed recall arm did move the channel): its prompt says 'ask them for it and do not call the tool', which is unambiguous, so nothing varied. These twelve are built so a SAME model varies: four make calling the tool a genuine judgement call, three add a second tool that is optional given what the user already said (so the trajectory varies in LENGTH, not in outcome), four assert on a literal the model produces variably while staying correct, and anchor_mandatory_lookup_fixed_format is a NEGATIVE CONTROL -- mandatory tool, unambiguous format, so variance THERE means the run measured noise rather than design. score, never fit: a floor fitted on the only surface where a channel can fire and then scored on that same surface is unfalsifiable (ADR-0025). Pre-registered in ADR-0038.",
+   "scenarios": [
+    "anchor_mandatory_lookup_fixed_format",
+    "calc_tool_or_mental_math",
+    "citation_style_underspecified",
+    "docsearch_or_general_knowledge",
+    "grammar_tool_or_direct_fix",
+    "optional_availability_before_booking",
+    "optional_notify_after_status_update",
+    "optional_part_stock_second_lookup",
+    "plaintext_answer_bold_optional",
+    "sql_answer_fence_unspecified",
+    "total_currency_code_or_symbol",
+    "verify_or_trust_pasted_status"
+   ]
+  },
+  {
+   "path": "fp-suite-v3",
+   "role": "score",
+   "why": "MP-222: attempt #2 at a same-model null the FORMAT/ASSERTION channel can actually move. fp-suite-v2 failed on this channel and published the failure: [M] 2026-09-07, 0 exposed of 160 trials in scope, all four of its assertion scenarios pinned at a violation rate of 0/5 or 5/5 on BOTH sides. [M] Re-reading fp-suite-v2's own stored traces (reports/channel-exposure/2026-09-07/v2*.jsonl, 400 runs per scenario) shows WHY, and it is not what the row assumed: the models were NOT deterministic. Three of the four assertions named a literal that lies outside the model's output distribution entirely - `[2]` appeared in 0/400 runs while `Passage 2` appeared in 400/400 (gpt-4o-mini split 42.5% `(Passage 2)` / 32.0% `Passage 2:`), and `EUR` appeared in 0/400 while gpt-4o-mini split 47.0% U+20AC / 53.0% `euros`. Swapping ONLY the asserted literal on those identical stored runs turns 0/20 sides-differ into 11-17/20. The variance was always there; the instrument was pointed away from it. So v3 changes the INSTRUMENT, not the temperature: five scenarios assert on literals that are verbatim in their own prompt, so the failure mode that killed v2 - 'the model never produced the literal' - is structurally impossible, and the only remaining question is the OMISSION rate under brevity pressure; assertions are conjunctions of 3-5 elements so a scenario is dead only if EVERY element is pinned at exactly 1.0; and two anchors are quiet by construction. score, never fit: no threshold may be fitted here and no prompt or assertion may be edited after a rate has been measured (ADR-0025, ADR-0038). Content-disjoint from every other set; its rate is never pooled with the fp-suite bound and its artifacts live under reports/channel-exposure/.",
+   "scenarios": [
+    "action_items_keep_the_owners",
+    "anchor_closed_set_label",
+    "anchor_echo_the_reference_line",
+    "dispatch_line_keeps_the_ids",
+    "handover_note_keeps_the_ids",
+    "json_null_or_omitted_key",
+    "metrics_line_keeps_the_numbers",
+    "regex_anchors_unspecified",
+    "slug_conjunction_stopwords",
+    "standup_digest_keeps_the_ids"
+   ]
+  },
+  {
+   "path": "calibration/tool",
+   "role": "fit",
+   "why": "MP-224 / ADR-0041. The labelled tool-NAME-trajectory set. A structural rule for that channel may be CHOSEN here and must then be scored somewhere else. `[M] 2026-09-08` It exists because every candidate rule so far was priced against examples/fp-suite-v2, which ADR-0038 declares role `score` forever -- choosing a rule because it takes that corpus's alarms from 1 to 0 is ADR-0025's prohibition with one word changed, from 'threshold' to 'structural rule'. And ADR-0002's revisit bar asks for >=30 labelled pairs where `[M]` what existed was 4 distinct scenarios replayed 20 times (n_eff = 4, so a detection-loss bound of 52.7%, not the 25.9% '0 in 10' suggests). 32 pairs, 16 `equivalent` and 16 `changed`, with the ground truth in calibration/tool/labels.json. NO rate may ever be published from here.",
+   "scenarios": [
+    "tc_anchor_deeds_office_lookup",
+    "tc_anchor_ferry_book_two_step",
+    "tc_archive_two_box_request",
+    "tc_bakery_standing_delivery",
+    "tc_beekeeping_backorder_lookup",
+    "tc_boxoffice_seat_move",
+    "tc_brewery_keg_credit",
+    "tc_campsite_pitch_hold",
+    "tc_carwash_plan_change",
+    "tc_cheese_delivery_route",
+    "tc_cidermill_reminder_channel",
+    "tc_cleaning_rate_uplift",
+    "tc_climbinggym_freeze_refund",
+    "tc_courier_locker_reassign",
+    "tc_dentallab_case_setup",
+    "tc_filmkit_lens_swap",
+    "tc_glazier_survey_check",
+    "tc_kennel_boarding_clearance",
+    "tc_laundry_route_shortfall",
+    "tc_locksmith_charge_guard",
+    "tc_marina_berth_assign",
+    "tc_nursery_batch_move",
+    "tc_parking_permit_renew",
+    "tc_planthire_offhire_collection",
+    "tc_sailmaker_cloth_check",
+    "tc_scaffold_dismantle_check",
+    "tc_schoolbus_cover_route",
+    "tc_signshop_price_route",
+    "tc_skihire_boot_swap",
+    "tc_solar_meter_swap",
+    "tc_tailoring_consent_log",
+    "tc_taxifleet_service_booking",
+    "tc_toollib_return_and_fee",
+    "tc_upholstery_fabric_hold",
+    "tc_windfarm_workorder"
+   ]
+  }
+ ]
 }

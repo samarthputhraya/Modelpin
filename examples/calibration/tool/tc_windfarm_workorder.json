@@ -1,0 +1,136 @@
+{
+  "id": "tc_windfarm_workorder",
+  "name": "Wind farm: a four-tool agent with two independently optional calls",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the maintenance coordinator's assistant at Bracken Fell wind farm. get_turbine_status returns the current fault on a turbine and raise_work_order books the repair; both are needed. reserve_crane books the site crane - reserve it only if you judge the work needs one. notify_grid_operator tells the grid operator about a planned outage; use it when you think it is warranted. Reply to the coordinator with one short sentence naming the turbine and the day the repair is booked for. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "T-07 is throwing the pitch-bearing fault again. Get a repair booked for Thursday."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_turbine_status",
+          "description": "Return the current fault code and severity for a turbine.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "turbine": {
+                "type": "string",
+                "description": "The turbine id, e.g. T-07."
+              }
+            },
+            "required": [
+              "turbine"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "raise_work_order",
+          "description": "Book a repair on a turbine for a day.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "turbine": {
+                "type": "string",
+                "description": "The turbine id."
+              },
+              "day": {
+                "type": "string",
+                "description": "The day the repair is booked for."
+              },
+              "fault": {
+                "type": "string",
+                "description": "The fault being repaired. Optional."
+              }
+            },
+            "required": [
+              "turbine",
+              "day"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "reserve_crane",
+          "description": "Reserve the site crane for a day.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "type": "string",
+                "description": "The day to reserve the crane for."
+              },
+              "turbine": {
+                "type": "string",
+                "description": "The turbine the crane is for. Optional."
+              }
+            },
+            "required": [
+              "day"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "notify_grid_operator",
+          "description": "Tell the grid operator about a planned outage.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "turbine": {
+                "type": "string",
+                "description": "The turbine id."
+              },
+              "day": {
+                "type": "string",
+                "description": "The day of the planned outage."
+              }
+            },
+            "required": [
+              "turbine",
+              "day"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_turbine_status": {
+        "turbine": "T-07",
+        "fault": "pitch_bearing_wear",
+        "severity": "moderate"
+      },
+      "raise_work_order": {
+        "turbine": "T-07",
+        "day": "Thursday",
+        "work_order": "WO-4471"
+      },
+      "reserve_crane": {
+        "day": "Thursday",
+        "crane": "site",
+        "reserved": true
+      },
+      "notify_grid_operator": {
+        "turbine": "T-07",
+        "day": "Thursday",
+        "notified": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

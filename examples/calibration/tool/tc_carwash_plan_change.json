@@ -1,0 +1,79 @@
+{
+  "id": "tc_carwash_plan_change",
+  "name": "Car wash: trust the member or verify first, the model's call",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the assistant on the Lather Lane car-wash membership desk. change_plan moves a member to a different plan. get_subscription returns what the member is on today - look it up first if you are not sure the member has told you correctly, or trust what they say if you are. Reply to the member with one short sentence naming their new plan and the date it starts. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "I am on Bronze at the moment, membership LL-4090 - move me up to Gold from the 1st of next month please. Next month is October."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_subscription",
+          "description": "Return the plan a membership is currently on.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "membership_id": {
+                "type": "string",
+                "description": "The membership id, e.g. LL-4090."
+              }
+            },
+            "required": [
+              "membership_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "change_plan",
+          "description": "Move a membership to a different plan from a date.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "membership_id": {
+                "type": "string",
+                "description": "The membership id."
+              },
+              "plan": {
+                "type": "string",
+                "description": "The new plan name."
+              },
+              "starts": {
+                "type": "string",
+                "description": "The start date in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "membership_id",
+              "plan",
+              "starts"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_subscription": {
+        "membership_id": "LL-4090",
+        "plan": "Bronze"
+      },
+      "change_plan": {
+        "membership_id": "LL-4090",
+        "plan": "Gold",
+        "starts": "2026-10-01"
+      }
+    },
+    "temperature": 1.0
+  }
+}

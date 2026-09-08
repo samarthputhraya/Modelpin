@@ -28,15 +28,40 @@ DEFAULT_SUITE_ID = "local-suite"
 DEFAULT_SUITE_VERSION = "unversioned"
 
 
+#: Scenario fields excluded from the content hash because they describe how a recording is
+#: COMPARED, not what is recorded. See `compute_suite_hash`.
+_NON_BEHAVIOURAL_FIELDS = frozenset({"match"})
+
+
 def compute_suite_hash(scenarios: list[Scenario]) -> str:
     """A deterministic content fingerprint of a scenario suite.
 
     Hashes the *validated* pydantic models (sorted by id, canonical JSON) rather than raw
     file bytes, so reformatting a scenario file does not change the hash but editing its
     meaning does. Returns e.g. ``"sha256:1a2b3c4d5e6f"``.
+
+    **`match` is excluded, and that is not an oversight (MP-227).** This function is also
+    `scenario_fingerprint`, which ADR-0039 uses to answer one question: *does this recorded
+    baseline describe the scenario it is about to be compared against?* `Scenario.match`
+    changes how two recordings are compared and cannot change a byte of either -- nothing
+    under `replay/` or `providers/` reads it. Including it would have made a user who adds
+    ``"match": "subset"`` to stop a false red build find every scenario in their store
+    reported stale and be told to pay to re-record traces that were never wrong. `[M]`
+    Excluding it also keeps every fingerprint written before MP-227 valid: a `None`-valued
+    field would otherwise have serialised as ``"match": null`` into *every* scenario's dump
+    and marked *every* existing baseline stale on upgrade, so that `modelpin check` abstained for
+    every user who did nothing at all.
+
+    The cost is that the hash alone no longer distinguishes two runs that differed only in a
+    `match` declaration, so the published Report discloses the modes separately -- see
+    `report.render_markdown`'s "Tool-call match mode" row, which names each override.
     """
     canonical = "\n".join(
-        json.dumps(s.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+        json.dumps(
+            s.model_dump(mode="json", exclude=set(_NON_BEHAVIOURAL_FIELDS)),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         for s in sorted(scenarios, key=lambda s: s.id)
     )
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()

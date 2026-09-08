@@ -1,0 +1,76 @@
+{
+  "id": "tc_nursery_batch_move",
+  "name": "Nursery: a forced two-step collapsed to one call",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the glasshouse assistant at Sedgemoor Nurseries. To move a batch, call get_batch with the batch code first, then call move_batch to put it on the bench the grower named. Never move a batch without looking it up first. Reply to the grower with one short sentence naming the batch and the bench it is now on. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Move batch SD-118, the young rosemary, onto bench 4."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_batch",
+          "description": "Return a propagation batch by its code.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "batch_code": {
+                "type": "string",
+                "description": "The batch code, e.g. SD-118."
+              }
+            },
+            "required": [
+              "batch_code"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "move_batch",
+          "description": "Move a propagation batch onto a bench.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "batch_code": {
+                "type": "string",
+                "description": "The batch code."
+              },
+              "bench": {
+                "type": "string",
+                "description": "The destination bench, e.g. 4."
+              }
+            },
+            "required": [
+              "batch_code",
+              "bench"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_batch": {
+        "batch_code": "SD-118",
+        "crop": "rosemary",
+        "bench": "2",
+        "trays": 40
+      },
+      "move_batch": {
+        "batch_code": "SD-118",
+        "bench": "4",
+        "status": "moved"
+      }
+    },
+    "temperature": 1.0
+  }
+}

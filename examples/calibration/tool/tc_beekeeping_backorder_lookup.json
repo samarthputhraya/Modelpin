@@ -1,0 +1,108 @@
+{
+  "id": "tc_beekeeping_backorder_lookup",
+  "name": "Beekeeping supplies: the required stock look-up dropped",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the order-desk assistant at Thornhive Beekeeping Supplies. Always call get_stock before promising anything, then call place_backorder for what is short. email_customer sends the customer a note; use it when you judge it useful. Reply to the order desk with one short sentence stating how many brood frames are on backorder and the date they are expected. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Sirkka Aalto wants 12 brood frames, order TH-4413. Nothing on the shelf as far as I know."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_stock",
+          "description": "Return how many of an item are on the shelf.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "item": {
+                "type": "string",
+                "description": "The item name, e.g. brood frames."
+              }
+            },
+            "required": [
+              "item"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "place_backorder",
+          "description": "Place a backorder for an item against an order.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_number": {
+                "type": "string",
+                "description": "The order number, e.g. TH-4413."
+              },
+              "item": {
+                "type": "string",
+                "description": "The item name."
+              },
+              "quantity": {
+                "type": "integer",
+                "description": "How many to backorder."
+              }
+            },
+            "required": [
+              "order_number",
+              "item",
+              "quantity"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "email_customer",
+          "description": "Email the customer a note about their order.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_number": {
+                "type": "string",
+                "description": "The order number."
+              },
+              "message": {
+                "type": "string",
+                "description": "The body of the email."
+              }
+            },
+            "required": [
+              "order_number",
+              "message"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_stock": {
+        "item": "brood frames",
+        "on_hand": 0
+      },
+      "place_backorder": {
+        "order_number": "TH-4413",
+        "item": "brood frames",
+        "quantity": 12,
+        "expected": "2026-11-03"
+      },
+      "email_customer": {
+        "order_number": "TH-4413",
+        "sent": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

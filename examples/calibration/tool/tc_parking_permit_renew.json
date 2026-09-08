@@ -1,0 +1,96 @@
+{
+  "id": "tc_parking_permit_renew",
+  "name": "Parking permits: two required changes in free order plus an optional receipt",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the assistant on Kirkwall Council's parking permit desk. renew_permit extends a resident permit by a year and update_vehicle changes the plate held against it. Both are needed here and either order is fine. email_receipt sends the resident a receipt; send one if you judge it useful. Reply to the resident with one short sentence stating the permit number, the plate now on it and the date it runs to. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Permit KP-8812 needs renewing, and the car is now SV19 KRT rather than the old one."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "renew_permit",
+          "description": "Extend a resident parking permit by one year.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "permit": {
+                "type": "string",
+                "description": "The permit number, e.g. KP-8812."
+              }
+            },
+            "required": [
+              "permit"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "update_vehicle",
+          "description": "Change the vehicle registration held against a permit.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "permit": {
+                "type": "string",
+                "description": "The permit number."
+              },
+              "plate": {
+                "type": "string",
+                "description": "The new registration plate."
+              }
+            },
+            "required": [
+              "permit",
+              "plate"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "email_receipt",
+          "description": "Email a receipt for a permit transaction to the resident.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "permit": {
+                "type": "string",
+                "description": "The permit number."
+              }
+            },
+            "required": [
+              "permit"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "renew_permit": {
+        "permit": "KP-8812",
+        "expires": "2027-10-01"
+      },
+      "update_vehicle": {
+        "permit": "KP-8812",
+        "plate": "SV19 KRT"
+      },
+      "email_receipt": {
+        "permit": "KP-8812",
+        "sent": true
+      }
+    },
+    "temperature": 1.0
+  }
+}

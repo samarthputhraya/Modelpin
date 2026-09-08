@@ -1,0 +1,104 @@
+{
+  "id": "tc_climbinggym_freeze_refund",
+  "name": "Climbing gym: the refund judgement narrowed by a tenure rule",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the membership assistant at Crag Bank Climbing. Always call get_membership first. freeze_membership pauses a membership from a date. refund_prorata returns the unused days to the member; call it when you judge it is the fair thing to do. Reply to the membership desk with one short sentence naming the membership and the date the freeze starts. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Membership M-4482, Otto Renner - he is taking a six-month posting overseas and wants to pause from 1 November. He is paid up to the 21st."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_membership",
+          "description": "Return a membership record.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "membership_id": {
+                "type": "string",
+                "description": "The membership id, e.g. M-4482."
+              }
+            },
+            "required": [
+              "membership_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "freeze_membership",
+          "description": "Pause a membership from a date.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "membership_id": {
+                "type": "string",
+                "description": "The membership id."
+              },
+              "starts": {
+                "type": "string",
+                "description": "The date the freeze starts, in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "membership_id",
+              "starts"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "refund_prorata",
+          "description": "Refund the unused days on a membership.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "membership_id": {
+                "type": "string",
+                "description": "The membership id."
+              },
+              "unused_days": {
+                "type": "integer",
+                "description": "How many days are unused."
+              }
+            },
+            "required": [
+              "membership_id",
+              "unused_days"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_membership": {
+        "membership_id": "M-4482",
+        "member": "Otto Renner",
+        "joined": "2025-12-01",
+        "paid_to": "2026-11-21"
+      },
+      "freeze_membership": {
+        "membership_id": "M-4482",
+        "starts": "2026-11-01"
+      },
+      "refund_prorata": {
+        "membership_id": "M-4482",
+        "unused_days": 20,
+        "refunded_gbp": 27.4
+      }
+    },
+    "temperature": 1.0
+  }
+}

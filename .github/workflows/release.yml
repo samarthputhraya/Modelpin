@@ -184,12 +184,34 @@ jobs:
 
           # Read the file; never import the package. Importing runs code from the ref this job
           # has not finished vouching for yet.
+          #
+          # `[M] 2026-09-08` MP-204 made `pyproject.toml` the single source: `__version__` is
+          # resolved from the INSTALLED distribution inside a try/except, so there is no
+          # top-level literal left to compare against the tag. The clause that used to do that
+          # comparison therefore failed CLOSED on the first release after MP-204 landed --
+          # "modelpin/__init__.py has no __version__ = '...' line" -- and nothing caught it
+          # because no test reads this file and release.yml has not run since v0.2.1.
+          #
+          # What must be true NOW is the inverse: that nobody has reintroduced a
+          # hand-maintained copy. That is the MP-03 drift this project has already paid for
+          # twice. The value itself is bound to pyproject by construction at install time, and
+          # CI asserts it in
+          # tests/test_packaging_contents.py::test_the_reported_version_matches_pyproject.
           init = pathlib.Path("modelpin/__init__.py").read_text(encoding="utf-8")
-          m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', init, re.M)
-          if m is None:
-              problems.append("modelpin/__init__.py has no __version__ = '...' line")
-          elif m.group(1) != ver:
-              problems.append(f"modelpin/__init__.py says {m.group(1)!r}, tag says {ver!r}")
+          if not re.search(r"_dist_version\(|importlib\.metadata", init):
+              problems.append(
+                  "modelpin/__init__.py no longer resolves __version__ from the installed "
+                  "distribution; it must, so pyproject.toml stays the single source (MP-204)"
+              )
+          for lit in re.finditer(r'^\s*__version__\s*=\s*["\']([^"\']+)["\']', init, re.M):
+              got = lit.group(1)
+              # The uninstalled-tree sentinel is deliberately NOT a version, and must not drift
+              # into looking like one.
+              if re.match(r"^\d+\.\d+\.\d+", got):
+                  problems.append(
+                      f"modelpin/__init__.py hardcodes __version__ = {got!r}; that copy drifts "
+                      "(MP-204). Resolve it from the installed distribution instead."
+                  )
 
           changelog = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
           if not re.search(rf"^## \[{re.escape(ver)}\] - \d{{4}}-\d{{2}}-\d{{2}}", changelog, re.M):

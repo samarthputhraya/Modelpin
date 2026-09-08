@@ -1,0 +1,104 @@
+{
+  "id": "tc_cheese_delivery_route",
+  "name": "Creamery: the delivery tool substituted for a different one",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the dispatch assistant at Hollow Lane Creamery. Call get_order for the order number. Out-of-region deliveries go by courier, so call book_courier for them; book_own_van is for deliveries inside the county only. Reply to the dispatch board with one short sentence naming the order and the day it will be delivered. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Order CH-77 for Brantwood Deli, out at Aberley - get it moving for Thursday."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_order",
+          "description": "Return a wholesale order by number.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_number": {
+                "type": "string",
+                "description": "The order number, e.g. CH-77."
+              }
+            },
+            "required": [
+              "order_number"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "book_courier",
+          "description": "Book a third-party courier for a delivery.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_number": {
+                "type": "string",
+                "description": "The order number."
+              },
+              "day": {
+                "type": "string",
+                "description": "The delivery day."
+              }
+            },
+            "required": [
+              "order_number",
+              "day"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "book_own_van",
+          "description": "Put a delivery on one of our own vans.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "order_number": {
+                "type": "string",
+                "description": "The order number."
+              },
+              "day": {
+                "type": "string",
+                "description": "The delivery day."
+              }
+            },
+            "required": [
+              "order_number",
+              "day"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_order": {
+        "order_number": "CH-77",
+        "customer": "Brantwood Deli",
+        "town": "Aberley"
+      },
+      "book_courier": {
+        "order_number": "CH-77",
+        "day": "Thursday",
+        "status": "booked"
+      },
+      "book_own_van": {
+        "order_number": "CH-77",
+        "day": "Thursday",
+        "status": "booked"
+      }
+    },
+    "temperature": 1.0
+  }
+}

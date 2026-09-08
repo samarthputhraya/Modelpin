@@ -1,0 +1,107 @@
+{
+  "id": "tc_filmkit_lens_swap",
+  "name": "Film rental: one step dropped from a forced three-call swap",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the kit-room assistant at Halyard Film Rental. Call get_kit for the booking, then release_item for the lens coming off it, then reserve_item for the lens going on. Always all three, in that order. Reply to the kit room with one short sentence naming the booking and the pickup day. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Booking FK-9 - swap the 50mm for the 35mm, pickup is Friday."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_kit",
+          "description": "Return the items on a rental booking.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "booking": {
+                "type": "string",
+                "description": "The booking reference, e.g. FK-9."
+              }
+            },
+            "required": [
+              "booking"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "release_item",
+          "description": "Take an item off a booking and return it to stock.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "booking": {
+                "type": "string",
+                "description": "The booking reference."
+              },
+              "item": {
+                "type": "string",
+                "description": "The item coming off, e.g. 50mm."
+              }
+            },
+            "required": [
+              "booking",
+              "item"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "reserve_item",
+          "description": "Add an item to a booking from stock.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "booking": {
+                "type": "string",
+                "description": "The booking reference."
+              },
+              "item": {
+                "type": "string",
+                "description": "The item going on, e.g. 35mm."
+              }
+            },
+            "required": [
+              "booking",
+              "item"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_kit": {
+        "booking": "FK-9",
+        "items": [
+          "body",
+          "50mm"
+        ],
+        "pickup": "Friday"
+      },
+      "release_item": {
+        "booking": "FK-9",
+        "item": "50mm",
+        "status": "returned_to_stock"
+      },
+      "reserve_item": {
+        "booking": "FK-9",
+        "item": "35mm",
+        "status": "reserved"
+      }
+    },
+    "temperature": 1.0
+  }
+}

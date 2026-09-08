@@ -1,0 +1,75 @@
+{
+  "id": "tc_taxifleet_service_booking",
+  "name": "Taxi fleet: a confirmation look-up added before the booking",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the fleet assistant at Rannoch Cars. book_service books a vehicle in with the garage. get_vehicle returns what we hold against a plate; the plate on the job sheet is authoritative, so there is no need to look it up. Reply to the fleet board with one short sentence naming the vehicle and the date it is booked in. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "SV19 KRT is due its service - book it in for the 9th."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "book_service",
+          "description": "Book a vehicle in with the garage for a date.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "plate": {
+                "type": "string",
+                "description": "The registration plate, e.g. SV19 KRT."
+              },
+              "date": {
+                "type": "string",
+                "description": "The service date in YYYY-MM-DD form."
+              }
+            },
+            "required": [
+              "plate",
+              "date"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_vehicle",
+          "description": "Return the vehicle record held against a plate.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "plate": {
+                "type": "string",
+                "description": "The registration plate."
+              }
+            },
+            "required": [
+              "plate"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "book_service": {
+        "plate": "SV19 KRT",
+        "date": "2026-10-09",
+        "status": "booked"
+      },
+      "get_vehicle": {
+        "plate": "SV19 KRT",
+        "make": "Skoda",
+        "mileage": 148200
+      }
+    },
+    "temperature": 1.0
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "id": "tc_signshop_price_route",
+  "name": "Sign shop: two routes to the same figure",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the counter assistant at Bellhouse Signs. get_price_list returns the current board rate for a sign size. get_saved_quote returns the quote we already sent the customer. For this job the two agree, so use whichever one you prefer. Reply to the customer with one short sentence giving the price for the sign. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "How much is the 1200 by 600 fascia board we talked about? My quote reference is Q-3391."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_price_list",
+          "description": "Return the current board rate for a sign size.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "string",
+                "description": "The sign size, e.g. 1200x600."
+              }
+            },
+            "required": [
+              "size"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_saved_quote",
+          "description": "Return a quote previously sent to a customer.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "type": "string",
+                "description": "The quote reference, e.g. Q-3391."
+              }
+            },
+            "required": [
+              "reference"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_price_list": {
+        "size": "1200x600",
+        "price_gbp": 245
+      },
+      "get_saved_quote": {
+        "reference": "Q-3391",
+        "size": "1200x600",
+        "price_gbp": 245
+      }
+    },
+    "temperature": 1.0
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "id": "tc_marina_berth_assign",
+  "name": "Marina: a forced look-up-then-assign, with an optional depth check",
+  "kind": "agent",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the berthing assistant at Cawsand Marina. Call get_berth for the berth the harbour master names, then call assign_berth to put the vessel in it; never assign a berth without looking it up first. check_depth reports the charted depth at low water - call it if you are not sure the berth suits the vessel, and skip it if you are. That judgement is yours. Reply to the harbour master with one short sentence naming the vessel and the berth it now has. Do not describe which tools you used or what steps you took."
+      },
+      {
+        "role": "user",
+        "content": "Put Saltwren on berth C-14 for the week. She draws 1.9 m."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_berth",
+          "description": "Return a berth's dimensions and whether it is free.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "berth_id": {
+                "type": "string",
+                "description": "The berth number, e.g. C-14."
+              }
+            },
+            "required": [
+              "berth_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "check_depth",
+          "description": "Return the charted depth at low water for a berth.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "berth_id": {
+                "type": "string",
+                "description": "The berth number, e.g. C-14."
+              }
+            },
+            "required": [
+              "berth_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "assign_berth",
+          "description": "Assign a vessel to a berth.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "berth_id": {
+                "type": "string",
+                "description": "The berth number."
+              },
+              "vessel_name": {
+                "type": "string",
+                "description": "The vessel's name."
+              },
+              "nights": {
+                "type": "integer",
+                "description": "How many nights, if stated. Optional."
+              }
+            },
+            "required": [
+              "berth_id",
+              "vessel_name"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_results": {
+      "get_berth": {
+        "berth_id": "C-14",
+        "length_m": 12,
+        "free": true
+      },
+      "check_depth": {
+        "berth_id": "C-14",
+        "depth_lw_m": 2.1
+      },
+      "assign_berth": {
+        "berth_id": "C-14",
+        "vessel_name": "Saltwren",
+        "status": "assigned"
+      }
+    },
+    "temperature": 1.0
+  }
+}

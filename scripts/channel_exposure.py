@@ -39,21 +39,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from modelpin.diff.structural import assertion_violation_flags  # noqa: E402
 from modelpin.models import DiffResult, Trace  # noqa: E402
 from modelpin.scenarios import load_scenarios  # noqa: E402
-from scripts.fp_measurement import fp_outcome, load_artifact, upper_bound_95  # noqa: E402
+from scripts.fp_measurement import (  # noqa: E402
+    SEVERITY_REASONS,
+    fp_outcome,
+    load_artifact,
+    upper_bound_95,
+)
 
 #: How a flagged verdict is attributed to the channel that raised it. These are the literal
 #: reason strings `diff/__init__.py` appends, and `tests/test_channel_exposure.py` asserts each
 #: one still appears in that file -- so rewording an explanation fails a test instead of
 #: silently reattributing every false alarm to "other". Same guard shape as the [ARM:] markers
 #: in `fp_measurement.py`, and for the same reason: prose that something parses is an interface.
-CHANNEL_REASONS: dict[str, str] = {
-    "tool": "tool-call behavior changed",
-    "tool_relation": "tool-call trajectory now violates",
-    "refusal": "refusal rate",
-    "argument": "tool-call arguments changed",
-    "assertion": "output format drift",
-    "semantic": "semantic drift",
-}
+#: `[M] 2026-09-08 FP review` MP-223 gave these six strings a second home in
+#: `fp_measurement.SEVERITY_REASONS`, verbatim and with nothing asserting the two were equal --
+#: two copies of one prose interface in sibling scripts, which is how they disagree. Aliased,
+#: not re-listed: the arrow points this way because `channel_exposure` already imports from
+#: `fp_measurement` and the reverse would be circular.
+CHANNEL_REASONS: dict[str, str] = SEVERITY_REASONS
 
 #: The negative control (ADR-0038 D1d). It must never move on either target channel; if it does,
 #: the run measured noise and nothing else in it is readable.
