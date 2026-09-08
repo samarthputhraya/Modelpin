@@ -35,16 +35,24 @@ END = "<!-- fp-run-of-record:end -->"
 
 
 def _artifacts() -> tuple[str, list[Path]]:
-    """The dated run directory the document names, and its artifacts in name order."""
+    """The run directory the document names, and its artifacts in name order.
+
+    The marker carries either a bare date, resolved under `reports/fp-runs/`, or a
+    repo-relative directory. `[M] 2026-09-07` (MP-216) the second form became necessary when
+    the run of record was re-scored under ADR-0040: those artifacts are deliberately NOT in
+    `reports/fp-runs/`, because a re-score living beside its source is what
+    `tests/test_cross_judge_agreement.py` exists to prevent.
+    """
     doc = DOC.read_text(encoding="utf-8")
     m = re.search(rf"{re.escape(BEGIN)} (\S+) -->", doc)
     if m is None:
-        pytest.fail("docs/fp-measurement.md has no `fp-run-of-record:begin <date>` marker")
-    date = m.group(1)
-    paths = sorted((RUNS / date).glob("*.jsonl"))
+        pytest.fail("docs/fp-measurement.md has no `fp-run-of-record:begin <where>` marker")
+    where = m.group(1)
+    directory = (REPO / where) if "/" in where else (RUNS / where)
+    paths = sorted(directory.glob("*.jsonl"))
     if not paths:
-        pytest.skip(f"reports/fp-runs/{date} is not present (pruned from the sdist)")
-    return date, paths
+        pytest.skip(f"{where} is not present (pruned from the sdist)")
+    return where, paths
 
 
 def _embedded_block() -> str:
