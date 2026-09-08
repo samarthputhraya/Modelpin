@@ -116,7 +116,7 @@ cross-vendor sanity arm:
 
 **What it does not say.** Twelve plus seven plus eight scenarios are twenty-seven scenarios, and `[M]` **9 of them carried the bound**: 18 contributed no scored trial (four `arg_*` shapes, `classify_review_sentiment`, `format_markdown_table`, all eight of the held-out suite, and — new under this engine — `rewrite_email_polite`, `agent_reschedule_two_step`, `support_order_status` and `rag_answer_with_citation`), and two shapes — `arg_numeric_rounding` (16) and `arg_freetext_note` (13) — supply **29 of the 39**. Over distinct shapes the POOLED bound is **28.3%** (`upper_bound_95(0, 9)` — nine *shapes*). `[!]` **Do not confuse this 28.3% with the hard-severity 28.3% in the headline**: that one is `upper_bound_95(0, 9)` over nine *trials*, and its own distinct-shape discount is a different number again (`0/6` over six shapes, **39.3%**). Two different quantities collide on one numeral here purely by arithmetic accident; neither may ever be printed without saying which it is (ADR-0042 D3). `[M]` Of the 39 scored trials, **30 could only have fired on the advisory argument gate, 8 on the semantic channel and 1 on refusal — 0 on the tool-call trajectory and 0 on format/assertion**: the structural floors saw no exposure here.
 
-**Read that last sentence before quoting the 7.4%.** Under the previous engine the bound was carried by the semantic channel (51 of 82 scored trials), which is a hard, build-failing signal. Under this one it is carried by the **argument gate — 30 of 39 — and that gate is advisory**: by ADR-0029 it escalates only to `changed_minor` and can never fail a build on its own. So most of what the conditional bound now measures is a channel that cannot produce a red build. Only **9 of the 39** scored trials sat on a channel that can independently fail one — 8 on the semantic channel, 1 on refusal — and the tool trajectory contributed **zero**. The assertion channel contributed zero too, and it could not have failed a build either: like the argument gate it escalates only to `changed_minor` (ADR-0032). The honest reading is that this number constrains the engine less than the same number did a week ago, on a smaller denominator, and the page says so rather than reporting an improved-looking 0/39. The tool channel has since been given a corpus and a denominator of its own — see *Channel exposure* below; the assertion channel still has neither. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. **Every judge that produced a number in the bound above is an OpenAI model** — 24 of these trials have since been re-scored by a non-OpenAI judge, whose separate figures appear under *Cross-judge agreement* below; it agreed on every verdict but *not* on how many trials were scorable at all. The bound itself is unchanged and remains OpenAI-judged. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
+**Read that last sentence before quoting the 7.4%.** Under the previous engine the bound was carried by the semantic channel (51 of 82 scored trials), which is a hard, build-failing signal. Under this one it is carried by the **argument gate — 30 of 39 — and that gate is advisory**: by ADR-0029 it escalates only to `changed_minor` and can never fail a build on its own. So most of what the conditional bound now measures is a channel that cannot produce a red build. Only **9 of the 39** scored trials sat on a channel that can independently fail one — 8 on the semantic channel, 1 on refusal — and the tool trajectory contributed **zero**. The assertion channel contributed zero too, and it could not have failed a build either: like the argument gate it escalates only to `changed_minor` (ADR-0032). The honest reading is that this number constrains the engine less than the same number did a week ago, on a smaller denominator, and the page says so rather than reporting an improved-looking 0/39. The tool channel has since been given a corpus and a denominator of its own — see *Channel exposure* below; the assertion channel has since been given one too -- see *The assertion channel* below, where it is 1 false alarm in 30 scored trials over 7 distinct scenarios, on a third corpus built for it. Repeats buy resolution on these shapes, never coverage of a twenty-eighth. Two OpenAI candidate models are two models; the Groq arm is a sanity arm. **Every judge that produced a number in the bound above is an OpenAI model** — 24 of these trials have since been re-scored by a non-OpenAI judge, whose separate figures appear under *Cross-judge agreement* below; it agreed on every verdict but *not* on how many trials were scorable at all. The bound itself is unchanged and remains OpenAI-judged. A user's own suite at their own temperature is a different measurement — and now one they can run with one command.
 
 > **Corrected 2026-08-23 (MP-75).** The previous run of record's headline read *"0 false alarms in 8
 > scored trials"*. Those 8 were not scored trials. The harness now excludes a trial in which nothing
@@ -703,7 +703,7 @@ not over tool use in general. Two models from one vendor are two models. The poo
 every trial that reached a verdict, including the control's 40, which the per-channel rows
 exclude.
 
-## The assertion channel (2026-09-08) — measured for the first time, in either direction
+## The assertion channel (2026-09-08) — measured for FALSE POSITIVES for the first time, in either direction
 
 `[M]` **1 false alarm in 30 scored assertion-exposed trials = 3.3%, one-sided 95% upper bound
 14.9%.** Over **7 distinct scenarios** that is `1/7`, upper bound **52.1%** — and per ADR-0042 D3
@@ -711,32 +711,55 @@ the shape figure is the one that constrains, not the trial figure. Both anchors 
 exposure, so the run is readable. Corpus `examples/fp-suite-v3` (role `score`), artifacts under
 [`reports/channel-exposure/2026-09-08/`](../reports/channel-exposure/2026-09-08/).
 
+`[M]` **312 same-model trials** across four surfaces: `gpt-4o-mini` vs itself judged by
+`gpt-4.1-mini`, and `gpt-4.1-mini` vs itself judged by `gpt-4o-mini`, each replicated once
+(`runs: 5` × `repeats: 10`, `ALPHA 0.05`, `temperature: 1.0`, no `seed`). No model graded
+its own output, and **both judges are OpenAI models**. `[M]` **The run spans two
+revisions** — v3a/v3b at Modelpin `848059a`, v3c/v3d at `25fdd9d` — and a reader should not
+have to find that in the artifact headers: `25fdd9d` adds `Scenario.match` and touches
+nothing under `modelpin/diff/`, and no scenario in this corpus declares `tools` or `match`,
+so the assertion path is identical across both.
+
+Reproduce, offline and without a key:
+
+```
+python scripts/channel_exposure.py reports/channel-exposure/2026-09-08/v3[abcd]-*.jsonl
+```
+
 Until this run the format/assertion channel had **never been measured for false positives in
 either direction.** `[M]` Across the 710-trial run of record: **0** trials with
 `format_valid == False`. Across `examples/fp-suite-v2`, a corpus built specifically to move it:
 **0 exposed of 160 in scope.** The channel was not dead — the recall arm moved it seven times —
 so what was missing was a corpus, not an engine.
 
-**The premise the third attempt was filed on turned out to be false, and that is why it worked.**
-`[M]` Recomputed offline from v2's own stored traces, 400 recorded runs per scenario: the models
-were *not* deterministic. `citation_style_underspecified` never emitted the asserted `[2]`
-(**0/400**) while emitting `Passage 2` **400/400**, splitting `(Passage 2)` 42.5% against
-`Passage 2:` 32.0%. Replaying the identical stored runs against a different asserted literal —
+**The premise the second attempt was filed on turned out to be false, and that is why it worked.**
+`[M]` Recomputed offline from v2's own stored traces, 400 recorded runs per scenario (200 per
+model): neither model was deterministic, though not equally so.
+`citation_style_underspecified` never emitted the asserted `[2]` (**0/400**) while emitting
+`Passage 2` **400/400**; over gpt-4o-mini's 200 runs that splits `(Passage 2)` **42.5%**
+against `Passage 2:` **32.0%**, while gpt-4.1-mini used `(Passage 2)` in **199 of 200** —
+near-pinned on this literal, and varying on others. Replaying the identical stored runs against a different asserted literal —
 changing nothing but the string — turns *"the sides never differ"* into *"the sides differ most
 of the time"* (12–16 of 20 trials on three of the four scenarios). v2 did not fail because the
 models are deterministic. It failed because the author had to **guess** which string the model
 would sometimes emit, and guessed one with probability exactly zero.
 
-So v3 removes the guess: 6 of its 8 live scenarios assert only on literals copied **verbatim out
-of their own prompt**, each a 3–5 element conjunction, with a brevity constraint as the source of
-variance. A conjunction is dead only if *every* element is pinned, which is a far smaller target
-than one literal being pinned.
+So v3 removes the guess for most of the set: **5 of its 8 live scenarios** assert only on
+literals copied **verbatim out of their own prompt**, each a 4–5 element conjunction, with a
+brevity constraint as the source of variance. A conjunction is dead only if *every* element
+is pinned, which is a far smaller target than one literal being pinned. `[M]` **The sixth
+strategy-(b) scenario does not clear that bar**: `slug_conjunction_stopwords` asserts
+`q3-rollout`, `-and-` and `billing-flow`, which are slugified *transforms* of its prompt's
+"Q3 Rollout & the New Billing Flow", not copies of it — so it still carries the bet that
+killed v2, and it was exposed in 1 of its 31 trials.
 
-| | trials in scope | assertion-exposed | scored | flagged | bound |
+| | trials in scope (of the FP trials) | assertion-exposed | scored | flagged | bound |
 |---|---|---|---|---|---|
-| run of record (710-trial null) | 710 | 0 | 0 | 0 | none |
+| run of record (710-trial null) | **293** of 710 | 0 | 0 | 0 | none |
 | `fp-suite-v2` (built to move it) | 160 | 0 | 0 | 0 | none |
-| **`fp-suite-v3` (this run)** | **312** | **56** | **30** | **1** | **3.3%, ub 14.9%** |
+| **`fp-suite-v3` (this run)** | **312** (249 ex-anchors) | **56** | **30** | **1** | **3.3%, ub 14.9%** |
+
+`[M]` The three rows do not all count the same way, so the column says which: row 1 is the assertion-declaring subset of 710 FP trials; row 2 excludes its anchor; row 3's 312 **includes** its 63 negative-control trials, because `channel_exposure.py`'s `ANCHOR` constant names a v2 scenario and does not match v3's two anchors (MP-230). Anchors that hold contribute 0 to exposed, 0 to scored and 0 to flagged, so the bound is unaffected either way.
 
 **Read these five things before quoting 14.9%.**
 
@@ -744,18 +767,24 @@ than one literal being pinned.
    the 30 scored trials (`dispatch_line_keeps_the_ids` 15, `regex_anchors_unspecified` 7).
    Repeats buy resolution on these shapes, never coverage of an eighth.
 2. `[M]` **The one flagged trial is published as a false positive whatever anyone thinks of it**
-   (ADR-0036 rule 4): `standup_digest_keeps_the_ids#6`, `changed_minor @ 0.996`, channel
+   (ADR-0036 §2, "Every flagged trial is published as a false positive, with its traces"): `standup_digest_keeps_the_ids#6`, `changed_minor @ 0.996`, channel
    `assertion`. It is advisory by ADR-0032 and could not have failed a build — which is a fact
    about severity (ADR-0042), not a reason to discount it.
-3. `[M]` **The run is 312 trials, not the 400 pre-registered.** Three of four surfaces completed
-   clean (100 trials each, 0 provider errors). The fourth walled on the provider's rate/quota
-   limit and contributed 12 of its 100; a `--resume` at one worker re-attempted and failed again.
-   Provider errors never enter a rate (ADR-0036), so the bound is unaffected in kind — but the
-   denominator is a quarter smaller than bought, and that is a shortfall, not a design choice.
+3. `[M]` **The run is 312 trials, not the 400 pre-registered.** Three of four surfaces
+   completed clean (100 trials each, **0** provider errors). The fourth returned a provider
+   error on **88 of its 100** trials and contributed 12. `[!]` **The committed artifact
+   records that error only as `"provider error"`, with no status code** — the runner's own
+   log recorded the provider's message as *rate limit or quota exceeded* 87 times, but that
+   log is not in this repo, so a reader cannot check it here. What would falsify the reading:
+   a re-run of that surface succeeding. `[M]` A `--resume` at one worker re-attempted **6**
+   of the 88 and all 6 failed again; the other 82 were never retried before it was stopped.
+   Provider errors never enter a rate (ADR-0036 §2), so the bound is unaffected in kind — but
+   the denominator is a quarter smaller than bought, and that is a shortfall, not a design
+   choice.
 4. `[M]` **Both models are OpenAI and both judges are OpenAI.** No cross-vendor arm ran on this
    corpus at all. The free Groq pilot that gated the spend is not a measurement of these models:
    on v2's prompts `openai/gpt-oss-20b` cites as `【Passage 2】` where both OpenAI models use
-   `(Passage 2)`. A rate measured on the pilot model transfers to neither.
+   `(Passage 2)` or `Passage 2:`. A rate measured on the pilot model transfers to neither.
 5. `[M]` **The tool channel returned zero exposure here, by design.** No file in this corpus
    declares `tools` — one seam per scenario — so nothing in this section says anything about the
    tool trajectory. That channel's own number is in the section above, and it is worse.
@@ -763,7 +792,7 @@ than one literal being pinned.
 **The outcomes were pre-registered before the run** (`examples/fp-suite-v3/README.md`,
 §"What failure looks like"): SUCCESS at ≥ 20 scored trials with both anchors quiet, PARTIAL at
 1–19, FAILURE at 0 — with FAILURE committing the page to a permanent stated limit and *not*
-authorising a fourth attempt. 30 scored clears SUCCESS. The prediction that came with it was
+authorising a third attempt. 30 scored clears SUCCESS. The prediction that came with it was
 "expect 0 or 1 false alarms, and do not read 0 as a failure"; the observed 1 is inside that.
 
 ## Cross-judge agreement (2026-09-07) — one replay, two judges
