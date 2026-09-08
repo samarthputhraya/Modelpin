@@ -73,9 +73,21 @@ key first.
   *"0 false alarms in 0 scored trials"*: every set that had ever been run ran at temperature 0,
   where every channel returned `p = 1.00` and no trial could fire (the seven `arg_*` scenarios at
   0.7 had existed since MP-54 but had never been run under the shipped engine). Every trial and
-  its traces are committed under `reports/fp-runs/2026-09-07/`, and a test regenerates the
+  its traces are committed under `reports/fp-runs-adr0040/2026-09-07/` (the original replays are
+  kept beside them in `reports/fp-runs/2026-09-07/`), and a test regenerates the
   published block from them. Bound, not zero; see `docs/fp-measurement.md` for what it does not
-  say — including a measured false negative in the semantic channel, tracked as MP-206.
+  say — including that 30 of the 39 scored trials sat on the advisory argument gate, that the
+  detection increase is partly in-sample, and that the new semantic rule's safety is conditional
+  on judge leniency and not yet priced.
+- **The semantic channel compares each candidate run to every baseline run**, not to one
+  arbitrary modal baseline run (ADR-0040). `[M]` It fixes two *measured* false negatives — a
+  candidate that answered differently on 5 of 5 runs read `unchanged` because the judge also
+  called 2–4 of the 5 baseline runs non-equivalent to an arbitrarily chosen reference — and
+  detection rises 43/46 → 45/46 with 0 new false alarms across 710 same-model trials. It is not
+  free: `[M]` judge calls per run rise about **4.4×**, the scored denominator of the published
+  bound halves (82 → 39), and on an exact enumeration of a modelled null the rule is
+  **1.6×–9.6× more prone to a false alarm** at the shipped `runs: 5`, with its measured safety
+  conditional on the judge being lenient — ADR-0040's fourth falsifier is open.
 - **`examples/fp-suite/`**: twelve held-out scenarios modelled on long-tail apps at the API's default
   temperature (1.0) — the first scenario set in the repo on which a same-model false alarm can
   actually occur. Role `score`; reviewed before its first run; never edited after.

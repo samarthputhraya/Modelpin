@@ -1185,8 +1185,8 @@ def main() -> None:
         "openai); REQUIRED otherwise. [M] MP-208: `openai/gpt-oss-120b` is a GROQ id whose "
         "vendor prefix says `openai`, so inference returns None and the run dies at "
         "preflight. Without this flag the harness could only ever score with an OpenAI "
-        "judge, and 51 of the 82 trials in the run of record were scored on the semantic "
-        "channel alone.",
+        "judge, and at the time 51 of the 82 scored trials in the run of record could only "
+        "have fired on the semantic channel (8 of 39 under the current engine).",
     )
     ap.add_argument("--no-judge", action="store_true", help="skip the semantic LLM-judge")
     ap.add_argument("--scenarios-dir", default=None, help="default examples/suite")
