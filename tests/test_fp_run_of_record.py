@@ -167,3 +167,58 @@ def test_the_severity_denominators_are_never_presented_as_summing_to_scored():
     assert sev["hard_scored"] + sev["advisory_scored"] >= pooled["scored"]
     block = _embedded_block()
     assert "do not sum to SCORED" in block, block[:2000]
+
+
+def test_neither_severity_bound_is_published_without_its_distinct_shape_count():
+    """ADR-0042 D3. `[M] 2026-09-08 FP review` The trial counts flatter both bounds badly:
+    hard `0/9` is 6 distinct scenarios (39.3%, not 28.3%) and advisory `0/30` is 3 (63.2%, not
+    9.5%), two of which supply 29 of the 30.
+
+    `examples/roles.json` already prices this same set by scenario count and ADR-0041's
+    detection arm carries the identical discount, so publishing the trial-count bound bare
+    would be this page contradicting two records it cites.
+    """
+    _, paths = _artifacts()
+    sev = agg.summarise([str(p) for p in paths])["pooled"]["severity"]
+    doc = DOC.read_text(encoding="utf-8")
+    block = _embedded_block()
+    headline = doc[doc.index("**Headline") : doc.index("## ", doc.index("**Headline"))]
+
+    for severity in ("hard", "advisory"):
+        shapes = len(sev[f"{severity}_shapes"])
+        assert shapes, f"the {severity} bound rests on no named scenario at all"
+        assert shapes < sev[f"{severity}_scored"], (
+            f"the {severity} denominator is {sev[f'{severity}_scored']} trials over {shapes} "
+            "shapes; if that stops being a discount, update this test deliberately"
+        )
+        bound = f"{upper_bound_95(sev[f'{severity}_fp'], shapes):.1%}"
+        assert (
+            bound in headline
+        ), f"the headline must carry the distinct-shape bound {bound} for the {severity} rate"
+        assert bound in block, f"the generated block must carry {bound} too"
+
+
+def test_the_page_says_the_hard_bound_has_no_tool_channel_exposure():
+    """ADR-0042 D4. `[M]` The hard 0/9 is 8 semantic + 1 refusal + 0 tool + 0 assertion.
+
+    Calling it "the CI-FAILING channels" without that breakdown overstates coverage on exactly
+    the channel a migration tool exists for -- MP-207's open P0, restated as a headline. This
+    is the assertion that stops the severity split becoming a nicer-looking way to say the
+    same unmeasured thing.
+    """
+    _, paths = _artifacts()
+    exposed = agg.summarise([str(p) for p in paths])["pooled"]["severity"]["exposed_by_channel"]
+    assert exposed["tool"] == 0, (
+        "the tool channel now has exposure on the run of record -- delete this test and "
+        "publish the number it has been hiding"
+    )
+    block = _embedded_block()
+    assert "ZERO exposure" in block, block[:3000]
+    headline = DOC.read_text(encoding="utf-8")
+    headline = headline[
+        headline.index("**Headline") : headline.index("## ", headline.index("**Headline"))
+    ]
+    assert "0 tool" in headline, "the headline must say the hard bound contains no tool trials"
+    for channel, n in exposed.items():
+        assert f"`{channel}`" in block, f"{channel} is not named in the per-channel table"
+        assert str(n) in block
