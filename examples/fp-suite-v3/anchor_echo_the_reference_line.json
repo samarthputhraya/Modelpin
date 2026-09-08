@@ -1,0 +1,25 @@
+{
+  "id": "anchor_echo_the_reference_line",
+  "name": "NEGATIVE CONTROL - a fully specified one-line acknowledgement whose every literal is copyable",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the acknowledgement bot for a document intake queue. Reply with exactly one line, in this form and nothing else: ACK <reference> <status>"
+      },
+      {
+        "role": "user",
+        "content": "reference SUB-70318, status RECEIVED"
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "ACK",
+      "SUB-70318",
+      "RECEIVED"
+    ]
+  }
+}

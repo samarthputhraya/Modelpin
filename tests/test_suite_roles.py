@@ -240,6 +240,26 @@ EXPECTED_MEMBERS: dict[tuple[str, str], frozenset[str]] = {
             "verify_or_trust_pasted_status",
         }
     ),
+    # MP-222: attempt #2 at the ASSERTION channel alone, after fp-suite-v2 failed on it and
+    # published the failure. [M] The v2 traces show the models were never deterministic --
+    # three of its four assertions simply named a literal outside the output distribution
+    # (`[2]` in 0/400 runs against `Passage 2` in 400/400). These ten declare no tools, so
+    # the assertion channel is the only one they are built to move. Same no-edit-after-
+    # scoring rule as fp-suite and fp-suite-v2; moving one needs an ADR.
+    ("fp-suite-v3", "score"): frozenset(
+        {
+            "action_items_keep_the_owners",
+            "anchor_closed_set_label",
+            "anchor_echo_the_reference_line",
+            "dispatch_line_keeps_the_ids",
+            "handover_note_keeps_the_ids",
+            "json_null_or_omitted_key",
+            "metrics_line_keeps_the_numbers",
+            "regex_anchors_unspecified",
+            "slug_conjunction_stopwords",
+            "standup_digest_keeps_the_ids",
+        }
+    ),
 }
 
 #: Derived, so the path -> role pin and the membership pin cannot drift apart.

@@ -1,0 +1,25 @@
+{
+  "id": "slug_conjunction_stopwords",
+  "name": "A URL slug where dropping the ampersand and spelling it out are both standard slugifier behaviour",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the CMS helper. Turn the article title the editor gives you into a URL slug: lowercase, words joined by hyphens. Reply with the slug and nothing else."
+      },
+      {
+        "role": "user",
+        "content": "Q3 Rollout & the New Billing Flow"
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "q3-rollout",
+      "-and-",
+      "billing-flow"
+    ]
+  }
+}

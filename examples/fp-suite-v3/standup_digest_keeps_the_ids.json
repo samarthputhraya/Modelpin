@@ -1,0 +1,27 @@
+{
+  "id": "standup_digest_keeps_the_ids",
+  "name": "A one-sentence stand-up digest whose dashboard scraper needs five identifiers from three updates",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the stand-up digest bot for an engineering channel. Turn the pasted updates into a single sentence the team lead can skim."
+      },
+      {
+        "role": "user",
+        "content": "Ravi: finished the retry logic on payments-api, PR #2318 is merged, moving to the webhook backlog.\nMei: still blocked on the SOC2-114 evidence request, waiting on legal since Tuesday.\nTomas: cut release 5.9.0-rc2 to staging, error rate is sitting at 0.4% which is above our 0.2% budget."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "payments-api",
+      "#2318",
+      "SOC2-114",
+      "5.9.0-rc2",
+      "0.4%"
+    ]
+  }
+}

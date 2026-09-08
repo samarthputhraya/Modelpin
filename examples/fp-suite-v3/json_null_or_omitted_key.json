@@ -1,0 +1,23 @@
+{
+  "id": "json_null_or_omitted_key",
+  "name": "A contact object with no phone number, where emitting null and omitting the key are both idiomatic",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the CRM integration assistant. Our contact objects carry name, email, phone and office. Reply with the JSON object and nothing else."
+      },
+      {
+        "role": "user",
+        "content": "Add this one: Dana Whitfield, dana@northgate.co.uk, London office. We don't have a phone number for her."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_not_contain": [
+      "null"
+    ]
+  }
+}

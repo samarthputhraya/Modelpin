@@ -1,0 +1,26 @@
+{
+  "id": "dispatch_line_keeps_the_ids",
+  "name": "A 90-character dispatch line whose handheld parser needs four identifiers the prompt never lists",
+  "kind": "single",
+  "input": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You write the one-line dispatch text a courier sees on their handheld. One line only, and keep it short - the screen truncates at roughly 90 characters."
+      },
+      {
+        "role": "user",
+        "content": "Job for this afternoon: collect from Meridian Print, unit 4B Halston Way, our reference MP-20714, customer is Okonkwo-Reyes, they need the tail lift, drop at BS1 4TR before 16:45, driver code DRV-311."
+      }
+    ],
+    "temperature": 1.0
+  },
+  "assertions": {
+    "must_contain": [
+      "MP-20714",
+      "BS1 4TR",
+      "16:45",
+      "DRV-311"
+    ]
+  }
+}
