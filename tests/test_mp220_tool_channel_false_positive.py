@@ -17,7 +17,7 @@ construction. It is not a judgement call and there is no reading of the data tha
 Three rows of 480 came back `regression`; this is the one the TOOL channel produced. (The other
 two, `plaintext_answer_bold_optional#2` on v2b and `sql_answer_fence_unspecified#6` on v2d, are
 semantic-channel alarms on scenarios that make no tool calls at all -- `tool_call_match 1.0` on
-both -- and belong to ADR-0040's territory, not this row's. `[M] 2026-09-08 fp-guardian`: the
+both -- and belong to ADR-0040's territory, not this row's. `[M] 2026-09-08, FP review`: the
 pooled v2a-d FP rate is 3/101; the TOOL-channel rate is 1/26.)
 
     artifact   v2a-fp-suite-v2-gpt-4o-mini.jsonl
@@ -43,7 +43,7 @@ network, no spend. The judge is not needed to see this: the stored run DID have 
 `flagged` row is `["tool"]` alone - so dropping it leaves the tool channel's arithmetic and
 the published verdict bit-identical.
 
-STATUS. MP-220 is OPEN and **BLOCKED**, not merely unfixed. `[M] 2026-09-08 fp-guardian`
+STATUS. MP-220 is OPEN and **BLOCKED**, not merely unfixed. `[M] 2026-09-08, the FP review`
 rejected both candidate engine rules on measured evidence, and the reasons bind anyone who
 picks this up:
 
