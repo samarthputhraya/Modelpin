@@ -73,6 +73,54 @@ def _tree(tmp_path: Path) -> Path:
     return root
 
 
+def _changelog_is_dated_for(version: str, text: str) -> bool:
+    return bool(re.search(rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}", text, re.M))
+
+
+def _repo_is_release_ready() -> bool:
+    """Does the tree CLAIM to be the one about to be tagged?
+
+    Between releases it does not, and should not: `pyproject.toml` names the next version
+    while `CHANGELOG.md` and `README.md` still describe the last shipped one. Only during
+    release preparation do all three agree.
+    """
+    version = _declared_version()
+    changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
+    readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    return _changelog_is_dated_for(version, changelog) and f"-> modelpin {version}" in readme
+
+
+def _prepared_tree(tmp_path: Path) -> Path:
+    """A copy of the tree made release-ready for the declared version.
+
+    The mutants below must start from a tree the gate ACCEPTS, or "the mutant was rejected"
+    proves nothing -- it would have been rejected anyway. Preparing the copy (never the repo)
+    keeps every mutant meaningful on any day, including the ~99% of days that are not a
+    release day.
+    """
+    root = _tree(tmp_path)
+    version = _declared_version()
+
+    changelog_path = root / "CHANGELOG.md"
+    changelog = changelog_path.read_text(encoding="utf-8")
+    if not _changelog_is_dated_for(version, changelog):
+        marker = "## [Unreleased]"
+        heading = f"## [{version}] - 2026-01-01"
+        if marker in changelog:
+            changelog = changelog.replace(marker, heading, 1)
+        else:
+            changelog = f"{heading}\n\n{changelog}"
+        changelog_path.write_text(changelog, encoding="utf-8")
+
+    readme_path = root / "README.md"
+    readme = readme_path.read_text(encoding="utf-8")
+    if f"-> modelpin {version}" not in readme:
+        readme = re.sub(r"-> modelpin \d+\.\d+\.\d+", f"-> modelpin {version}", readme, count=1)
+        readme_path.write_text(readme, encoding="utf-8")
+
+    return root
+
+
 def _run_gate(tree: Path, version: str) -> subprocess.CompletedProcess[str]:
     script = tree / "_gate.py"
     script.write_text(_gate_source(), encoding="utf-8")
@@ -84,19 +132,37 @@ def _run_gate(tree: Path, version: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_the_gate_accepts_the_current_tree(tmp_path: Path) -> None:
-    """The tree we are about to tag must pass its own release gate.
+def test_the_gate_accepts_a_tree_prepared_for_the_declared_version(tmp_path: Path) -> None:
+    """The gate must pass a tree that IS ready — on any day, not only release day.
 
-    This is the assertion whose absence let a broken gate sit in `main`. It fails the build
-    *before* a human publishes a Release and watches the workflow reject it.
+    This is the assertion whose absence let a broken gate sit in `main`: MP-204 deleted the
+    `__version__` literal the gate matched on, and nothing noticed for a whole release cycle.
+    That defect is independent of whether today happens to be a release day, so this case must
+    be too — it runs against a prepared copy rather than waiting for the repo to be mid-cut.
     """
     version = _declared_version()
-    result = _run_gate(_tree(tmp_path), version)
+    result = _run_gate(_prepared_tree(tmp_path), version)
     assert result.returncode == 0, (
-        f"release.yml's version gate REJECTS this tree at version {version}. Publishing a "
-        "GitHub Release would fail in CI before anything is built.\n\n"
+        f"release.yml's version gate REJECTS a tree prepared for {version}. Tagging it would "
+        "fail in CI before anything is built.\n\n"
         f"{result.stdout}{result.stderr}"
     )
+
+    # And when the repo CLAIMS to be the tree about to ship, the unprepared bytes must pass
+    # too — that is the release-prep branch, where a human is one `git tag` from publishing.
+    #
+    # Deliberately an extra assertion rather than a second test with a `pytest.skip`. A skip
+    # would make the suite's pass/skip counts depend on where in the release cycle it runs,
+    # and `tests/test_recall_arm.py::test_the_readmes_test_count_is_the_real_one` pins those
+    # counts in README.md — so a conditional skip would turn a published number into
+    # something that silently changes twice per release. One test, always run, no skip.
+    if _repo_is_release_ready():
+        real = _run_gate(_tree(tmp_path), version)
+        assert real.returncode == 0, (
+            f"release.yml's version gate REJECTS this tree at {version}, and the repo claims "
+            "to be release-ready. Publishing a GitHub Release would fail in CI.\n\n"
+            f"{real.stdout}{real.stderr}"
+        )
 
 
 def _hardcode_literal(root: Path) -> None:
@@ -167,7 +233,7 @@ def test_the_gate_rejects(tmp_path: Path, label: str, mutate: object, expected: 
     state `release.yml` was actually in for the `__version__` clause — it could no longer
     distinguish a correct tree from any other, because it matched neither.
     """
-    root = _tree(tmp_path)
+    root = _prepared_tree(tmp_path)
     mutate(root)  # type: ignore[operator]
     result = _run_gate(root, _declared_version())
 
