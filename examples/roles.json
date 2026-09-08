@@ -162,6 +162,23 @@
         "total_currency_code_or_symbol",
         "verify_or_trust_pasted_status"
       ]
+    },
+    {
+      "path": "fp-suite-v3",
+      "role": "score",
+      "why": "MP-222: attempt #2 at a same-model null the FORMAT/ASSERTION channel can actually move. fp-suite-v2 failed on this channel and published the failure: [M] 2026-09-07, 0 exposed of 160 trials in scope, all four of its assertion scenarios pinned at a violation rate of 0/5 or 5/5 on BOTH sides. [M] Re-reading fp-suite-v2's own stored traces (reports/channel-exposure/2026-09-07/v2*.jsonl, 400 runs per scenario) shows WHY, and it is not what the row assumed: the models were NOT deterministic. Three of the four assertions named a literal that lies outside the model's output distribution entirely - `[2]` appeared in 0/400 runs while `Passage 2` appeared in 400/400 (gpt-4o-mini split 42.5% `(Passage 2)` / 32.0% `Passage 2:`), and `EUR` appeared in 0/400 while gpt-4o-mini split 47.0% U+20AC / 53.0% `euros`. Swapping ONLY the asserted literal on those identical stored runs turns 0/20 sides-differ into 11-17/20. The variance was always there; the instrument was pointed away from it. So v3 changes the INSTRUMENT, not the temperature: five scenarios assert on literals that are verbatim in their own prompt, so the failure mode that killed v2 - 'the model never produced the literal' - is structurally impossible, and the only remaining question is the OMISSION rate under brevity pressure; assertions are conjunctions of 3-5 elements so a scenario is dead only if EVERY element is pinned at exactly 1.0; and two anchors are quiet by construction. score, never fit: no threshold may be fitted here and no prompt or assertion may be edited after a rate has been measured (ADR-0025, ADR-0038). Content-disjoint from every other set; its rate is never pooled with the fp-suite bound and its artifacts live under reports/channel-exposure/.",
+      "scenarios": [
+        "action_items_keep_the_owners",
+        "anchor_closed_set_label",
+        "anchor_echo_the_reference_line",
+        "dispatch_line_keeps_the_ids",
+        "handover_note_keeps_the_ids",
+        "json_null_or_omitted_key",
+        "metrics_line_keeps_the_numbers",
+        "regex_anchors_unspecified",
+        "slug_conjunction_stopwords",
+        "standup_digest_keeps_the_ids"
+      ]
     }
   ]
 }
