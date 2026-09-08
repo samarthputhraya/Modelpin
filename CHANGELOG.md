@@ -4,11 +4,36 @@ All notable changes to Modelpin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-08
 
-Five ways the tool could report something it had not measured, or discard something you had
-written, are closed. Three of them ended in a confident verdict; two of them spent your API
-key first.
+> ### ⚠️ Upgrading breaks your existing baselines. Re-run `mp baseline` once.
+>
+> **Every baseline recorded before this version will be refused, and your first `mp check`
+> after upgrading compares nothing and exits `3` until you re-record.** `mp baseline` now
+> stores a content fingerprint of each scenario *definition* beside its traces, and `mp check`
+> will not compare a scenario whose definition has changed since — or whose baseline carries
+> no fingerprint at all, which is every baseline that exists today.
+>
+> ```
+> mp baseline          # once, after upgrading. Then mp check works as before.
+> ```
+>
+> This is a deliberate cost. `[M]` The store keyed a baseline to a scenario by **id alone**
+> and got it wrong in both directions: a rewritten scenario compared against a stale baseline
+> reported `OK 1 scenario(s) unchanged`, exit `0`, over a candidate that had genuinely started
+> refusing; and two unrelated scenarios sharing a filename produced `REGRESSION (confidence
+> 0.99)`, exit `1`, off nothing but a name collision. Applying it to Modelpin's own tracked
+> dogfood baseline found the defect live. Full rationale below and in ADR-0039.
+>
+> **Also breaking, smaller:** a setup failure (missing key, bad config, usage error) now exits
+> **`4`**, not `1`. `1` means only a real regression. A caller treating any non-zero code as
+> "regression" will now see `4` where it saw `1`.
+
+Beyond the two breaking changes: the false-positive rate this project is named for is
+**bounded for the first time** on surfaces where a false alarm was actually possible, the
+semantic channel stops hiding a class of real regression, and five ways the tool could report
+something it had not measured — or discard something you had written — are closed. Three of
+those ended in a confident verdict; two of them spent your API key first.
 
 ### Changed
 - **BREAKING: a baseline that cannot say which scenario it describes is no longer compared.**
