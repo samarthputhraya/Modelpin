@@ -130,8 +130,18 @@ what is sent to the model, so nothing has to be replayed again.
 
 Scenarios can also be agent runs: set `"kind": "agent"`, add `"tools"` (and canned `"tool_results"`)
 to `input`, and Modelpin drives a multi-turn model↔tool loop so trajectories like
-`lookup_order → issue_refund` actually emerge during replay. Eight worked examples spanning tool
-trajectories, semantic equivalence, refusals, and output format live in
+`lookup_order → issue_refund` actually emerge during replay.
+
+**`modelpin init --agent-example` writes one you can run.** It scaffolds an annotated,
+runnable two-step refunds agent (`lookup_order` → `issue_refund`) with canned tool
+results, so the trajectory diff is reachable without leaving the package or copying
+JSON out of a browser. It is behind a flag rather than in the default scaffold on
+purpose: `[M]` a `single` scenario costs one model call per replay and an agent one
+drives the tool loop up to six, so scaffolding it by default would take a first
+`modelpin baseline` from 5 calls to as many as 35 — on your key, for a fictional shop.
+
+Eight further worked examples spanning tool trajectories, semantic equivalence,
+refusals, and output format live in
 [`examples/suite/`](https://github.com/samarthputhraya/modelpin/tree/main/examples/suite/).
 
 ---
@@ -481,12 +491,18 @@ sort of divergence Modelpin exists to notice.
 
 | Command | What it does |
 |---|---|
-| `mp init [dir]` | Scaffold `modelpin.yaml` + `scenarios/` (never overwrites). |
-| `mp scan [path]` | Detect which AI models the repo depends on, and where. |
-| `mp baseline` | Record current model behavior for your scenarios (N runs). |
-| `mp check --to <model>` | Replay scenarios on a new model, diff vs baseline, write the PR-style report, fail CI on a regression. |
-| `mp version` | Print the Modelpin version. |
-| `mp report --to <new> --from <incumbent> --suite-dir <dir>` | Replay a scenario suite across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. `--suite-dir` is required: the wheel ships no scenarios, so the **open public suite** lives in the repo at `examples/report-suite/` — clone it, or point this at your own. |
+| `modelpin init [dir]` | Scaffold `modelpin.yaml` + `scenarios/` (never overwrites). |
+| `modelpin scan [path]` | Detect which AI models the repo depends on, and where. |
+| `modelpin baseline` | Record current model behavior for your scenarios (N runs). |
+| `modelpin check --to <model>` | Replay scenarios on a new model, diff vs baseline, write the PR-style report, fail CI on a regression. |
+| `modelpin version` | Print the Modelpin version. |
+| `modelpin report --to <new> --from <incumbent> --suite-dir <dir>` | Replay a scenario suite across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. `--suite-dir` is required: the wheel ships no scenarios, so the **open public suite** lives in the repo at `examples/report-suite/` — clone it, or point this at your own. |
+
+
+Every command is also available as **`mp`** — except in PowerShell, where `mp` is a
+built-in alias for `Move-ItemProperty` and will fail with a `ParameterBindingException`
+that names Modelpin nowhere. This table spells out `modelpin` for that reason; use
+`mp` freely in bash, zsh and cmd.
 
 Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--config`,
 `--scenarios-dir`, `--store-dir`, and `--fixtures`, which is **required** with `--provider fake`
@@ -573,8 +589,8 @@ fired; the 2026-09-07 run measured surfaces that can); multi-turn replay; a real
 GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
 in the wheel); the
 [Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **1037 tests passing** (+2 `xfail`, pinning the
-MP-165 trajectory residual and the MP-220 tool-channel false positive, so 1039 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
+`pip install "modelpin[providers]"`; `[M]` **1089 tests passing** (+2 `xfail`, pinning the
+MP-165 trajectory residual and the MP-220 tool-channel false positive, so 1091 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
 adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
 Marketplace.
 

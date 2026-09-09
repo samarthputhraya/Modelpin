@@ -53,6 +53,7 @@ from modelpin.diff.stats import (
 from modelpin.models import MATCH_MODES, Assertion, DiffResult, DiffVerdict, Scenario, Trace
 from modelpin.providers import ProviderAdapter, ProviderError, get_adapter, provider_help
 from modelpin.providers.fake import FakeProvider
+from modelpin.providers.openai import MAX_TOOL_TURNS
 from modelpin.replay import replay
 from modelpin.report import (
     ChannelCensus,
@@ -70,6 +71,7 @@ from modelpin.report.suite import (
 )
 from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
 from modelpin.scenarios import ScenarioError, load_scenarios, unrecognised_assertion_keys
+from modelpin.scenarios.starter import AGENT_STARTER_FILENAME, write_agent_starter
 from modelpin.storage import (
     STORE_DIRNAME,
     BaselineError,
@@ -183,6 +185,10 @@ class _EncodingSafeStdout:
 # forwarded -- the full `IO[str]` protocol is not implemented and is not needed.
 console = Console(file=cast(IO[str], _EncodingSafeStdout()))
 
+# A literal, unlike the agent starter in `scenarios/starter.py`, which is built from a real
+# `Scenario` object. Not an oversight: README.md quotes these exact bytes under "The one
+# `mp init` writes", so re-serializing them would move the scaffold and leave the published
+# copy behind. The agent starter has no such published copy and is generated.
 _SAMPLE_SCENARIO = """{
   "id": "greeting",
   "name": "Simple greeting",
@@ -884,17 +890,42 @@ def scan(path: str = typer.Argument(".", help="Repo root to scan.")) -> None:
     if not hits:
         console.print("No model identifiers found.")
         return
-    table = Table("model", "file", "line", title="Models this repo depends on", box=ASCII_BOX)
-    for h in sorted(hits, key=lambda x: (x["model"], x["file"], x["line"])):
-        # `Text(...)`, not raw strings: a rich Table parses cell content as MARKUP, and these
-        # cells are paths discovered in someone else's repo. `[M] 2026-09-02` a folder named
-        # `src [experimental]` rendered as `src ` -- `scan` reporting a file path that does
-        # not exist, on one of the first commands a stranger runs. A Next.js repo, whose
-        # route folders are literally `[slug]`, would have every such row corrupted.
-        # `Text` is used rather than `_rich_escape` because it cannot be re-parsed downstream.
-        table.add_row(Text(h["model"]), Text(h["file"]), Text(str(h["line"])))
-    console.print(table)
-    console.print(f"[dim]{len({h['model'] for h in hits})} distinct model(s).[/]")
+
+    # `[M] 2026-09-09` MP-236. The detector labels every hit `code` (a wired-up call or an
+    # active config value) or `comment` (a code comment, or documentation prose). Pooling the
+    # two was the audit's finding: the headline count is the first number a stranger reads and
+    # it must mean models this repo CALLS. A mention is still worth showing -- `# TODO:
+    # evaluate gpt-5.5` is a real intention, and hiding it would be the blind half of the same
+    # defect -- so it is listed and counted separately rather than deleted or merged.
+    called = [h for h in hits if h.get("context", "code") == "code"]
+    mentioned = [h for h in hits if h.get("context", "code") != "code"]
+
+    def _rows(rows: list[dict], title: str) -> Table:
+        table = Table("model", "file", "line", title=title, box=ASCII_BOX)
+        for h in sorted(rows, key=lambda x: (x["model"], x["file"], x["line"])):
+            # `Text(...)`, not raw strings: a rich Table parses cell content as MARKUP, and
+            # these cells are paths discovered in someone else's repo. `[M] 2026-09-02` a
+            # folder named `src [experimental]` rendered as `src ` -- `scan` reporting a file
+            # path that does not exist, on one of the first commands a stranger runs. A
+            # Next.js repo, whose route folders are literally `[slug]`, would have every such
+            # row corrupted. `Text` is used rather than `_rich_escape` because it cannot be
+            # re-parsed downstream.
+            table.add_row(Text(h["model"]), Text(h["file"]), Text(str(h["line"])))
+        return table
+
+    if called:
+        console.print(_rows(called, "Models this repo depends on"))
+        console.print(f"[dim]{len({h['model'] for h in called})} distinct model(s) called.[/]")
+    else:
+        console.print("No model identifiers found in code or configuration.")
+
+    if mentioned:
+        only = {h["model"] for h in mentioned} - {h["model"] for h in called}
+        console.print(_rows(mentioned, "Also mentioned (comments and docs -- not counted above)"))
+        console.print(
+            f"[dim]{len(only)} of these appear only in prose. A mention is not a dependency; "
+            "read them before treating any as one.[/]"
+        )
 
 
 @app.command()
@@ -906,9 +937,28 @@ def init(
         help="Write a runnable offline demo instead of scaffolding this repo "
         "(no API key, no cost).",
     ),
+    agent_example: bool = typer.Option(
+        False,
+        "--agent-example",
+        help="Also scaffold a runnable `kind: agent` scenario with input.tools and "
+        "tool_results, showing the tool-call trajectory diff. Costs more to replay.",
+    ),
 ) -> None:
     """Create modelpin.yaml + scenarios/ in the current repo (never overwrites)."""
     root = Path(directory)
+
+    if demo and agent_example:
+        # Refused rather than silently ignored. `--demo` returns before the scaffold path
+        # ever runs, so honouring only one of two flags the user typed is the MP-198 shape:
+        # input stated, discarded without a word, run continues. The two ARE different
+        # things -- the demo is a fake-provider sandbox that costs nothing, this is a
+        # scenario replayed on the user's own key -- so say which one to run.
+        _fail(
+            "--demo and --agent-example scaffold different things and cannot be combined. "
+            "`--demo` writes a self-contained offline sandbox (fake provider, no key, no "
+            "cost); `--agent-example` adds a real agent scenario to THIS repo's scenarios/, "
+            "which `modelpin baseline` replays on your own key. Run whichever you want."
+        )
 
     if demo:
         written = write_demo(root)
@@ -960,6 +1010,12 @@ def init(
     if not existing:
         (scenarios_dir / "greeting.json").write_text(_SAMPLE_SCENARIO, encoding="utf-8")
         created.append(str(scenarios_dir / "greeting.json"))
+    # Additive, and deliberately NOT gated on `existing`: a user who initialised a week ago
+    # and now wants to see the tool-trajectory feature is the main person who asks for this,
+    # and gating it would hand them the "Already initialised" line and nothing else -- the
+    # no-exit loop MP-01 and the reserved-file glob above were both about.
+    agent_written = write_agent_starter(scenarios_dir) if agent_example else []
+    created.extend(str(p) for p in agent_written)
     if created:
         console.print("[green]Scaffolded:[/]")
         for c in created:
@@ -972,8 +1028,9 @@ def init(
         # MP-32: this branch means `init` ADOPTED a config it did not write. Reporting a bare
         # "already initialised" let a cloned repo's config hand the user a scenario set they
         # had never seen, which `baseline` then replayed on their key. Name what was adopted.
-        # `existing` is not stale here: this branch means nothing was created, so no
-        # greeting.json was written after the glob.
+        # `existing` is not stale here: this branch means nothing was created, so neither
+        # greeting.json nor the agent starter was written after the glob -- both append to
+        # `created`, so writing either takes the branch above instead.
         # `sub` is the config's own `scenarios_dir:` value and `cfg_path` derives from the
         # directory argument -- both user-authored text on the line that exists to tell a user
         # WHAT they just adopted (MP-32). Corrupting it defeats the disclosure.
@@ -982,6 +1039,28 @@ def init(
         console.print(
             f"[dim]{len(existing)} scenario(s) in {_sub}/ - `modelpin baseline` replays "
             f"all of them on your own key. Not yours? Check {_rich_escape(str(cfg_path))}.[/]"
+        )
+
+    # Printed on BOTH branches, because both are dead ends for the tool-trajectory feature
+    # otherwise. `[M] 2026-09-09` first-run audit: the only worked agent examples the README
+    # cites live in `examples/suite/`, which ADR-0011 keeps out of the wheel -- so this line
+    # is what stops "go and read GitHub" being the answer to "how do I diff a tool call".
+    if not agent_example:
+        console.print(
+            "[dim]Want to see the tool-call trajectory diff? "
+            "`modelpin init --agent-example` writes a runnable `kind: agent` scenario "
+            "with tools and canned results, annotated.[/]"
+        )
+    elif agent_written:
+        console.print(
+            f"\n[bold]{_rich_escape(AGENT_STARTER_FILENAME)}[/] is a `kind: agent` scenario: "
+            f"one replay drives up to {MAX_TOOL_TURNS} model calls as the tool loop turns, "
+            f"where a `single` scenario costs one. It is a fictional refunds desk - read it, "
+            f"then replace it with your own tools or delete it."
+        )
+    else:
+        console.print(
+            f"[dim]{_rich_escape(AGENT_STARTER_FILENAME)} already exists; left untouched.[/]"
         )
 
 
