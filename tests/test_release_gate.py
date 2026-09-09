@@ -64,9 +64,14 @@ def _gate_source() -> str:
     return "\n".join(ln[pad:] if ln.strip() else "" for ln in lines)
 
 
-def _tree(tmp_path: Path) -> Path:
+def _tree(tmp_path: Path, name_hint: str = "tree") -> Path:
     """A minimal copy of the files the gate reads."""
-    root = tmp_path / "tree"
+    # Named, because one test builds TWO copies -- a prepared one and the untouched real tree.
+    # `[M] 2026-09-09` A fixed "tree" name made that test raise FileExistsError, and only ever
+    # on a release-prep branch, because the second copy is built solely when the repo already
+    # claims to be release-ready. It surfaced while cutting 0.3.1: a latent failure that waits
+    # for release day is the same disease this module exists to treat.
+    root = tmp_path / name_hint
     (root / "modelpin").mkdir(parents=True)
     for name in FILES:
         shutil.copy2(_repo_root() / name, root / name)
@@ -157,7 +162,7 @@ def test_the_gate_accepts_a_tree_prepared_for_the_declared_version(tmp_path: Pat
     # counts in README.md — so a conditional skip would turn a published number into
     # something that silently changes twice per release. One test, always run, no skip.
     if _repo_is_release_ready():
-        real = _run_gate(_tree(tmp_path), version)
+        real = _run_gate(_tree(tmp_path, "real"), version)
         assert real.returncode == 0, (
             f"release.yml's version gate REJECTS this tree at {version}, and the repo claims "
             "to be release-ready. Publishing a GitHub Release would fail in CI.\n\n"

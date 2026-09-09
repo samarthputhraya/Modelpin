@@ -37,7 +37,7 @@ Install (Python 3.12+):
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.3.0
+modelpin version                        # -> modelpin 0.3.1
 ```
 
 > **Windows PowerShell:** run `modelpin …`, not `mp …`. PowerShell ships a built-in `mp` alias
