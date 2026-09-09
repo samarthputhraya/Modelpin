@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Iterable
 
+from modelpin.config import DEFAULT_CONFIG_FILE
 from modelpin.storage import STORE_DIRNAME
 
 #: The o-series numbers that actually exist. `[M] 2026-08-29` the pattern was `o[0-9]`,
@@ -87,7 +88,55 @@ _URL_ON_LINE = re.compile(r"(?:https?://|www\.)\S+", re.I)
 _ASSET_SUFFIX = re.compile(r"\.(?:png|jpe?g|gif|svg|webp|ico|bmp|mp4|pdf|css|html?)$", re.I)
 
 
-DEFAULT_EXTS = {".py", ".env", ".yaml", ".yml", ".json", ".toml", ".js", ".ts"}
+#: Where a model id is WIRED UP: source and configuration the program actually reads.
+CODE_EXTS = {".py", ".env", ".yaml", ".yml", ".json", ".toml", ".js", ".ts"}
+
+#: Where a model id is TALKED ABOUT. MP-236's second half: `DEFAULT_EXTS` was `CODE_EXTS`
+#: alone, so a repo whose README says "we use `claude-3-5-sonnet` as a fallback" scanned to
+#: `No model identifiers found.`, exit 0 -- the same confident-empty-result shape MP-195 fixed
+#: for cross-vendor ids, arriving through the file walk instead of the patterns.
+#:
+#: `[M] 2026-09-09` Measured before adding, because docs are prose and prose is where a
+#: fabrication would come from. Two independent corpora, neither a fixture:
+#:
+#:     kavach (a real app, 9 doc files       5 new rows / 1 distinct -- `Llama-3.3-70B`,
+#:     actually walked)                      already found in `kavach/classifier.py`.
+#:                                           Models findable ONLY in its docs: NONE.
+#:     a site-packages tree (28 doc files)   9 matches / 2 distinct -- `claude-sonnet-5`,
+#:                                           `claude-haiku-4-5`, both real ids inside
+#:                                           `model="..."` samples. 0 fabricated.
+#:
+#: `[M] 2026-09-09` The counts above were first written as 27 and 156 and both were wrong, in
+#: the direction that overstates the check. 27 is the number of `.md` files ON DISK in kavach;
+#: the walker reaches 9, because `_is_virtualenv` prunes 18 inside `.venv-modelpin` and one in
+#: `.modelpin`. 156 reproduces on no tree on the machine. The RESULT columns are unchanged and
+#: were reproduced exactly -- only the denominator was invented, which is the half a reader
+#: would have trusted most.
+#:
+#: `.txt` is deliberately NOT here. It is not a documentation format, it is the default
+#: extension for logs, scraped dumps and data exports -- MP-201's 28 fabrications were
+#: exactly that kind of content. `[A]` Falsified by one real repo whose only record of its
+#: model is a `.txt`; add it then, with the measurement.
+DOC_EXTS = {".md", ".markdown", ".rst"}
+
+DEFAULT_EXTS = CODE_EXTS | DOC_EXTS
+
+#: Line-comment introducers, by extension. `.json` has none by design. Documentation
+#: formats are absent because they need no scanning: every line of prose is commentary.
+_COMMENT_TOKEN = {
+    ".py": "#",
+    ".yaml": "#",
+    ".yml": "#",
+    ".toml": "#",
+    ".env": "#",
+    ".js": "//",
+    ".ts": "//",
+}
+
+#: Modelpin's own config, under both spellings YAML permits. Bound to the constant rather
+#: than typed, for the same reason `SKIP_DIRS` binds `STORE_DIRNAME`: renaming the file
+#: must not silently re-open MP-236.
+_OWN_CONFIG_NAMES = {DEFAULT_CONFIG_FILE.lower(), f"{Path(DEFAULT_CONFIG_FILE).stem.lower()}.yml"}
 #: Directory names never worth scanning, matched at or below the scan root. `.venv`/`venv`
 #: stay for the case a virtualenv has no `pyvenv.cfg` (a stale or hand-made one), but they
 #: are no longer what CARRIES the venv rule -- see `_is_virtualenv`.
@@ -163,8 +212,75 @@ def _iter_files(root: Path, exts: set[str]) -> Iterable[Path]:
                 yield p
 
 
+def _comment_cut(line: str, token: str) -> int:
+    """Index where `line`'s trailing comment begins, or `len(line)` if it has none.
+
+    Quoted spans are skipped, so ``MODEL = "gpt-4o"  # or gpt-5`` cuts at the `#` and
+    ``url = "https://x/#gpt-4"`` does not cut at all. That is the whole ambition: this is a
+    one-line lexer, not a parser for eight languages.
+
+    Two bounds, stated because they are load-bearing nowhere else and must stay that way:
+    a model id inside a Python docstring reads as code (line-based scanning cannot see a
+    multi-line string), and an unbalanced apostrophe in unquoted YAML prose -- `dont` vs
+    `don't` -- swallows the rest of the line, so a real comment after it reads as code.
+    BOTH degrade toward "call it code", which keeps the row. The only place that choice can
+    delete anything is Modelpin's own config, whose generated comments start at column 0
+    where no quote precedes them.
+    """
+    quote = ""
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif line.startswith(token, i):
+            return i
+        i += 1
+    return len(line)
+
+
 def scan_repo(root: str | Path = ".", exts: set[str] | None = None) -> list[dict]:
-    """Return [{model, file, line}] for every model id found in the repo."""
+    """Return [{model, file, line, context}] for every model id found in the repo.
+
+    `context` is `"code"` (the id is wired up: source, or an active config value) or
+    `"comment"` (the id is talked about: a code comment, or documentation prose).
+
+    MP-236. `[M] 2026-09-09`, found by a first-run audit of the published 0.3.0 and
+    reproduced verbatim in a directory holding one 1-file app plus a fresh `modelpin init`:
+    **3 of 6 rows, and 1 of 3 "distinct model(s)", were Modelpin talking to itself.**
+    `qwen/qwen3.8-27b` was reported as a dependency of the user's app; it exists nowhere in
+    that app, only inside the scaffold comment `modelpin init` had just written explaining the
+    judge-model-collision rule. This is MP-200's class (our `.modelpin/` store reported back
+    as the user's models) in the one file we write into the user's repo by hand, and it lands
+    on the first command a stranger runs.
+
+    The rule is structural, NOT a copy of the scaffold's text: **in Modelpin's own config, a
+    model id outside an active setting is commentary, not a declaration.** We define that
+    file's schema, and `models:` / `judge_model:` is the only way to declare a model in it --
+    so a commented-out `judge_model:` is a DISABLED one, and prose about a model is not a
+    dependency. Matching the template's wording instead would put a second copy of it in this
+    module (MP-03's exact defect) and would fail silently the day `modelpin init`'s wording changes.
+
+    Comments elsewhere are KEPT and labelled, not suppressed. `# TODO: evaluate gpt-5.5` in
+    the user's own app is a model that repo has a relationship with, and the audit read it as
+    a true positive; a commented-out `MODEL = "gpt-4o"` is the same. `context` is what lets
+    `modelpin scan` print those in their own group later -- rendering it is the CLI's half of this
+    row and is not done here.
+
+    `[M]` Measured on `C:/dev/kavach`, a real repo carrying a hand-edited `modelpin.yaml`, so
+    the cost of the rule is stated rather than assumed: **15 rows / 6 distinct -> 14 / 5**.
+    The one dropped row is `llama-3.3-70b-versatile` in a hand-written NOTE that says Groq
+    RETIRED it -- prose about a dead model, reported until now as a live dependency. That is
+    the shape of what this rule deletes, and one sample is the bound: `[A]` a user who keeps
+    their real model id ONLY in a modelpin.yaml comment loses a row. They would have to have
+    commented out the setting that names it, which is how you turn it off.
+    """
     root = Path(root)
     exts = exts or DEFAULT_EXTS
     hits: list[dict] = []
@@ -179,14 +295,39 @@ def scan_repo(root: str | Path = ".", exts: set[str] | None = None) -> list[dict
             text = f.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
+        # `.env.example` and friends: `Path(".env.example").suffix` is `.example`, the same
+        # blind spot `_iter_files` documents, so the key is derived the same way there.
+        suffix = ".env" if f.name.startswith(".env") else f.suffix.lower()
+        token = _COMMENT_TOKEN.get(suffix)
+        own_config = f.name.lower() in _OWN_CONFIG_NAMES
         for i, line in enumerate(text.splitlines(), start=1):
-            for model in _models_in(line):
-                hits.append({"model": model, "file": str(f.relative_to(root)), "line": i})
+            # A documentation file is commentary end to end, so the cut is 0. A format with
+            # no line comment (`.json`) has no cut at all.
+            cut = 0 if suffix in DOC_EXTS else (_comment_cut(line, token) if token else len(line))
+            for model, start in _models_in(line):
+                context = "code" if start < cut else "comment"
+                if own_config and context == "comment":
+                    continue
+                hits.append(
+                    {
+                        "model": model,
+                        "file": str(f.relative_to(root)),
+                        "line": i,
+                        "context": context,
+                    }
+                )
     return hits
 
 
-def _models_in(line: str) -> list[str]:
-    """Every model id on one line, with substring matches of a longer id dropped.
+def _models_in(line: str) -> list[tuple[str, int]]:
+    """Every model id on one line as `(id, start)`, with substring matches of a longer id
+    dropped.
+
+    The start offset exists so `scan_repo` can ask which side of a comment marker the id sits
+    on. It is the LEFTMOST occurrence's offset, because the dedupe below keeps the first hit
+    of an id on a line: ``MODEL = "gpt-4o"  # gpt-4o stays`` is one row, `code`, exactly as
+    it was one row before this offset existed. Reporting the same id twice on one line to
+    label it twice would answer a noise row with two.
 
     MP-195. The vendor-prefixed patterns overlap the bare ones by construction -- `qwen/` and
     `qwen<n>` both fire on ``qwen/qwen3-32b`` -- so without this the fix for scan's BLINDNESS
@@ -212,16 +353,16 @@ def _models_in(line: str) -> list[str]:
             if _ASSET_SUFFIX.search(m.group(0)):
                 continue
             spans.append((m.start(), m.end(), m.group(0)))
-    out: list[str] = []
+    out: list[tuple[str, int]] = []
     seen: set[str] = set()
-    for start, end, text in spans:
+    for start, end, text in sorted(spans, key=lambda s: s[0]):
         contained = any(
             (o_start <= start and end <= o_end) and (o_end - o_start) > (end - start)
             for o_start, o_end, _ in spans
         )
         if not contained and text not in seen:
             seen.add(text)
-            out.append(text)
+            out.append((text, start))
     return out
 
 
