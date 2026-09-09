@@ -63,7 +63,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modelpin.diff.structural import canonical_sequence, tool_call_sequence  # noqa: E402
+from modelpin.diff.stats import (  # noqa: E402
+    permutation_pvalue_distribution,
+    permutation_pvalue_mean,
+)
+from modelpin.diff.structural import (  # noqa: E402
+    canonical_sequence,
+    modal_sequence,
+    tool_call_sequence,
+    trajectory_match,
+)
 from modelpin.models import DiffResult, Trace  # noqa: E402
 from modelpin.scenarios import load_scenarios  # noqa: E402
 from scripts.fp_measurement import (  # noqa: E402
@@ -128,10 +137,56 @@ def mode_bucket(n: int) -> str:
 MODE_BUCKETS = ("1 (pinned)", "2", "3-4", "5+")
 
 
+def tool_pvalue(base: list[Trace], cand: list[Trace], mode: str) -> float:
+    """The tool channel's own p-value, by the same branch the engine takes.
+
+    Recomputed from the stored traces rather than read from `signals`, which does not carry
+    it. The branch mirrors `modelpin/diff/__init__.py` exactly -- the distribution test for
+    the equivalence modes, the violation-rate test otherwise -- so this predicate cannot drift
+    from the gate it claims to describe.
+    """
+    from modelpin.diff import EQUIVALENCE_MODES
+
+    if mode in EQUIVALENCE_MODES:
+        return permutation_pvalue_distribution(list(_keys(base, mode)), list(_keys(cand, mode)))
+    ref = modal_sequence(base, mode)
+
+    def _viol(traces: list[Trace]) -> list[int]:
+        return [0 if trajectory_match(ref, tool_call_sequence(t), mode) else 1 for t in traces]
+
+    return permutation_pvalue_mean(_viol(base), _viol(cand))
+
+
+def tool_channel_can_fire(base: list[Trace], cand: list[Trace], mode: str) -> bool:
+    """Could the tool channel raise a hard alarm on this trial AT ALL?
+
+    `[M] 2026-09-09` This existed as `lambda ...: True`, which was not a placeholder but a
+    flattering denominator: it credited the shipped gate for every null, including the ones it
+    could not possibly have failed. That is ADR-0022's exact prohibition, and the reason the
+    project's own "0 false alarms in 0 SCORED trials" was withdrawn.
+
+    The first correction tested whether the trajectory VARIED. `[M]` The FP review found it right in
+    direction, still loose: of the 76 trials it admitted, **53 have `tool_p` exactly 1.0**.
+    ADR-0022 names the case -- "at N=5 the tool channel's p is exactly 1.0 across the whole
+    `|i-j| <= 1` band: 16 of 36 cells, 10 of which have genuinely differing sides." A varying
+    trajectory is necessary for the gate to fire and nowhere near sufficient.
+
+    So the test is ADR-0022's own predicate applied to this channel: exposed when the tool
+    channel's p-value is below 1.0. `[M]` The bound moves again in the unflattering direction
+    -- 0/76 ub 3.9% -> 0/23 ub 12.2% -- which is the direction a false-positive denominator
+    should be wrong in, if it must be wrong at all.
+
+    NOVELTY and DISJOINT both require the candidate to hold a key the baseline does not, so
+    they already imply variance; ANDing this in corrects the rule that had no precondition,
+    which is precisely the one it was overstating.
+    """
+    return tool_pvalue(base, cand, mode) < 1.0
+
+
 RULES = {
-    "status_quo": lambda base, cand, mode: True,
-    "novelty": novelty_holds,
-    "disjoint": disjoint_holds,
+    "status_quo": tool_channel_can_fire,
+    "novelty": lambda b, c, m: tool_channel_can_fire(b, c, m) and novelty_holds(b, c, m),
+    "disjoint": lambda b, c, m: tool_channel_can_fire(b, c, m) and disjoint_holds(b, c, m),
 }
 
 
@@ -228,6 +283,7 @@ def summarise(paths: list[str]) -> dict:
             "changed_pairs": 0,
             "masked": 0,
             "fp_scenarios": set(),
+            "fp_exposed_scenarios": set(),
             "detect_scenarios": set(),
             "by_mode": {
                 b: {"fp": 0, "fp_exposed": 0, "detected": 0, "changed": 0} for b in MODE_BUCKETS
@@ -266,6 +322,7 @@ def summarise(paths: list[str]) -> dict:
                     if RULES[rule](base, cand, mode):
                         cell["fp_exposed"] += 1
                         strat["fp_exposed"] += 1
+                        cell["fp_exposed_scenarios"].add(rec["scenario_id"])
                     if v == "regression":
                         cell["fp"] += 1
                         strat["fp"] += 1
@@ -287,7 +344,7 @@ def render(summary: dict) -> list[str]:
         "",
         "`n_eff` is DISTINCT scenarios, not trials. `[M]` The corpus this set replaces read "
         "`0 in 10` while being 4 distinct shapes replayed 20 times, so its true bound on a "
-        "detection-loss rate was 52.7%, not 25.9%. Every bound below is over `n_eff`.",
+        "detection-loss rate was 52.7%, not 25.9%. `[M] 2026-09-09` This header used to promise every bound was over `n_eff` while the FP cell computed over TRIALS -- so it contradicted itself in the flattering direction, on the one column a rule gets chosen by. Both are printed now, and per ADR-0042 D3 the shape figure is the one that constrains.",
         "",
         "| rule | FP (hard alarms on the null) | detections kept | n_eff FP / detect | "
         "masked by another channel |",
@@ -295,9 +352,12 @@ def render(summary: dict) -> list[str]:
     ]
     for rule, c in summary["rules"].items():
         n_fp, k_fp = c["fp_exposed"], c["fp"]
+        m_fp = len(c["fp_exposed_scenarios"])
+        # ADR-0042 D3: neither figure may be printed bare, and the shape one governs.
         fp_cell = (
             f"{k_fp}/{n_fp} = {k_fp / n_fp:.1%}, ub {upper_bound_95(k_fp, n_fp):.1%}"
-            if n_fp
+            f" -- over {m_fp} shapes, ub {upper_bound_95(k_fp, m_fp):.1%} (governs)"
+            if n_fp and m_fp
             else "**0/0 - NOT A LOW RATE, NO MEASUREMENT**"
         )
         det = f"{c['detected']}/{c['changed_pairs']}" if c["changed_pairs"] else "n/a"

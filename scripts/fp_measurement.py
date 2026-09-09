@@ -1007,18 +1007,54 @@ def trial_key(base_scn, cand_scn, sid: str) -> str:
     return f"{'fp' if cand_scn is base_scn else 'recall'}:{sid}"
 
 
-def plan_trials(scenarios, repeats: int) -> list[tuple[str, str, Any, Any]]:
+def load_perturbations(scenarios_dir: str | None) -> dict[str, str]:
+    """The perturbation for each scenario id: the corpus's own `labels.json` wins.
+
+    `[M] 2026-09-09` MP-224 authored `examples/calibration/tool/labels.json` as the ground
+    truth for 35 labelled pairs -- ADR-0041 and the set's README both name it as such -- while
+    this module's recall arm read only the module-level `PERTURBATIONS` dict. The ids did not
+    overlap, so the corpus's 19 `changed` pairs produced NO recall trials at all and the run
+    printed `Detection: 0/0` beside a healthy-looking FP rate. A labelled set that cannot run
+    its own labels is not a labelled set.
+
+    Copying those strings into the dict would be the MP-03 shape (one fact, two copies) that
+    cost this project the scaffolded `runs:` default and the hardcoded `__version__`. So the
+    file is read, and it takes precedence for the ids it names. Entries whose `perturbation`
+    is `null` are the `equivalent` half of the set: they are same-model nulls by construction
+    and must NOT get a recall trial.
+    """
+    merged = dict(PERTURBATIONS)
+    if not scenarios_dir:
+        return merged
+    path = os.path.join(scenarios_dir, "labels.json")
+    if not os.path.exists(path):
+        return merged
+    with open(path, encoding="utf-8") as fh:
+        labels = json.load(fh)
+    for sid, entry in labels.items():
+        if not isinstance(entry, dict):
+            continue
+        instruction = entry.get("perturbation")
+        if isinstance(instruction, str) and instruction.strip():
+            merged[sid] = instruction
+    return merged
+
+
+def plan_trials(
+    scenarios, repeats: int, perturbations: dict[str, str] | None = None
+) -> list[tuple[str, str, Any, Any]]:
     """Every trial `main()`'s two arms will ask for, in the order they will ask: FP rows
     repeat-major (round 1 of every scenario, then round 2, ...), then the recall rows.
     Returns `(key, sid, base_scn, cand_scn)` tuples."""
+    perturbations = PERTURBATIONS if perturbations is None else perturbations
     plan: list[tuple[str, str, Any, Any]] = []
     for i in range(repeats):
         for scn in scenarios:
             sid = fp_label(scn.id, i, repeats)
             plan.append((trial_key(scn, scn, sid), sid, scn, scn))
     for scn in scenarios:
-        if scn.id in PERTURBATIONS:
-            cand = _perturb(scn, PERTURBATIONS[scn.id])
+        if scn.id in perturbations:
+            cand = _perturb(scn, perturbations[scn.id])
             plan.append((trial_key(scn, cand, scn.id), scn.id, scn, cand))
     return plan
 
@@ -1699,7 +1735,8 @@ def main() -> None:
             return None
         return r, base, cand
 
-    plan = plan_trials(scenarios, args.repeats)
+    perturbations = load_perturbations(args.scenarios_dir)
+    plan = plan_trials(scenarios, args.repeats, perturbations)
     if args.arm != "both":
         # Only ever a NARROWING of a rejudge, and only of which trials are bought. Both arms
         # still print below; the one that was not re-scored simply reports its trials as
@@ -1780,7 +1817,7 @@ def main() -> None:
             print(line)
 
     # --- detection: injected perturbations -------------------------- [ARM:RECALL] ---
-    perturbed = [s for s in scenarios if s.id in PERTURBATIONS]
+    perturbed = [s for s in scenarios if s.id in perturbations]
     print("INJECTED PERTURBATIONS (perturbed candidate) -- a flag is a detection, and")
     print("  `unchanged` is a MISS. NB a miss is not automatically an engine defect: the")
     print("  candidate may have resisted the injected instruction. Read the explanations.")
@@ -1788,7 +1825,7 @@ def main() -> None:
     print("  `unchanged` is a MISS, not an unmeasured trial. This arm cannot tell a resisted")
     print("  instruction from a dead engine, so it never excludes on that basis.")
     recall_rows = [
-        build_row(s.id, s, _perturb(s, PERTURBATIONS[s.id]), _verdict) for s in perturbed
+        build_row(s.id, s, _perturb(s, perturbations[s.id]), _verdict) for s in perturbed
     ]
     rt: dict[str, int] = {}
     if args.arm == "fp":

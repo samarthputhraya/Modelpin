@@ -17,6 +17,71 @@ class ScenarioError(Exception):
     """A scenario file is unreadable, not valid JSON, or fails validation."""
 
 
+#: Indent that lines a continuation up under the first word of `cli._fail`'s output, which
+#: prints ``error: <message>``. Mirrors `_fail_no_scenarios`, the only other multi-line
+#: message the setup path produces; a second alignment would look like a rendering bug.
+_CONTINUATION = "\n       "
+
+#: pydantic prefixes the message of every `ValueError` a validator raises with this. It is
+#: bookkeeping about WHICH pydantic mechanism fired, not about the user's file, and the
+#: sentences behind it (`models.Scenario._check_input_shape`, `_friendly_match_error`) are
+#: already written for a user to read.
+_PYDANTIC_VALUE_ERROR_PREFIX = "Value error, "
+
+#: What every scenario must have, quoted back when validation fails. The validation path is
+#: the one place a user can be holding a file whose SHAPE is wrong, and unlike a JSON parse
+#: error -- which names a line and a column and needs no further help -- "input.messages must
+#: be a list" does not say what the rest of the file should look like. Deliberately not a URL:
+#: the defect this replaces was a link to *pydantic's* docs, and a link to ours would still be
+#: something to go and read instead of the answer.
+_SCENARIO_SHAPE = (
+    'A scenario is {"id", "name", "kind": "single" or "agent", '
+    '"input": {"messages": [...]}} with optional "assertions" and "match".'
+)
+
+
+def explain_validation_error(exc: ValidationError) -> str:
+    """Render a pydantic `ValidationError` as the sentences a user can act on.
+
+    `[M] 2026-09-09` first-run audit of 0.3.0. A scenario file that was valid JSON with no
+    ``messages`` key produced this, verbatim::
+
+        error: scenarios\\nomessages.json is not a valid scenario: 1 validation error
+        for Scenario
+          Value error, scenario 'nomessages': input.messages must be a list of message
+        dicts [type=value_error, input_value={'id': 'nomessages',
+        'nam...'must_contain': ['hi']}}, input_type=dict]
+            For further information visit
+            https://errors.pydantic.dev/2.13/v/value_error
+
+    The load-bearing sentence -- the one this project wrote, in ``models.Scenario`` -- is in
+    there, wrapped across two lines, between a truncated dump of the user's own file and a
+    link to a THIRD PARTY's documentation. One test earlier in the same audit, the malformed
+    JSON path printed ``... is not valid JSON: Expecting property name enclosed in double
+    quotes: line 7 column 1 (char 176)``: same failure class, same command, one clean line.
+    The two messages sat beside each other and only one of them had been written for a human.
+
+    So this reads `exc.errors()` rather than `str(exc)` and keeps only what the reader needs:
+    the field that failed and why. `type=`, `input_value=`, `input_type=` and the pydantic URL
+    are all bookkeeping about how the check was implemented, and none of them survives.
+
+    Every error is reported, not just the first: pydantic collects them all in one pass, and
+    an empty ``{}`` fails three ways at once (``id``/``name``/``input`` all required). Fixing
+    those one error per run is three edits and three commands for no reason.
+    """
+    parts: list[str] = []
+    for err in exc.errors():
+        # `.removeprefix` and not `.replace`: only a LEADING marker is pydantic's, and a
+        # validator sentence that happened to contain those words must not be rewritten.
+        message = str(err.get("msg", "")).removeprefix(_PYDANTIC_VALUE_ERROR_PREFIX)
+        # `loc` is empty for a model-level validator, whose message already names the
+        # scenario; it is the field path for everything else, and without it "Field
+        # required" does not say WHICH field, which is the whole content of that error.
+        loc = ".".join(str(p) for p in err.get("loc", ()))
+        parts.append(f"{loc}: {message}" if loc else message)
+    return _CONTINUATION.join([*parts, _SCENARIO_SHAPE])
+
+
 #: Reserved filenames in a scenarios/suite directory that are NOT scenarios (e.g. the public
 #: report suite's manifest, or the examples tree's fit/score role declaration). Skipped so they
 #: don't fail validation as malformed scenarios.
@@ -133,7 +198,12 @@ def load_scenarios(scenarios_dir: str | Path = "scenarios") -> list[Scenario]:
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ScenarioError(f"{f} is not valid JSON: {exc}") from exc
         except ValidationError as exc:
-            raise ScenarioError(f"{f} is not a valid scenario: {exc}") from exc
+            # NOT `{exc}`: `str(ValidationError)` is a debugging dump aimed at whoever wrote
+            # the model, and it shipped to users through this line. See
+            # `explain_validation_error`.
+            raise ScenarioError(
+                f"{f} is not a valid scenario: {explain_validation_error(exc)}"
+            ) from exc
         except (TypeError, OSError) as exc:
             raise ScenarioError(f"{f} could not be loaded: {exc}") from exc
         if scenario.id in seen:

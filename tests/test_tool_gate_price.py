@@ -31,6 +31,7 @@ from scripts.tool_gate_price import (
     check_set,
     disjoint_holds,
     novelty_holds,
+    tool_channel_can_fire,
     verdict_under,
 )
 
@@ -322,3 +323,53 @@ def test_the_mode_count_axis_is_the_one_a_pooled_rate_would_hide() -> None:
     # MP-220 shape; at 10 its precondition is trivially met and it suppresses nothing.
     assert not novelty_holds(*two_mode, "strict")
     assert novelty_holds(*many, "strict")
+
+
+def test_the_status_quo_is_not_credited_for_trials_it_could_never_have_failed() -> None:
+    """An unconditioned denominator is a flattering one, and this project has paid for it.
+
+    `[M] 2026-09-09` `RULES["status_quo"]` was `lambda base, cand, mode: True`, so the FP
+    denominator counted every `equivalent` trial while NOVELTY's and DISJOINT's counted only
+    the trials their preconditions admitted. The table then compared a bound over 140 against
+    a bound over 31 as though they measured the same thing.
+
+    `[M]` On the two 2026-09-09 arms, 64 of the 140 `equivalent` trials had an IDENTICAL tool
+    trajectory on both sides. `tool_tvd` is 0 there, so `tool_tvd >= MIN_TOOL_TVD` is
+    unreachable at any threshold -- those trials could not have failed. Counting them moved
+    the published bound from 3.9% to 2.1% in the flattering direction, which is ADR-0022's
+    exact prohibition and the reason "0 false alarms in 0 SCORED trials" was withdrawn.
+    """
+    pinned = side([["a", "b"]] * 5)
+    assert not tool_channel_can_fire(pinned, side([["a", "b"]] * 5), "strict"), (
+        "a trial whose trajectory is identical on both sides is counted as exposure. TVD is "
+        "0, so no threshold can make the tool channel fire on it; it is evidence that "
+        "nothing was tested, not evidence of a low rate."
+    )
+
+    varied = side([["a", "b"], ["a"], ["a", "b"], ["a", "b"], ["a", "b"]])
+    assert tool_channel_can_fire(varied, side([["a"]] * 5), "strict"), (
+        "a trial whose trajectory varies is NOT counted as exposure. That shrinks the "
+        "denominator on exactly the trials the gate exists to judge."
+    )
+
+
+def test_conditioning_exposure_did_not_turn_the_status_quo_into_a_suppressor() -> None:
+    """The fix must move a denominator and nothing else.
+
+    `verdict_under` consults the same predicate, so a careless version of this change would
+    have made the status quo SUPPRESS alarms on pinned trials -- silently altering verdicts
+    while claiming to correct a count. It cannot: the tool channel cannot fire on a pinned
+    trajectory, so the predicate is only ever consulted where it returns True.
+    """
+    base = side([["a", "b"], ["a"], ["a", "b"], ["a", "b"], ["a", "b"]])
+    cand = side([["a"]] * 5)
+    for verdict, explanation in (
+        (DiffVerdict.regression, TOOL_ALARM),
+        (DiffVerdict.changed_minor, "tool-call arguments changed: x"),
+        (DiffVerdict.unchanged, "no statistically significant behavior change"),
+    ):
+        got, survived, masked = verdict_under(
+            result(verdict, explanation), base, cand, "strict", "status_quo"
+        )
+        assert got == verdict.value, f"status_quo changed a {verdict.value} verdict to {got}"
+        assert not masked, "status_quo reported masking; it suppresses nothing"

@@ -618,10 +618,28 @@ def test_the_recall_arm_publishes_only_through_the_pinned_helpers():
     # the selection sits above the marker and the assertion is satisfied by the unrelated
     # `PERTURBATIONS[s.id]` lookup inside the comprehension. `perturbed = []` survived all
     # 72 tests in FP review's mirror.
-    assert "for s in scenarios if s.id in PERTURBATIONS" in inspect.getsource(main), (
-        "main() no longer selects the perturbed scenarios from PERTURBATIONS. An empty "
-        "selection is the one remaining way to make this arm report 0/0 - loud rather than "
-        "silent (the CHECKED NOTHING banner fires), but nothing below main() can see it."
+    #
+    # `[M] 2026-09-09` This used to pin the literal `PERTURBATIONS`, and that turned out to
+    # be pinning the wrong noun. MP-224's labelled corpus keeps its ground truth in
+    # `examples/calibration/tool/labels.json`, which this module never read, so on the first
+    # paid run of that set all 19 `changed` pairs were invisible and the arm printed
+    # `Detection: 0/0` beside a healthy-looking false-positive rate. The banner fired exactly
+    # as designed; what it could not say was that the SELECTION SOURCE was incomplete. So the
+    # selection now reads a per-corpus map and the assertion pins BOTH halves: that main()
+    # still selects on that map, and that the map is still loaded from the corpus rather than
+    # quietly reverting to the module-level dict.
+    main_src = inspect.getsource(main)
+    assert "for s in scenarios if s.id in perturbations" in main_src, (
+        "main() no longer selects the perturbed scenarios from the loaded perturbation map. "
+        "An empty selection is the one remaining way to make this arm report 0/0 - loud "
+        "rather than silent (the CHECKED NOTHING banner fires), but nothing below main() can "
+        "see it."
+    )
+    assert "load_perturbations(" in main_src, (
+        "main() no longer loads the perturbation map from the corpus. A labelled set whose "
+        "labels.json is not read reports 0/0 detections while its false-positive half looks "
+        "healthy - which is how MP-224's corpus ran 35 trials and measured no detection at "
+        "all."
     )
     assert "_perturb(" in arm, "the candidate side is no longer perturbed at all"
     names = _called_names(main)
