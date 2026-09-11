@@ -35,7 +35,7 @@ from modelpin.config import (
     load_config,
 )
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_TO, write_demo
-from modelpin.detector import scan_repo
+from modelpin.detector import MAX_SCAN_BYTES, scan_repo
 from modelpin.diff import (
     MatchMode,
     ALPHA,
@@ -886,9 +886,11 @@ def version() -> None:
 @app.command()
 def scan(path: str = typer.Argument(".", help="Repo root to scan.")) -> None:
     """Detect which AI models this repo depends on, and where."""
-    hits = scan_repo(path)
+    skipped: list[str] = []
+    hits = scan_repo(path, skipped=skipped)
     if not hits:
         console.print("No model identifiers found.")
+        _print_scan_skips(skipped)
         return
 
     # `[M] 2026-09-09` MP-236. The detector labels every hit `code` (a wired-up call or an
@@ -926,6 +928,25 @@ def scan(path: str = typer.Argument(".", help="Repo root to scan.")) -> None:
             f"[dim]{len(only)} of these appear only in prose. A mention is not a dependency; "
             "read them before treating any as one.[/]"
         )
+    _print_scan_skips(skipped)
+
+
+def _print_scan_skips(skipped: list[str]) -> None:
+    """Say which files `scan` did NOT read, and why.
+
+    MP-242. A file over ``MAX_SCAN_BYTES`` is skipped rather than read, and that must be
+    visible: a scan that quietly looked past a file would be claiming coverage it did not
+    have -- and "No model identifiers found" is exactly the moment a skipped file matters.
+    """
+    if not skipped:
+        return
+    mb = MAX_SCAN_BYTES // (1024 * 1024)
+    shown = ", ".join(_rich_escape(p) for p in skipped[:5])
+    rest = f", and {len(skipped) - 5} more" if len(skipped) > 5 else ""
+    console.print(
+        f"[yellow]note:[/] {len(skipped)} file(s) over {mb} MB were not scanned: "
+        f"{shown}{rest}. A model id inside them would not be listed above."
+    )
 
 
 @app.command()

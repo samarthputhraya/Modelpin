@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import bisect
 import re
 from pathlib import Path
 from typing import Iterable
@@ -245,7 +246,19 @@ def _comment_cut(line: str, token: str) -> int:
     return len(line)
 
 
-def scan_repo(root: str | Path = ".", exts: set[str] | None = None) -> list[dict]:
+#: MP-242. A file larger than this is not read. `[M] 2026-09-09` security review: there was
+#: no guard at all -- a 200 MB file took 246 s and a 497 MB one was read whole into memory.
+#: Source files and configuration are rarely past a megabyte; what lives above this is a
+#: bundle, a lockfile, a dataset or a log. It is disclosed, never silent: a skipped file
+#: could hold a model id, and `scan` must not imply it looked where it did not.
+MAX_SCAN_BYTES = 5 * 1024 * 1024
+
+
+def scan_repo(
+    root: str | Path = ".",
+    exts: set[str] | None = None,
+    skipped: list[str] | None = None,
+) -> list[dict]:
     """Return [{model, file, line, context}] for every model id found in the repo.
 
     `context` is `"code"` (the id is wired up: source, or an active config value) or
@@ -286,6 +299,13 @@ def scan_repo(root: str | Path = ".", exts: set[str] | None = None) -> list[dict
     hits: list[dict] = []
     for f in _iter_files(root, exts):
         try:
+            # Checked by `stat` BEFORE reading, so an oversized file is never loaded. The
+            # caller learns about it through `skipped`, because a scan that quietly looked
+            # past a file would be claiming a coverage it did not have.
+            if f.stat().st_size > MAX_SCAN_BYTES:
+                if skipped is not None:
+                    skipped.append(str(f.relative_to(root)))
+                continue
             # MP-190's class, in the one site its sweep missed: `errors="ignore"` without
             # `encoding=` matched neither `read_text()` nor `read_text(encoding=` in that
             # commit's grep, so its claim that the two sites it fixed were "the ONLY two
@@ -339,7 +359,10 @@ def _models_in(line: str) -> list[tuple[str, int]]:
     longest match wins because a vendor-qualified id is the one the user can actually pass to
     `--to`; the bare tail is an artifact of our patterns, not something they wrote.
     """
+    # `finditer` returns non-overlapping URLs in order, so the only URL that can contain a
+    # match is the last one starting at or before it -- a binary search, not a scan of all.
     urls = [(u.start(), u.end()) for u in _URL_ON_LINE.finditer(line)]
+    url_starts = [s for s, _ in urls]
     spans: list[tuple[int, int, str]] = []
     for pat in MODEL_PATTERNS:
         for m in pat.finditer(line):
@@ -348,18 +371,42 @@ def _models_in(line: str) -> list[tuple[str, int]]:
             # first command a stranger runs -- and neither can be excluded by narrowing the
             # patterns, because `o4-...` and `gpt-6-...` are legal shapes for a real id. Only
             # the surrounding context separates them.
-            if any(us <= m.start() and m.end() <= ue for us, ue in urls):
+            i = bisect.bisect_right(url_starts, m.start()) - 1
+            if i >= 0 and m.end() <= urls[i][1]:
                 continue
             if _ASSET_SUFFIX.search(m.group(0)):
                 continue
             spans.append((m.start(), m.end(), m.group(0)))
+    # MP-242. `[M] 2026-09-09` This compared every span with every other span on the line --
+    # O(S^2) -- and a minified bundle is ONE enormous line. Minifiers emit `o1`/`o3`/`o4` as
+    # short local names, which the o-series pattern matches at every word boundary, so a
+    # bundle is dense with spans: reproduced at 4 KB -> 0.03 s, 8 KB -> 0.10 s, 16 KB ->
+    # 0.56 s, quadrupling per doubling, and the security review measured a 96 KB file at 105 s.
+    # Every JS/TS repository has a bundle, so for a front-end shop the tool's first command
+    # appeared to hang.
+    #
+    # Sorting by (start asc, end desc) puts every span that could contain another BEFORE it,
+    # so one sweep tracking the furthest end seen answers containment for all of them. The
+    # only span that sweep can mis-call is one at exactly the same position as an earlier
+    # span -- which is the same text, and `seen` drops it either way -- so the output is
+    # identical to the quadratic version's, set and order both, and a property test holds
+    # that on random inputs rather than asserting it here.
+    return _dedupe_spans(spans)
+
+
+def _dedupe_spans(spans: list[tuple[int, int, str]]) -> list[tuple[str, int]]:
+    """Drop every span strictly contained in a longer one, then repeated texts; keep order.
+
+    Extracted from `_models_in` (MP-242) so `tests/test_scan_performance.py` can hold it
+    against the original quadratic definition on random inputs. The claim that the two agree
+    exactly is the whole safety argument for the speed-up, so it is tested, not asserted.
+    """
     out: list[tuple[str, int]] = []
     seen: set[str] = set()
-    for start, end, text in sorted(spans, key=lambda s: s[0]):
-        contained = any(
-            (o_start <= start and end <= o_end) and (o_end - o_start) > (end - start)
-            for o_start, o_end, _ in spans
-        )
+    furthest = -1
+    for start, end, text in sorted(spans, key=lambda s: (s[0], -s[1])):
+        contained = furthest >= end
+        furthest = max(furthest, end)
         if not contained and text not in seen:
             seen.add(text)
             out.append((text, start))
