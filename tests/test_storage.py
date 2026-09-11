@@ -42,10 +42,17 @@ def test_baseline_with_gemini_signature_bytes_persists(tmp_path):
             }
         ],
     )
-    save_baseline({"s1": [trace]}, "gemini-3.1-flash-lite", tmp_path)
+    # The guarantee this test exists for is the one in its first comment: persisting must not
+    # CRASH. `[M] 2026-09-09` MP-240 strengthened how it holds. The bytes used to be
+    # base64-encoded on the way to disk; now `messages` is not persisted at all, because the
+    # diff never reads it and this is the file users are told to commit. So the signature
+    # never reaches the serializer -- which cannot crash on what it is never handed.
+    path = save_baseline({"s1": [trace]}, "gemini-3.1-flash-lite", tmp_path)
+    raw = path.read_text(encoding="utf-8")
+    assert "thought_signature" not in raw, "the opaque signature reached the committed file"
+    assert base64.b64encode(sig).decode("ascii") not in raw
     loaded = load_baseline("gemini-3.1-flash-lite", tmp_path)
-    stored = loaded["s1"][0].messages[0]["parts"][0]["thought_signature"]
-    assert base64.b64decode(stored) == sig  # round-trips losslessly (base64 on disk)
+    assert loaded["s1"][0].messages == [], "a loaded baseline carries no transcript"
     # the in-memory live object keeps the raw bytes — SDK feed-back is unaffected
     assert trace.messages[0]["parts"][0]["thought_signature"] == sig
 

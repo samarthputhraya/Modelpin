@@ -1142,8 +1142,13 @@ def baseline(
         named = ", ".join(f"{sid} ({n_hits} trace(s))" for sid, n_hits in sorted(leaky.items()))
         console.print(
             f"[yellow]warning:[/] a key-shaped token appears in the recorded traces for: {named}. "
-            f"{path} stores prompts and model output verbatim and is NOT git-ignored by default. "
-            "Review it before committing, and rotate the credential if it is real."
+            # MP-240: the baseline no longer stores prompts, so a key found in one lives in the
+            # user's scenario file -- which they commit too. Name both places, and say
+            # precisely what the baseline does still hold, since that is the file we told
+            # them to publish.
+            f"If it is in a prompt, it is in your scenario file; {path} keeps the model's "
+            "output and tool-call arguments verbatim and is NOT git-ignored by default. "
+            "Review both before committing, and rotate the credential if it is real."
         )
 
 

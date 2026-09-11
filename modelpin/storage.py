@@ -67,8 +67,21 @@ def save_baseline(
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "model_id": model_id,
+        # MP-240. `messages` is deliberately NOT persisted. `[M] 2026-09-09` security review:
+        # dumping the whole trace wrote every prompt verbatim once per run -- a key placed in a
+        # 2-scenario baseline's prompt appeared 10 times in the file -- and this is the file
+        # `actions/README.md` tells users to `git add` -- often into a public repository.
+        # (`modelpin init` writes no `.gitignore`, so nothing in a user's `.modelpin/` is
+        # ignored unless they add the rule themselves.) Nothing in `modelpin/diff/` reads `Trace.messages`: the comparison runs on
+        # tool calls, final output, refusal, tokens and latency, all of which are kept. The
+        # prompts already live in the user's own scenario files. What `messages` added on disk
+        # was those prompts multiplied by the run count, the intermediate tool-loop transcript,
+        # and Gemini `thought_signature` bytes that only mean anything in memory, mid-loop.
+        # `scripts/fp_measurement.py::traces_to_json` made the same choice for its artifacts;
+        # the file we actually ask people to publish had not. Old baselines that DO carry
+        # `messages` still load -- the field defaults to an empty list.
         "scenarios": {
-            sid: [t.model_dump(mode="json") for t in traces]
+            sid: [t.model_dump(mode="json", exclude={"messages"}) for t in traces]
             for sid, traces in traces_by_scenario.items()
         },
     }
