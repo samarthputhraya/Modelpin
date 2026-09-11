@@ -195,15 +195,46 @@ def _iter_files(root: Path, exts: set[str]) -> Iterable[Path]:
     ADRs about. Walking from the root downward cannot express that bug: only directories at
     or below the root are ever considered.
     """
+    # MP-241. `[M] 2026-09-09` `os.walk`'s default `followlinks=False` is enforced through
+    # `DirEntry.is_symlink()`, which is FALSE for an NTFS junction -- and a junction needs no
+    # privilege to create. Reproduced: `vendor/` junctioned to a directory outside the repo
+    # reported `claude-3-5-sonnet in vendor\secret_project.py`, a file that is not in the
+    # repository at all; `is_symlink()` said False and `os.path.isjunction()` said True. The
+    # `SKIP_DIRS` name match is a filter, not a boundary, so a `.git` re-exposed under another
+    # name was walked too.
+    #
+    # Bounded, and the bound is load-bearing: hits carry only `{model, file, line, context}`
+    # and are printed to the user's own terminal, so this leaked filenames and existence,
+    # never content, and nothing left the machine. It is fixed because `scan` must not report
+    # files that are not in the repo it was pointed at.
+    #
+    # The boundary is the REAL path, resolved once for the root and checked for every
+    # directory before descending and for every link-typed file before reading. That covers
+    # junctions, directory symlinks and file symlinks with one rule, and keeps a symlink that
+    # points somewhere INSIDE the repo -- a monorepo's shared package -- working as before.
+    root_real = os.path.normcase(os.path.realpath(root))
+
+    def _inside(p: Path) -> bool:
+        real = os.path.normcase(os.path.realpath(p))
+        return real == root_real or real.startswith(root_real + os.sep)
+
     for dirpath, dirnames, filenames in os.walk(root):
         here = Path(dirpath)
         dirnames[:] = [
             d
             for d in dirnames
-            if d not in SKIP_DIRS and d not in SKIP_DIRS_ANY_DEPTH and not _is_virtualenv(here / d)
+            if d not in SKIP_DIRS
+            and d not in SKIP_DIRS_ANY_DEPTH
+            and not _is_virtualenv(here / d)
+            and _inside(here / d)
         ]
         for name in filenames:
             p = here / name
+            # A regular file can only escape if its directory did, and directories are pruned
+            # above -- so only a LINK needs its real path checked, which keeps the cost off
+            # the ordinary case.
+            if (p.is_symlink() or os.path.isjunction(p)) and not _inside(p):
+                continue
             # MP-195. `.env` was matched by exact name, so `.env.example` -- the file a repo
             # commits precisely BECAUSE it is the readable record of which model it uses --
             # was invisible, along with `.env.local`, `.env.sample` and every other variant.
