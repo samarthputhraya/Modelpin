@@ -43,17 +43,54 @@ _APOSTROPHE_VARIANTS: str = (
 )
 _APOSTROPHE_MAP: dict[int, str] = {ord(ch): "'" for ch in _APOSTROPHE_VARIANTS}
 
-#: Key-shaped tokens to redact from ANY text before it is shown or logged. Covers OpenAI
-#: keys (``sk-``/``sk-proj-``) — which also matches Anthropic ``sk-ant-`` — Google
-#: credentials in their several prefixes (``AIza...`` API keys, ``ya29.`` / ``AQ.``
-#: OAuth-style tokens), Groq keys (``gsk_``, an OpenAI-compatible host we support), and raw
-#: ``Bearer`` headers.
+#: Key-shaped tokens to redact. Covers OpenAI keys (``sk-``/``sk-proj-``) — which also
+#: matches Anthropic ``sk-ant-`` — Google credentials in their several prefixes (``AIza...``
+#: API keys, ``ya29.`` / ``AQ.`` OAuth-style tokens), Groq keys (``gsk_``), raw ``Bearer``
+#: headers, and since MP-243: AWS access key ids (``AKIA``/``ASIA``), GitHub tokens
+#: (``ghp_``/``gho_``/``ghu_``/``ghs_``/``ghr_`` and ``github_pat_``), PEM private keys —
+#: the whole block, not just its header — and Azure storage ``AccountKey=``.
+#:
+#: `[M] 2026-09-09` security review: every one of the MP-243 shapes survived scrubbing, while
+#: README said a failed call "never leaks your key". Three design constraints, all pinned in
+#: ``tests/test_secret_shapes.py``:
+#:
+#: * **Only distinctive prefixes.** Azure OpenAI keys and several hosted-inference keys are
+#:   bare hex or base64. A pattern for "32 hex characters" would redact git SHAs, content
+#:   hashes and request ids out of every error message this runs over, and a scrubber that
+#:   destroys the diagnostic it sits inside gets turned off. Those keys are NOT covered, and
+#:   the README says so rather than implying otherwise.
+#: * **No leading word boundary. Ever.** `[M]` The first draft of MP-243 added ``\b`` before
+#:   every prefix to stop two cosmetic false positives (``risk-free-retry`` -> ``ri[redacted]``,
+#:   ``FAQ.documentation-page`` -> ``F[redacted]``). The FP review measured what that cost: a
+#:   key that follows a WORD character has no boundary before it, and that is exactly where an
+#:   escape leaves one -- ``repr()``'s ``\nsk-proj-...``, URL-encoded ``%3Dsk-proj-...``,
+#:   ``=``. All of those were redacted on ``main`` and LEAKED under the draft, and it was
+#:   not hypothetical: openai 3.3.1 builds its error text from a Python repr of the response
+#:   body, and ``openai.py`` scrubs exactly that string. **For a secret scrubber a false
+#:   negative is a leaked key and a false positive is an ugly word, so this errs toward
+#:   over-redaction, and the two false positives are ACCEPTED as the price.** They were on
+#:   ``main`` already; nothing here makes them worse.
+#: * **Bounded scans.** The PEM body and key-type spans are capped, because an unbounded lazy
+#:   ``[\s\S]*?`` searches to the end of the text for every unterminated ``BEGIN`` header:
+#:   `[M]` 1,000 such headers took 0.354 s against 0.002 s before, quadrupling per doubling. A
+#:   real PEM key is under 4 KB; 8 KB is headroom, not a limit anyone will meet.
 _SECRET_RE = re.compile(
-    r"sk-[A-Za-z0-9_\-]{4,}"
+    # The full PEM block first, so the key BODY is consumed with its header; the lone header
+    # after it catches a block that was truncated before its END line.
+    r"-----BEGIN[A-Z ]{0,32}PRIVATE KEY-----[\s\S]{0,8192}?-----END[A-Z ]{0,32}PRIVATE KEY-----"
+    r"|-----BEGIN[A-Z ]{0,32}PRIVATE KEY-----"
+    r"|sk-[A-Za-z0-9_\-]{4,}"
     r"|gsk_[A-Za-z0-9_\-]{10,}"
     r"|AIza[0-9A-Za-z_\-]{10,}"
     r"|ya29\.[A-Za-z0-9_.\-]{10,}"
     r"|AQ\.[A-Za-z0-9_.\-]{10,}"
+    # AWS ids are always uppercase, so scoped case-sensitivity is what stops a word like
+    # `asiapacificregion1234` reading as a key -- not a word boundary, which would leak an
+    # id that follows `%3D`. The trailing `\b` constrains what FOLLOWS, never what precedes.
+    r"|(?-i:(?:AKIA|ASIA)[0-9A-Z]{16}\b)"
+    r"|gh[pousr]_[A-Za-z0-9]{36,}"
+    r"|github_pat_[A-Za-z0-9_]{22,}"
+    r"|AccountKey=[A-Za-z0-9+/]{20,}={0,2}"
     r"|Bearer\s+\S+",
     re.IGNORECASE,
 )

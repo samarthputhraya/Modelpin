@@ -455,8 +455,16 @@ hardcoded, shipped, or stored (cost stays yours; provider ToS stays clean):
 - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
 - `GROQ_API_KEY` (and the equivalents for other OpenAI-compatible hosts)
 
-In CI, supply these as repo secrets (see the workflow above). Error text is scrubbed of
-`sk-` / `Bearer` tokens, so a failed call never leaks your key into a log, traceback, or PR comment.
+In CI, supply these as repo secrets (see the workflow above).
+
+**What gets redacted, and what does not.** Provider error messages are scrubbed of key-shaped
+tokens before Modelpin shows them — OpenAI and Anthropic `sk-`, Groq `gsk_`, Google `AIza` /
+`ya29.`, AWS `AKIA` / `ASIA`, GitHub `ghp_` / `github_pat_`, PEM private keys, Azure storage
+`AccountKey=`, and raw `Bearer` headers. Two limits, stated plainly: a key with **no distinctive
+prefix** (Azure OpenAI's bare hex keys, for instance) is not recognised, because a pattern for
+"32 hex characters" would also redact every git SHA and request id in the error you are trying
+to read; and **recorded traces are never rewritten** — if a key-shaped token appears in a
+model's output, `mp baseline` warns you rather than silently editing the evidence.
 
 ### Google: billing Vertex AI instead of an API key
 
