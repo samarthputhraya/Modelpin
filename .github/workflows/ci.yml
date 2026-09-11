@@ -203,3 +203,36 @@ jobs:
           cd "$SMOKE_TMP/empty"
           "$VENV_BIN/modelpin" version
           "$VENV_BIN/mp" version
+
+      # MP-244. `[M] 2026-09-09` security review: NO dependency CVE scan had ever run on this
+      # project. This audits exactly what a customer gets from `pip install
+      # "modelpin[providers]"` -- the wheel built above, plus the provider SDKs, which are
+      # the largest part of the dependency surface -- in its OWN venv, so the bare-install
+      # smoke venv above keeps testing the "no provider SDKs needed" claim it exists for.
+      #
+      # The closure is frozen and audited as pinned versions (`-r ... --no-deps`), so the
+      # audit reports on what was actually installed rather than re-resolving it. `modelpin`
+      # itself is dropped from the freeze: this is a pre-release wheel, not a PyPI version.
+      #
+      # Dev tools are deliberately out of scope here. `[M] 2026-09-11` the first full scan
+      # found advisories only in `black`, a formatter no customer installs; that is tracked
+      # as its own backlog row rather than allowed to turn every PR red.
+      #
+      # BLOCKING on purpose: a known vulnerability in something we ship to customers should
+      # stop a merge. It can go red on a PR that changed nothing, because a CVE can be
+      # published against an upstream release at any time -- that is the point of running it.
+      - name: Audit the dependencies a customer installs (pip-audit)
+        run: |
+          python -m venv "$SMOKE_TMP/customer"
+          CB="$SMOKE_TMP/customer/bin"
+          [ -d "$CB" ] || CB="$SMOKE_TMP/customer/Scripts"
+          "$CB/python" -m pip install --upgrade pip
+          WHL=$(ls "$SMOKE_TMP"/dist/*.whl)
+          "$CB/python" -m pip install "${WHL}[providers]"
+          "$CB/python" -m pip freeze | grep -vi '^modelpin' > "$SMOKE_TMP/customer-freeze.txt"
+          echo "customer closure: $(wc -l < "$SMOKE_TMP/customer-freeze.txt") pinned packages"
+          python -m venv "$SMOKE_TMP/audit"
+          AB="$SMOKE_TMP/audit/bin"
+          [ -d "$AB" ] || AB="$SMOKE_TMP/audit/Scripts"
+          "$AB/python" -m pip install --upgrade pip pip-audit
+          "$AB/python" -m pip_audit -r "$SMOKE_TMP/customer-freeze.txt" --no-deps --progress-spinner off
