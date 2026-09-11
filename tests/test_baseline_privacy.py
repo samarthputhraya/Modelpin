@@ -102,3 +102,25 @@ def test_an_old_baseline_with_messages_still_loads(tmp_path: Path) -> None:
 
     loaded = load_baseline("m", store_dir=str(tmp_path))
     assert loaded["refund"][0].final_output == "Refunded order 4471."
+
+
+def test_nothing_the_diff_reads_is_the_transcript() -> None:
+    """ADR-0043's revisit trigger, made mechanical rather than remembered.
+
+    Stripping `messages` from the committed baseline is safe for exactly one reason: nothing
+    that decides a verdict reads it. If that stops being true, this test fails -- and the
+    right response is to REVISIT ADR-0043, not to delete this test. Per the ADR, a transcript
+    that some future feature needs belongs in a separate, git-ignored file, never back in the
+    baseline we tell users to publish.
+    """
+    root = Path(__file__).resolve().parents[1] / "modelpin"
+    readers = []
+    for path in [*sorted((root / "diff").rglob("*.py")), root / "judge.py"]:
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if ".messages" in line and not line.lstrip().startswith("#"):
+                readers.append(f"{path.relative_to(root.parent)}:{i}: {line.strip()}")
+    assert not readers, (
+        "code that decides a verdict now reads Trace.messages -- the premise of ADR-0043 no "
+        "longer holds, so the stripped baseline would silently change a verdict. Revisit the "
+        "ADR before changing either side:\n  " + "\n  ".join(readers)
+    )
