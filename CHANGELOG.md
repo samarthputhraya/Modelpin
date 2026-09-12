@@ -4,7 +4,83 @@ All notable changes to Modelpin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] - 2026-09-09
+## [0.3.1] - 2026-09-12
+
+### Security
+
+A security review of 0.3.0 found six issues. All six are fixed here. One of them — the
+baseline transcript, below — affects **every version this project has released**, not only
+0.3.0.
+
+**If you use the GitHub Action, check how you pin Modelpin.** The first item below let a
+model's output put a link into the comment our Action posts on your pull request. The fix is in
+the Modelpin package, so if you use `samarthputhraya/modelpin@v1` and have never set
+`modelpin-spec`, your next run installs 0.3.1 and picks the fix up with no change from you. If
+you pinned `modelpin-spec` to a version or a git ref (`modelpin[providers]==0.3.0`, for
+instance), **you must bump it** — you will not get the fix otherwise. Comments already posted by
+an affected run are not rewritten; delete any you do not trust.
+
+We know of no exploitation, and of no installation of the Action outside this repository. We
+have no telemetry, so that is an absence of evidence rather than a guarantee.
+
+- **A model could inject a link, image or HTML into the PR comment the Action posts.** The
+  comment escaped only block-level Markdown, and tool names come from the model — which can
+  hallucinate one. `[M]` A tool name of `escalate[Build passed - view logs](https://…)` rendered
+  as a masked link: a forged CI banner, linking anywhere, posted by our bot into your pull
+  request. Model ids from `modelpin.yaml` — which a pull request can edit — reached the same
+  comment unescaped at **29 interpolation sites, including every verdict header**, and at 9 more
+  in the published Report. Every untrusted value in both is now escaped, and the tests check the
+  RENDERED page, not the source text. **One residual, stated rather than hidden:** those tests
+  render CommonMark, which does not linkify a bare URL, while GitHub's GFM does. The escaping
+  targets that too, but it is `[A]` until confirmed on a real rendered comment.
+- **The baseline file our docs tell you to commit stored every prompt, once per run.** `[M]` A
+  key placed in a 2-scenario baseline's prompt appeared 10 times in the file. Nothing in the
+  comparison reads the prompt transcript, so baselines no longer store it; your prompts stay
+  where you wrote them, in your scenario files. Baselines recorded by 0.3.0 still load.
+
+  **This affects every version before 0.3.1, not just 0.3.0.** `[M]` `save_baseline` dumped the
+  full trace — `messages` included — in every release from 0.1.0 through 0.3.0, and
+  `actions/README.md` has instructed `git add … .modelpin/` since 0.1.2.
+
+  **If you have ever committed a `.modelpin/baseline-*.json` to a public repository, it contains
+  your prompts.** Two things to do, in this order:
+
+  1. **Rotate any credential that appeared in a prompt.** Assume it is public. This is the only
+     remedy that does not depend on rewriting history.
+  2. Re-record with `modelpin baseline` and commit. **This does not remove the old prompts** — a
+     new commit leaves the previous blob reachable in git history, in every existing clone and
+     fork, and through the GitHub API. Purging it needs a history rewrite (`git filter-repo`)
+     and a force-push, and even then forks and caches may retain it.
+
+  A re-recorded baseline still holds the model's **output text and the arguments of every tool
+  call**, verbatim, by design. The Action README now says exactly what each committed file holds
+  and when not to commit it.
+- **`modelpin scan` could report files outside the directory it was pointed at**, through a
+  Windows directory junction, which needs no privilege to create. Only file **paths**, line
+  numbers and model ids were shown, on your own terminal; no file content was read into the
+  output and nothing was transmitted. A path can itself be sensitive, which is why this is fixed
+  rather than accepted. Fixed for junctions and symlinks alike; a link that stays inside the
+  repository still works.
+- **`modelpin scan` could appear to hang on a minified JavaScript bundle.** The per-line
+  de-dupe was quadratic in matches per line, and a bundle is one enormous line. `[M]` Measured
+  here before the fix: 4 KB 0.03 s, 8 KB 0.10 s, 16 KB 0.56 s — quadrupling per doubling. It is
+  now linear: `[M]` the same shape at 96 KB scans in 0.08 s. (`[S] 2026-09-09` The security
+  review measured a 96 KB file at 105 s on its own machine; that figure is theirs, and is not a
+  before/after pair measured in one environment.) Files over 5 MB are skipped and named, never
+  skipped silently.
+- **Error messages missed six common credential shapes.** AWS access key ids, GitHub tokens,
+  PEM private keys and Azure storage keys are now redacted. Keys with no distinctive prefix
+  (Azure OpenAI's bare hex keys, for instance) are not recognised; the README says so rather
+  than claiming a failed call "never leaks your key", which it previously did.
+- **The Action referenced two third-party actions by movable tag.** Both are now pinned to the
+  exact commit their tags pointed to, so nothing you run changed — it just can no longer change
+  underneath you. `[M] 2026-09-11` The first dependency vulnerability scan this project has
+  run found no known vulnerability in the **41-package closure** `pip install
+  "modelpin[providers]"` installs — as of that date, against the advisory databases the audit
+  queried then. A CVE published after it changes that answer, which is exactly why CI now runs
+  the same audit on every change, blocking. The same scan **did** flag two advisories in
+  `black`, a dev-only formatter no customer installs; neither applies as this project uses it,
+  and the toolchain bump is tracked separately (MP-245).
 
 ### Added
 
