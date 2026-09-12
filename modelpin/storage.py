@@ -67,8 +67,11 @@ def save_baseline(
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "model_id": model_id,
+        # `messages` is deliberately NOT persisted -- see ADR-0043. This is the file our docs
+        # tell users to commit, and the diff never reads the transcript. Do not add it back to
+        # debug an agent: the ADR says where a transcript goes instead.
         "scenarios": {
-            sid: [t.model_dump(mode="json") for t in traces]
+            sid: [t.model_dump(mode="json", exclude={"messages"}) for t in traces]
             for sid, traces in traces_by_scenario.items()
         },
     }

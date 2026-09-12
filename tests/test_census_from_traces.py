@@ -219,7 +219,10 @@ def test_the_remedy_never_tells_a_user_to_add_tools_they_already_declared(
     _, md = _baseline_then_check(root)
     assert "NOT cleared on content" in md
     assert "add `tools`" not in md, "MP-159: the remedy is the advice that caused the defect"
-    assert "declared but never called in: fraud_check" in md
+    # MP-239: the tool name is a code span now. `_named_blind` escapes by default, because its
+    # old default of `str` is how two call sites reached untrusted text with no escaping at all
+    # -- and a code span matches the `judge_model` beside it in this very sentence.
+    assert "declared but never called in: `fraud_check`" in md
     assert "fraud_check" in md
 
 
