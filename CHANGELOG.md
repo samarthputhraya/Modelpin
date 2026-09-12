@@ -75,8 +75,9 @@ have no telemetry, so that is an absence of evidence rather than a guarantee.
 - **The Action referenced two third-party actions by movable tag.** Both are now pinned to the
   exact commit their tags pointed to, so nothing you run changed — it just can no longer change
   underneath you. `[M] 2026-09-11` The first dependency vulnerability scan this project has
-  run found no known vulnerability in the **41-package closure** `pip install
-  "modelpin[providers]"` installs — as of that date, against the advisory databases the audit
+  run found no known vulnerability in the closure `pip install "modelpin[providers]"`
+  installs — **40 packages on Linux, 41 on Windows**, the difference being `colorama`, which
+  `click` and `typer` require only there — as of that date, against the advisory databases the audit
   queried then. A CVE published after it changes that answer, which is exactly why CI now runs
   the same audit on every change, blocking. The same scan **did** flag two advisories in
   `black`, a dev-only formatter no customer installs; neither applies as this project uses it,
