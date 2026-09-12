@@ -228,6 +228,12 @@ jobs:
           [ -d "$CB" ] || CB="$SMOKE_TMP/customer/Scripts"
           "$CB/python" -m pip install --upgrade pip
           WHL=$(ls "$SMOKE_TMP"/dist/*.whl)
+          # `[M] 2026-09-12` Windows-only failure. MSYS converts a Git Bash path to Windows
+          # form only when it is passed to a native program as a bare path; `${WHL}[providers]`
+          # is not one, so pip received `/d/a/_temp/...` and resolved it against the current
+          # drive as `D:\d\a\_temp\...`. Convert first, using the same idiom as this job's
+          # "Normalize temp path" step. No-op on Linux, where `cygpath` does not exist.
+          WHL="$(cygpath -w "$WHL" 2>/dev/null || printf '%s' "$WHL")"
           "$CB/python" -m pip install "${WHL}[providers]"
           "$CB/python" -m pip freeze | grep -vi '^modelpin' > "$SMOKE_TMP/customer-freeze.txt"
           echo "customer closure: $(wc -l < "$SMOKE_TMP/customer-freeze.txt") pinned packages"
