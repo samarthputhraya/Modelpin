@@ -80,7 +80,14 @@ runs:
   using: "composite"
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v6
+      # MP-244. Pinned to a full commit SHA, never a floating tag: this file runs inside
+      # OTHER people's CI with their secrets in scope, and a moved tag is remote code
+      # execution that needs no access to this repository (tj-actions/changed-files,
+      # March 2025). `release.yml` already held that standard; the file we ask
+      # consumers to run did not. [S] 2026-09-11 GitHub API: floating `v6` and `v6.3.0`
+      # both dereference to this commit, and v6.3.0 is the newest v6 -- so pinning
+      # changes nothing a consumer runs today; it stops it changing underneath them.
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
       with:
         python-version: ${{ inputs.python-version }}
 
@@ -139,7 +146,10 @@ runs:
 
     - name: Post PR comment
       if: ${{ inputs.comment == 'true' && github.event.pull_request.number }}
-      uses: actions/github-script@v9
+      # MP-244, same reason as setup-python above. [S] 2026-09-11 GitHub API: `v9` and
+      # `v9.0.0` are two annotated tag objects that both dereference to this one commit,
+      # and they are the only v9 tags -- so this is exactly what `@v9` resolved to.
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
       env:
         REPORT_PATH: ${{ steps.check.outputs.report }}
       with:

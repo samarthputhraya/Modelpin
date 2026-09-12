@@ -17,8 +17,27 @@ see the project's `docs/`). Modelpin never ships or stores keys.
    mp init
    # ...edit modelpin.yaml + scenarios/...
    mp baseline --model gpt-4o-mini --provider openai   # writes .modelpin/baseline-*.json
-   git add modelpin.yaml scenarios/ .modelpin/ && git commit -m "modelpin baseline"
+   git add modelpin.yaml scenarios/ .modelpin/baseline-*.json && git commit -m "modelpin baseline"
    ```
+
+   > **Know what you are committing — especially to a public repository.**
+   > `scenarios/` holds your prompts, exactly as you wrote them. The baseline file
+   > (`.modelpin/baseline-*.json`) holds, for every run of every scenario, the model's
+   > **output text and the arguments of every tool call it made**, verbatim. It does not
+   > store your prompts. If your scenarios, or the answers a model gives to them, contain
+   > anything you would not put in a public commit — a system prompt you consider
+   > proprietary, a real customer record, an internal URL, a credential — keep this in a
+   > private repository, or use synthetic data in the scenarios. `mp baseline` warns when it
+   > sees a key-shaped token, but it cannot recognise a trade secret or a person's details.
+   >
+   > Only `baseline-*.json` needs committing. The rest of `.modelpin/` (`last-report.md`,
+   > `runs/`) is per-run output, and `modelpin init` does **not** ignore it for you — add
+   > these two lines to your `.gitignore` so it is never committed by accident:
+   >
+   > ```gitignore
+   > .modelpin/*
+   > !.modelpin/baseline-*.json
+   > ```
 2. Add a workflow that checks a candidate model on every PR (or when a model bumps):
 
    ```yaml
