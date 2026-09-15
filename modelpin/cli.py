@@ -17,7 +17,7 @@ import shlex
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from collections.abc import Sequence, Set as AbstractSet
+from collections.abc import Mapping, Sequence, Set as AbstractSet
 from typing import IO, Any, NoReturn, Optional, cast
 
 import typer
@@ -717,7 +717,15 @@ def _exercised_tools(*sides: Sequence[Trace]) -> bool:
     return any(t.tool_calls for side in sides for t in side)
 
 
-def _publish_report(markdown: str, store_dir: str, from_model: str, to: str) -> list[str]:
+def _publish_report(
+    markdown: str,
+    store_dir: str,
+    from_model: str,
+    to: str,
+    candidate_traces: Optional[Mapping[str, list[Trace]]] = None,
+    results: Sequence[DiffResult] = (),
+    exit_code: Optional[int] = None,
+) -> list[str]:
     """Write `last-report.md` and its durable archive copy; RETURN the notes to print.
 
     MP-160 extracted this because the zero-comparison exit paths did not write one. `[M]`
@@ -753,6 +761,33 @@ def _publish_report(markdown: str, store_dir: str, from_model: str, to: str) -> 
         notes.append(f"[dim]archived for citation: {_rich_escape(str(archived))}[/]")
     except OSError as exc:
         notes.append(f"[yellow]warning:[/] could not archive the report: {_rich_escape(str(exc))}")
+        return notes
+    if candidate_traces or results:
+        # The machine-readable record of this run, beside its report: every verdict (the
+        # `DiffResult`s) and every candidate run recorded. A verdict line and one example per
+        # side say WHAT changed; the full runs are what a reviewer needs to decide whether it
+        # matters, and scripts need the verdicts without parsing Markdown. Until now both were
+        # discarded when the process exited. Prompts are excluded, as in a baseline
+        # (ADR-0043); the store's .gitignore keeps the file out of commits.
+        record_path = archived.with_suffix(".json")
+        payload = {
+            "modelpin_version": __version__,
+            "from_model": from_model,
+            "to_model": to,
+            "exit_code": exit_code,
+            "results": [r.model_dump(mode="json") for r in results],
+            "candidate_runs": {
+                sid: [t.model_dump(mode="json", exclude={"messages"}) for t in runs]
+                for sid, runs in (candidate_traces or {}).items()
+            },
+        }
+        try:
+            record_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            notes.append(f"[dim]verdicts and candidate runs: {_rich_escape(str(record_path))}[/]")
+        except OSError as exc:
+            notes.append(
+                f"[yellow]warning:[/] could not save the run record: {_rich_escape(str(exc))}"
+            )
     return notes
 
 
@@ -1412,6 +1447,8 @@ def check(
     tool_active: set[str] = set()
     #: One baseline and one candidate run per flagged scenario, shown beside its verdict.
     examples: dict[str, tuple[Example, Example]] = {}
+    #: Every candidate run recorded, per compared scenario, archived beside the report.
+    candidate_runs: dict[str, list[Trace]] = {}
     #: (scenario_id, provider message) for scenarios the provider REFUSED outright. A
     #: different condition from `skipped` (no baseline recorded) and from an
     #: `insufficient_evidence` verdict (replayed, but nothing usable came back).
@@ -1520,6 +1557,7 @@ def check(
                 pair = pick_examples(base_traces, cand)
                 if pair:
                     examples[s.id] = pair
+            candidate_runs[s.id] = cand
             results.append(result)
 
     # NotImplementedError stays a HARD failure: an unimplemented adapter is a config error
@@ -1656,7 +1694,10 @@ def check(
         match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
         examples=examples,
     )
-    _publish_notes = _publish_report(markdown, store_dir, from_model, to)
+    _exit_code = 1 if has_regression else EXIT_UNMEASURED if (unmeasured or rejected) else 0
+    _publish_notes = _publish_report(
+        markdown, store_dir, from_model, to, candidate_runs, results, _exit_code
+    )
     console.print(_summary)
     for _note in _publish_notes:
         console.print(_note)
