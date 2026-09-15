@@ -1894,7 +1894,9 @@ def report(
     results: list[DiffResult] = []
     skipped: list[str] = []
     tool_active: set[str] = set()  # MP-159, as in `check`: read off the traces, not the suite
-    for s in scenarios:
+    report_examples: dict[str, tuple[Example, Example]] = {}
+    for _i, s in enumerate(scenarios, start=1):
+        _progress(_i, len(scenarios), s.id, prov)
         try:
             base_traces = replay(s, from_, adapter, runs=n)
             cand_traces = replay(s, to, adapter, runs=n)
@@ -1916,7 +1918,7 @@ def report(
         if _exercised_tools(base_traces, cand_traces):
             tool_active.add(s.id)
         results.append(
-            diff_scenario(
+            _report_result := diff_scenario(
                 s.id,
                 from_,
                 to,
@@ -1928,6 +1930,9 @@ def report(
                 judge=judge,
             )
         )
+        if _report_result.verdict != DiffVerdict.unchanged:
+            if pair := pick_examples(base_traces, cand_traces):
+                report_examples[s.id] = pair
 
     if not results:
         _fail("no scenarios completed; nothing to report.")
@@ -1949,7 +1954,7 @@ def report(
     underpowered = [s.id for s in compared if _cannot_reach_alpha(n, n, _effective_match(s, mode))]
     census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
-    console.print(render_cli(results, from_, to, n, underpowered, census))
+    console.print(render_cli(results, from_, to, n, underpowered, census, examples=report_examples))
 
     suite_id, suite_version = read_manifest(suite_dir)
     date_iso = datetime.now(timezone.utc).date().isoformat()
