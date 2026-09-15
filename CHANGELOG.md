@@ -6,7 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A machine-readable run record.** Every `modelpin check` writes
+  `.modelpin/runs/check-<from>-to-<to>-<time>.json` beside its archived report: the exit code,
+  every verdict with its signals and explanation, and every candidate run it recorded (prompts
+  excluded). Scripts no longer need to parse Markdown, and a reviewer can read every run behind a
+  verdict.
+- **Progress while a live run works:** one line per scenario, so a long `baseline` or `check`
+  no longer looks hung.
+
+### Changed
+
+- **Live runs are about 4x faster.** A scenario's runs are sent to the provider together (up to
+  5 at a time), and separate runs are judged together. `[M]` 12 scenarios on `gemini-2.5-flash`
+  vs itself, judge `gemini-3.5-flash`, one run each: baseline 170 s → 43 s, check 208 s → 62 s. The runs are
+  independent samples by design and each run asks the judge exactly the same questions, so no
+  verdict changes.
 
 ## [0.4.0] - 2026-09-15
 
