@@ -81,7 +81,7 @@ from modelpin.report.suite import (
 )
 from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
 from modelpin.scenarios import ScenarioError, load_scenarios, unrecognised_assertion_keys
-from modelpin.scaffold import CREDENTIAL_HINT, infer_setup, render_config
+from modelpin.scaffold import CREDENTIAL_HINT, has_credentials, infer_setup, render_config
 from modelpin.scenarios.starter import AGENT_STARTER_FILENAME, write_agent_starter
 from modelpin.storage import (
     STORE_DIRNAME,
@@ -1087,9 +1087,12 @@ def init(
             "(copy the starter file; one JSON file per case)."
         )
         if setup is not None:
-            console.print(
-                f"  2. Make sure {CREDENTIAL_HINT[setup.provider]} is set in your environment."
-            )
+            if has_credentials(setup.provider, os.environ):
+                console.print(
+                    f"  2. Credentials for {setup.provider} are already set in your environment."
+                )
+            else:
+                console.print(f"  2. Set {CREDENTIAL_HINT[setup.provider]} in your environment.")
         console.print(
             "  3. [bold]modelpin baseline[/]            # record how your current model behaves"
         )

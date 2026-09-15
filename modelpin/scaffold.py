@@ -101,7 +101,7 @@ def provider_for_model(model: str) -> Optional[str]:
     return None
 
 
-def _has_credentials(provider: str, env: Mapping[str, str]) -> bool:
+def has_credentials(provider: str, env: Mapping[str, str]) -> bool:
     for name, variables in PROVIDER_CREDENTIALS:
         if name == provider:
             return any((env.get(v) or "").strip() for v in variables)
@@ -109,7 +109,7 @@ def _has_credentials(provider: str, env: Mapping[str, str]) -> bool:
 
 
 def _credentialed_providers(env: Mapping[str, str]) -> list[str]:
-    return [name for name, _ in PROVIDER_CREDENTIALS if _has_credentials(name, env)]
+    return [name for name, _ in PROVIDER_CREDENTIALS if has_credentials(name, env)]
 
 
 def _vertex_claude_id(model: str, env: Mapping[str, str]) -> str:

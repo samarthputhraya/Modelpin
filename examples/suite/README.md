@@ -2,7 +2,7 @@
 
 A small, realistic scenario set for a customer-support / data SaaS app, used for **live
 two-model runs** and the **false-positive measurement** (spec §11 DoD). Unlike
-the generated `mp init --demo` sandbox (kept minimal, and offline), these are meant
+the generated `modelpin init --demo` sandbox (kept minimal, and offline), these are meant
 to run against real models with your own API key.
 
 The eight scenarios are chosen to exercise every diff signal:

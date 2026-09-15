@@ -1,6 +1,6 @@
 [project]
 name = "modelpin"
-version = "0.3.2"
+version = "0.4.0"
 description = "Dependabot for AI models — catch model-migration regressions before they hit production."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,7 +31,7 @@ dependencies = [
 providers = [
   "openai>=1.40",
   "google-genai>=1.0",
-  "anthropic>=0.34",
+  "anthropic[vertex]>=1.0",
   # Lets the SDKs trust a corporate proxy's root certificate on Windows/macOS (cli.py).
   "truststore>=0.9",
 ]

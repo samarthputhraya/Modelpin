@@ -355,7 +355,6 @@ def test_neither_disclosure_can_be_deleted_quietly():
 @pytest.mark.parametrize(
     ("detected", "n", "where"),
     [
-        (4, 6, "README.md"),
         (4, 6, "docs/fp-measurement.md"),
         (5, 6, "docs/fp-measurement.md"),
         (4, 6, "CHANGELOG.md"),

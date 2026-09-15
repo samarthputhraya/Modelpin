@@ -7,49 +7,77 @@
 [![Python](https://img.shields.io/pypi/pyversions/modelpin.svg)](https://pypi.org/project/modelpin/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/samarthputhraya/modelpin/blob/main/LICENSE)
 
-A provider ships a new model (or retires the one you depend on). Modelpin **replays your app's
-real behavior** on the new model, decides whether anything *actually* regressed despite model
-randomness, and posts a PR-style report — so you find out in a pull request, not in production.
+Your app runs on a language model. The provider ships a new version, or retires the one you use.
+**Modelpin replays your app's real requests on the new model, tells you whether its behavior
+actually changed — despite the randomness in every answer — and fails your CI build only when
+the change is real.**
+
+```text
+$ modelpin check --to gpt-4.1-mini
+
+REGRESSION refund_flow: tool-call behavior changed: ['lookup_order', 'issue_refund'] ->
+['lookup_order', 'lookup_order', 'issue_refund'] (reproduced on a second set of candidate
+runs, scored on its own) (confidence 0.99)
+   baseline : tools lookup_order -> issue_refund; "Refund issued for order A-1042."
+   candidate: tools lookup_order -> lookup_order -> issue_refund; "Refund issued for order A-1042."
+MINOR extract_total: output format drift: violates the scenario's text assertions (confidence 1.00)
+   baseline : "42.00"
+   candidate: "The total amount owed is $42.00."
+OK 6 scenario(s) unchanged
+
+-> Pin to gpt-4o-mini until resolved.
+```
+
+- **Built to not cry wolf.** Every scenario runs several times on both models; a difference only
+  counts when it is statistically significant, large enough to matter, *and* reproduces on a
+  fresh set of runs.
+- **Sees what text diffs miss.** Changed tool-call plans, new refusals, and answers that mean
+  something different — even when the final text looks identical.
+- **Works with what you use.** OpenAI, Anthropic (API or Vertex AI), Google Gemini (AI Studio or
+  Vertex AI), and OpenAI-compatible hosts (Groq, OpenRouter, Together, Cerebras). Cross-vendor
+  comparisons work too.
+- **Your key, your data.** Runs locally or in your CI with your own API key. Nothing is sent
+  anywhere else.
 
 CLI: `modelpin` (alias `mp`). License: Apache-2.0.
 
 ---
 
-## Why this exists (and why you can trust the verdict)
+## Contents
 
-Models are non-deterministic. Run the same prompt twice and the words change. So the naive way to
-"test a new model" — diff the text — cries wolf on every run. An alerter that cries wolf is worse
-than no alerter: you mute it, then it misses the real break.
-
-Modelpin's entire design optimizes for **one north-star metric: false-positive rate.** The promise
-is narrow and falsifiable: *if Modelpin says it broke, it broke.* Everything below is in service of
-that promise — and where the evidence is thin, this README says so plainly.
-
-This is meant to be the **independent, no-BS** tool: it measures behavior change **relative to your
-app**, it never declares one model globally "better," and the whole harness is open source so you
-can reproduce it and disagree.
+- [Install](#install)
+- [Try it in 30 seconds, offline](#try-it-in-30-seconds-offline)
+- [Use it on your app](#use-it-on-your-app)
+- [How it works](#how-it-works)
+- [Reading the results](#reading-the-results)
+- [Run it in CI (GitHub Action)](#run-it-in-ci-github-action)
+- [Providers and credentials](#providers-and-credentials)
+- [Cost](#cost)
+- [CLI reference](#cli-reference)
+- [Troubleshooting](#troubleshooting)
+- [Limits, and the evidence behind the design](#limits-and-the-evidence-behind-the-design)
 
 ---
 
-## Quickstart
+## Install
 
-Install (Python 3.12+):
+Python 3.12 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.3.1
+modelpin version                        # -> modelpin 0.4.0
 ```
 
-> **Windows PowerShell:** run `modelpin …`, not `mp …`. PowerShell ships a built-in `mp` alias
-> (`Move-ItemProperty`) that shadows the CLI. The `mp` alias works everywhere else (cmd, bash,
-> zsh) and via `mp.exe`; on PowerShell either use `modelpin`, call `mp.exe`, or run
-> `Remove-Item Alias:mp -Force` once per session (add it to your `$PROFILE` to make it permanent).
+The `providers` extra installs the OpenAI, Anthropic and Google SDKs. Plain `pip install modelpin`
+is enough for the offline demo.
 
-### Try it offline, no API key (30 seconds)
+> **Windows PowerShell:** type `modelpin`, not `mp`. PowerShell has a built-in `mp` alias
+> (`Move-ItemProperty`) that wins over the program. `mp` works in cmd, bash and zsh.
 
-`modelpin init --demo` writes a self-contained sandbox — four scenarios, canned traces and a
-config — into `modelpin-demo/`. It replays those traces through the fake provider, so you see
-the whole pipeline (baseline, candidate replay, behavioral diff, report) at zero cost and no key:
+## Try it in 30 seconds, offline
+
+No API key, no cost. `modelpin init --demo` writes a small sandbox with four scenarios and
+recorded model answers, and the rest of the pipeline runs exactly as it would live:
 
 <!-- mp:smoke -->
 ```bash
@@ -59,112 +87,146 @@ modelpin baseline --fixtures traces.json
 modelpin check --to demo-model-v2 --fixtures traces.json
 ```
 
-You'll get a per-scenario verdict (`unchanged` / `changed_minor` / `regression` /
-`insufficient_evidence` - the last meaning a side recorded nothing to compare), a confidence
-score, a one-line plain-English explanation per scenario, and a Markdown report written to
-`.modelpin/last-report.md` - **that exact file is what the GitHub Action posts** - plus a
-dated copy under `.modelpin/runs/` that the next run will not overwrite, for citing later:
+You will see one scenario per verdict:
 
 | scenario | verdict | why |
 |---|---|---|
-| `greeting` | `unchanged` | identical behavior — Modelpin stays quiet |
-| `refund_request` | `regression` | the candidate calls `lookup_order` twice; the final answer is word-for-word identical, so a text diff sees nothing |
-| `angry_customer` | `regression` | the candidate refuses an action the baseline performed |
-| `invoice_parse` | `changed_minor` | `"Total: $5"` → `"Total: 5"` breaks the scenario's assertion, but nothing refused and no tool moved |
+| `greeting` | `unchanged` | same behavior on both models |
+| `refund_request` | `regression` | the new model calls `lookup_order` twice — the final text is identical, so a text diff would miss it |
+| `angry_customer` | `regression` | the new model refuses an action the old one performed |
+| `invoice_parse` | `changed_minor` | `"Total: $5"` became `"Total: 5"`, breaking the scenario's text check |
 
-`modelpin check` exits **1** only on a real `regression` — that's the CI gate, and it is why
-the demo exits 1. It exits **3** when a scenario it compared could not be measured, when the
-provider rejected one, or when nothing could be compared at all — a different claim from "it
-broke". It exits **4** when it never produced a verdict at all: a missing API key, an unusable
-flag, an unreadable config, no scenarios found. Nothing was measured, so nothing is claimed.
-A scenario Modelpin cannot compare is named in the report and costs the run its
-clearance, but does not by itself fail the build. That covers three cases: no baseline was
-recorded; the scenario was **edited after** its baseline was recorded, so comparing it would
-measure your edit rather than the model; or the baseline records no scenario fingerprint at all
-and cannot vouch for what it describes. **Upgrading from a version before fingerprints: every
-baseline on disk falls into that third case, so your first `modelpin check` after upgrading
-compares nothing and exits 3 until you re-run `modelpin baseline` once.**
+The command exits **1** because regressions were found — that is what fails a CI build. The full
+report is written to `.modelpin/last-report.md`, the same file the GitHub Action posts on a pull
+request. Edit `traces.json` and re-run to watch the verdicts move.
 
-Then edit `traces.json`, re-run, and watch the verdict move: the answer is computed from the
-traces, not baked in.
+## Use it on your app
 
-None of this is bundled inside the installed package — the wheel is code only, and the demo is
-generated on your machine. That is deliberate: shipping them would mean the quickstart depends
-on data that a `pip install` may or may not place where the docs claim — which is exactly how the
-previous quickstart broke. Generating it means the commands above cannot rot.
-
-### The real flow, on your own app
+**1. Set up.** In your repository:
 
 ```bash
-# 1. Scaffold modelpin.yaml + scenarios/ (never overwrites existing files)
 modelpin init
-
-# 2. See which models your repo already depends on, and where
-modelpin scan
-
-# 3. Add a scenario or two (a JSON file per representative case — see below),
-#    then record how your current model behaves, N times
-export OPENAI_API_KEY=sk-...        # your key, read from the env — never stored
-modelpin baseline                   # uses models[0] + providers[0] from modelpin.yaml
-
-# 4. Replay your scenarios on a candidate model and diff the behavior
-modelpin check --to gpt-5.5
 ```
 
-A scenario is a small JSON file (one per case) under `scenarios/`. The one `mp init` writes:
+`init` reads your code to find the model you already call (for example `gpt-4o-mini` in
+`client.chat.completions.create(model="gpt-4o-mini", ...)`) and writes `modelpin.yaml` with that
+model, its provider, and an independent judge model. It also writes a starter scenario in
+`scenarios/`. It never overwrites existing files. `modelpin scan` shows every model id it finds.
+
+**2. Describe what your app does.** Put a few real requests from your app in `scenarios/`, one
+JSON file each — the system prompt, the user message, and any tools. For example:
 
 ```json
 {
-  "id": "greeting",
-  "name": "Simple greeting",
-  "kind": "single",
-  "input": {"messages": [{"role": "user", "content": "Say hello in one short sentence."}]},
-  "assertions": {"must_contain": ["hello"]}
+  "id": "route_ticket",
+  "name": "Route a support ticket to the right queue",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "Route the ticket. Reply with exactly one of: billing, bug, account, other."},
+      {"role": "user", "content": "I was charged twice for my March invoice."}
+    ],
+    "temperature": 0
+  },
+  "assertions": {"must_contain": ["billing"]}
 }
 ```
 
-Optional keys: `"match"` (`strict | unordered | subset | superset`) pins how *this* scenario's
-tool-call trajectory is compared, overriding the run's `--match`. Adding it does **not**
-invalidate a baseline you have already recorded — it changes how traces are compared, never
-what is sent to the model, so nothing has to be replayed again.
+Templates for classifiers, JSON extraction, refusal policies, tool-using agents and free-text
+answers: **[Writing scenarios](https://github.com/samarthputhraya/modelpin/blob/main/docs/writing-scenarios.md)**.
+`modelpin init --agent-example` adds a runnable tool-calling agent scenario.
 
-Scenarios can also be agent runs: set `"kind": "agent"`, add `"tools"` (and canned `"tool_results"`)
-to `input`, and Modelpin drives a multi-turn model↔tool loop so trajectories like
-`lookup_order → issue_refund` actually emerge during replay.
+**3. Record your current model.**
 
-**`modelpin init --agent-example` writes one you can run.** It scaffolds an annotated,
-runnable two-step refunds agent (`lookup_order` → `issue_refund`) with canned tool
-results, so the trajectory diff is reachable without leaving the package or copying
-JSON out of a browser. It is behind a flag rather than in the default scaffold on
-purpose: `[M]` a `single` scenario costs one model call per replay and an agent one
-drives the tool loop up to six, so scaffolding it by default would take a first
-`modelpin baseline` from 5 calls to as many as 35 — on your key, for a fictional shop.
+```bash
+export OPENAI_API_KEY=sk-...     # your key; see "Providers and credentials" for the others
+modelpin baseline
+```
 
-Eight further worked examples spanning tool trajectories, semantic equivalence,
-refusals, and output format live in
-[`examples/suite/`](https://github.com/samarthputhraya/modelpin/tree/main/examples/suite/).
+Each scenario runs 5 times; the results are saved to `.modelpin/baseline-<model>.json`. Commit
+that file if you want CI to compare against it (it holds model outputs, not your API key).
 
----
+**4. Check a candidate model.**
 
-## See it in your PR (GitHub Action)
+```bash
+modelpin check --to gpt-4.1-mini
+```
 
-The point of Modelpin is that the answer shows up **at review time.** It ships a real composite
-GitHub Action: it installs Modelpin, optionally records a baseline, runs `mp check`, posts a
-**sticky PR comment** (found-and-updated in place via a hidden marker — no comment spam), and
-**fails the job on a regression**. Drop this at `.github/workflows/modelpin.yml`:
+Before it spends anything, `check` prints how many calls the run will make. Then it replays your
+scenarios on the candidate, compares, and prints a verdict per scenario.
+
+A good first sanity check is to compare your model against itself
+(`modelpin check --to <your current model>`): it should come back `unchanged`. If a scenario
+flags against itself, its prompt leaves the model too much freedom — see
+[Writing scenarios](https://github.com/samarthputhraya/modelpin/blob/main/docs/writing-scenarios.md#habits-that-make-scenarios-work).
+
+## How it works
+
+```text
+ scenarios/*.json ──► modelpin baseline ──► N runs on your current model (saved)
+                                                   │
+ modelpin check --to <candidate> ──► N runs on the candidate
+                                                   │
+      compare the two sets of runs, signal by signal:
+        • tool calls (which tools, in what order)     • refusals
+        • meaning, judged by a separate LLM            • your must_contain / must_not_contain checks
+                                                   │
+      a regression must be (1) statistically significant, (2) large enough to matter,
+      and (3) reproduce on N fresh candidate runs
+                                                   │
+      verdict per scenario + exit code + .modelpin/last-report.md
+```
+
+Models are random: the same prompt gives different words every time, so comparing single answers
+is useless. Modelpin compares **distributions** — "the old model called the refund tool on 5 of 5
+runs, the new one on 0 of 5" — with an exact permutation test, a minimum effect size per signal,
+and a confirmation replay that stops one unlucky sample from turning a build red.
+
+The full explanation, in plain language, with the exact rule at the end:
+**[How Modelpin works](https://github.com/samarthputhraya/modelpin/blob/main/docs/how-it-works.md)**.
+
+## Reading the results
+
+| Verdict | Meaning | Exit code |
+|---|---|---|
+| `unchanged` | no significant behavior change | `0` |
+| `changed_minor` | something moved — a text check started failing, tool arguments changed, or a regression did not reproduce. Read it; it does not fail the build | `0` |
+| `regression` | a real, reproduced change in tool calls, refusals, or meaning | **`1`** |
+| `insufficient_evidence` | one side recorded nothing usable (for example empty answers) | `3` |
+
+| Exit code | Meaning |
+|---|---|
+| `0` | no regression |
+| `1` | at least one regression — pin your current model until you have looked |
+| `3` | the run could not fully answer (a scenario was unmeasurable or rejected by the provider, or nothing could be compared). **Not** a clean result |
+| `4` | Modelpin could not run at all: missing key, bad flag, unreadable config, no scenarios. Nothing was measured |
+
+Every flagged scenario shows one example run from each model, so you can see what changed.
+
+"Regression" means *your app's behavior changed from the baseline* — Modelpin does not judge
+which model is better. A new model that starts calling a tool your prompt asked for is a change
+worth reviewing, even if you like it.
+
+When a run's scenarios could not have detected certain kinds of change (for example, no judge
+configured and no tool calls), the output says so under `coverage:` instead of implying a clean
+bill of health.
+
+## Run it in CI (GitHub Action)
+
+Commit `modelpin.yaml`, `scenarios/` and `.modelpin/baseline-<model>.json`, then add
+`.github/workflows/modelpin.yml`:
 
 ```yaml
 name: Modelpin
 
 on:
-  pull_request:             # "did MY change break it?" — the CI gate
-  workflow_dispatch:        # trigger by hand the day a provider ships a new model
+  pull_request:             # did MY change (a prompt, a model id) break it?
+  workflow_dispatch:        # run by hand the day a provider ships a new model
   schedule:
-    - cron: "0 9 * * 1"     # "did the MODEL change under me?" — Mondays 09:00 UTC
+    - cron: "0 9 * * 1"     # did the MODEL change under me? Mondays 09:00 UTC
 
 permissions:
   contents: read
-  pull-requests: write      # so the action can post/update the PR comment
+  pull-requests: write      # lets the action post its report as a PR comment
 
 jobs:
   model-check:
@@ -173,442 +235,160 @@ jobs:
       - uses: actions/checkout@v4
       - uses: samarthputhraya/modelpin@v1
         with:
-          from: gpt-4o-mini       # the model you depend on today (committed baseline)
-          to: gpt-5.5             # the candidate to vet before adopting
-          provider: openai
-          runs: "5"
+          to: gpt-4.1-mini        # the candidate model to vet
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}     # BYO-key from repo secrets — never inline a key
-          # If your judge_model lives on another provider, add its key too:
-          # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # GROQ_API_KEY:   ${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}   # from repository secrets
 ```
 
-Action inputs: `to` (required), `from`, `provider`, `config`, `scenarios-dir`, `runs`, `match`,
-`baseline`, `comment`, `fail-on-regression`, `github-token`, `modelpin-spec`, `python-version`,
-`working-directory`. Outputs: `verdict-exit-code` (0 clean, 1 a behavioral regression,
-3 the run could not answer - a compared scenario was unmeasurable, the provider rejected one,
-or nothing could be compared) and `report-path`. The usual pattern is to
-**commit your baseline** so CI only replays the candidate; flip `baseline: "true"` to record fresh
-(needs the old model still reachable). Copy-paste workflow:
-[`examples/github-workflow.yml`](https://github.com/samarthputhraya/modelpin/blob/main/examples/github-workflow.yml).
+The action installs Modelpin, runs `modelpin check`, posts (and updates in place) a PR comment
+with the report, and fails the job on a regression (exit `1`), an unmeasurable run (`3`) or a
+setup error (`4`) — with an annotation saying which.
 
-**The two triggers answer different questions.** `pull_request` catches *your* change — the PR
-that bumps a model id, edits a prompt, or edits a scenario. `schedule` catches the *provider's*:
-a silent update to an id you never touched produces no PR, so nothing would tell you. A weekly
-replay surfaces that as a run that went red without a commit.
+Inputs: `to` (required), `from`, `provider` (defaults to `modelpin.yaml`), `config`,
+`scenarios-dir`, `runs`, `match`, `confirm`, `baseline` (record a fresh baseline first),
+`comment`, `fail-on-regression`, `github-token`, `modelpin-spec`, `python-version`,
+`working-directory`. Outputs: `verdict-exit-code`, `report-path`. More:
+[`actions/README.md`](https://github.com/samarthputhraya/modelpin/blob/main/actions/README.md).
 
-The schedule runs on **your** clock, not on a provider release feed. Modelpin does not watch
-deprecation pages today — `modelpin/watcher/` is a seed registry with no network call — so a
-weekly cron is the honest version of "find out before production does", and reading provider
-release feeds directly is the next step, not a shipped one. Price it before you enable it: a
-scheduled run spends real calls on your key every week, and `mp check` prints that bound before
-it spends.
+Things GitHub does that are worth knowing: scheduled workflows run only on the default branch,
+GitHub disables them after 60 days without repository activity, and a scheduled run needs your
+baseline model to still be available if you record baselines in CI.
 
-Three GitHub behaviours will bite you here, none of them Modelpin's:
+## Providers and credentials
 
-1. `schedule` fires **only on your default branch** — you cannot test it from a PR. Use
-   `workflow_dispatch` for that.
-2. GitHub **disables scheduled workflows after 60 days of repository inactivity.** That is
-   exactly the quiet, stable repo that most needs a drift check, so the safety net switches
-   itself off precisely when you stop looking. Re-enable it from the Actions tab, and never read
-   "no red runs" as "no drift" without confirming the workflow is still enabled.
-3. The scheduled run needs your `from` model **still reachable on your key.** When the provider
-   retires it, the job goes red because the baseline model is gone — not because behaviour
-   changed. Read the error before the verdict.
+Modelpin always uses **your** credentials, read from the environment. It never stores, logs or
+ships a key, and error messages are scrubbed of key-shaped strings.
 
----
+| Provider (`providers:` / `--provider`) | Credentials | Notes |
+|---|---|---|
+| `openai` | `OPENAI_API_KEY` | Chat Completions, multi-turn tool calls. Reasoning models (`o1`/`o3`/`o4`/`gpt-5*`) get `max_completion_tokens` and no temperature |
+| `anthropic` | `ANTHROPIC_API_KEY`, **or** Claude on Vertex AI: `ANTHROPIC_VERTEX_PROJECT_ID` + `gcloud auth application-default login` (`CLOUD_ML_REGION` defaults to `global`) | Messages API, multi-turn tool calls. Newer Claude models accept only default sampling, so a scenario's `temperature` is not sent to them |
+| `google` | `GEMINI_API_KEY` (AI Studio), **or** Vertex AI: `GOOGLE_GENAI_USE_VERTEXAI=true` + `GOOGLE_CLOUD_PROJECT` + application-default login | Multi-turn tool calls. Leave `GOOGLE_CLOUD_LOCATION` unset: newer Gemini models are served only on `global` |
+| `groq`, `openrouter`, `together`, `cerebras` | `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, `CEREBRAS_API_KEY` | OpenAI-compatible endpoints. Groq has a free tier |
 
-## How the behavioral diff works (the moat)
+**The judge** (`judge_model:` in `modelpin.yaml`) decides whether two answers mean the same thing.
+It can run on any provider above; set `judge_provider:` when the model id does not name its
+vendor (`gpt-*`, `claude-*` and `gemini-*` do; `openai/gpt-oss-120b` on Groq does not). Choose a
+model that is neither the one you run today nor the candidate. Remove `judge_model:` to compare
+only tool calls, refusals and text checks, with no extra calls.
 
-Modelpin decides "did it really change?" from **multiple signals over multiple runs**, then gates
-every regression behind a **distributional significance test plus an effect-size floor**. A single
-odd run never trips it; a majority that merely flips between two equally-likely behaviors never
-trips it. Here is the whole decision rule, no hand-waving:
+**Cross-vendor:** the baseline and the candidate can be on different providers — record the
+baseline with one `--provider`, check with another (`modelpin check --provider google --to
+gemini-2.5-flash`). `check` reads the baseline from disk, so only the candidate's key is needed
+(plus the judge's).
 
-**1. Multi-run, not single-shot.** Each scenario runs N times (`runs:` in config; default 5,
-minimum 2 — a single run can't form a distribution, so `--runs 1` is rejected outright). Baseline
-*and* candidate are both sampled, so the comparison is distribution-vs-distribution.
+**Behind a corporate proxy:** on Windows and macOS Modelpin trusts the operating system's
+certificate store, so a TLS-inspecting proxy your machine already trusts works. On Linux, point
+`SSL_CERT_FILE` at your CA bundle.
 
-**N is not a quality dial — below 4 it is an on/off switch for whole signal groups.** An exact
-permutation test over `C(2N, N)` relabelings has a hard p-floor, so below N=4 some signals
-cannot reach `p ≤ 0.05` at any effect size, and at N=2 none of them can:
+## Cost
 
-| runs/side | smallest p reachable | refusal + format drift | tool-call + argument (`strict`/`unordered`) |
-|---|---|---|---|
-| 2 | 0.167 | **cannot fire** | **cannot fire** |
-| 3 | 0.050 / 0.100 | fires (exactly at the boundary) | **cannot fire** |
-| 4 | 0.014 / 0.029 | fires | fires |
-| 5 (default) | 0.004 / 0.008 | fires | fires |
+Everything runs on your key, and `check` prints the size of the run before it spends:
 
-`[M]` Both columns are measured from the shipped permutation functions, not restated — see
-`min_achievable_pvalue_mean` / `..._distribution` in `modelpin/diff/stats.py`. The floors also
-depend on **both** sides, so a baseline recorded at 5 runs checked at 2 is priced at 5v2
-(0.048 — below the line), not at 2v2.
-
-Modelpin says so **before it spends**, and `mp check` never describes such a scenario as
-clean: the PR comment names the blind scenarios, drops its green tick, and reads *"NOT
-cleared"* — or *"only partially cleared"* when some scenarios were measured and some were
-not — never *"looks safe to adopt"*. `[A]` The public Report (`mp report`) does not yet carry
-this qualifier; until it does, do not publish a Report from a run below `--runs 4`.
-
-**2. Structural signals** (per run, no network, deterministic):
-- **Tool-call trajectory match** with four modes — `strict | unordered | subset | superset`
-  (`--match`) — so you choose how strict "same plan" means for your agent. A single scenario
-  can override the flag with its own `"match"` field, which is what you want when *that*
-  scenario's prompt makes a call genuinely optional (*"use it when it would be useful"*):
-  under `strict`, a model that exercises that discretion on 4 of 5 runs and 0 of 5 on the next
-  is reported as a regression, and `[M]` we have measured exactly that on a same-model null.
-  Declaring `"match": "subset"` on that one scenario fixes it without loosening anything else
-  — and it belongs to the scenario rather than to a new global default: `[M]` a global
-  `subset` would silence the tool channel on 7 of the 10 tool-channel detection rows in our
-  recall arm. On that corpus every one of those rows is still caught by the semantic judge, so
-  we have measured **no detection loss** — but 10 rows are only 4 distinct scenarios, so "no
-  detection cost" carries a 95% upper bound of 52.7% and is not a result we lean on. Note the
-  default is still `strict`, so an optional call that disappears **is** flagged unless a
-  scenario says otherwise.
-- **Tool-call argument match** — the right tool called with the wrong argument is still a
-  behavior change (`issue_refund(amount=49.99)` → `issue_refund(amount=4999.00)` is a 100×
-  financial error that a names-only diff scores as identical). This signal is **advisory**: its
-  floor is not yet calibrated on a labelled set, so it raises a scenario to `changed_minor` and
-  never fails your build on its own. See *the false-positive evidence* below.
-- **Output format / assertion validity** — your scenario's `must_contain` / `must_not_contain`
-  text assertions, checked as a rate across runs.
-- **Refusal detection** — did the model start declining requests it used to answer?
-- **Latency / token deltas** — captured and reported, but **informational only**; they never gate
-  the verdict (latency is jittery; a token bump isn't a behavior regression).
-
-**3. Semantic signal** (optional LLM-as-judge): a low-temperature judge answers the only question
-that matters — *do these answers mean / accomplish the same thing?* This catches the structural
-blind spot: two answers that are textually different but identical in meaning ("The total is $5."
-vs "5 dollars."). The judge is **injected and optional** — with no `judge_model` set (and always on
-the offline `fake` path) the diff stays purely structural and makes zero network calls, so CI can
-run for $0. The judge is independent of the two models being compared, so it can arbitrate a
-cross-vendor check.
-
-**4. The statistics that kill false alarms.** Every gating signal goes through an **exact
-two-sample permutation test** (`modelpin/diff/stats.py` — no SciPy, deterministic, so golden tests
-stay reproducible). A signal counts as a regression only when **both**:
-- the candidate distribution differs from baseline at **p ≤ 0.05** (`ALPHA`), **and**
-- the effect clears a conservative **size floor** — tool-call shift ≥ 0.5 total-variation distance
-  (`MIN_TOOL_TVD`), refusal-rate rise ≥ 0.34 (`MIN_REFUSAL_DELTA`), or semantic-divergence rate
-  ≥ 0.5 over baseline (`MIN_SEMANTIC_DELTA`). The argument signal has a fifth floor —
-  fully-disjoint payloads, TVD ≥ 1.0 (`MIN_TOOL_ARG_TVD`) — which is **uncalibrated**, and is
-  why that signal is capped at `changed_minor`. Every floor that gated a verdict is printed in
-  the report's *Settings (reproducibility)* block.
-
-The size floor is what stops a *statistically* significant but *practically* trivial jitter from
-firing once N grows large. These floors are intentionally conservative — biased toward missing a
-borderline change rather than inventing one — because a miss is a false *negative* (the safe
-direction for a trust product), while a false alarm erodes trust permanently.
-
-**Output:** each scenario gets a verdict, a confidence score, the underlying signals, and a one-line
-explanation. A structural tool-call / refusal break or a calibrated semantic divergence is a
-**CI-failing `regression`**; format/assertion drift alone, or a tool-call **argument** change
-alone, is `changed_minor` — reported in full, with the recommendation to pin, but `mp check`
-exits 0 and your build stays green. That is deliberate: an uncalibrated floor is allowed to tell
-you something, never to stop you.
-
-### The false-positive evidence — and its limits, stated plainly
-
-**Result: bounded for the first time, on the 2026-09-07 run of record — 0 false alarms in 39 scored trials, same model vs itself, on two OpenAI models plus a 12-trial single-repeat sanity arm on Groq that constrains nothing.** One-sided 95% upper bound **7.4%** on the conditional rate — over the 39 trials in which some channel could have fired. A second bound, **0.4%**, is computed over all 710 trials that reached a verdict, but 671 of those 710 could not have fired at any threshold, so it is reported for completeness and is not the number to quote; the conditional 7.4% is the one that constrains the engine. Not a zero, a bound — and a bound carried by **9 of 27** scenario shapes at the shipped defaults (`runs: 5`, `--match strict`, judge on): 18 contributed no scored trial, two shapes supply 29 of the 39, and over distinct shapes the *pooled* bound is **28.3%** — a different quantity from the hard-severity 28.3% in Status below, which is over 9 *trials* and discounts to 39.3% over its 6 shapes. The two collide on one numeral by arithmetic accident; neither may be quoted bare. `[M]` **30 of those 39 trials could only have fired on the argument gate, which is advisory and can never fail a build on its own** — so most of what this bound measures is a channel that cannot produce a red build, and the twelve `examples/fp-suite/` scenarios at the API's default temperature 1.0 supply only 9 of the 39. Every trial's traces are committed under [`reports/fp-runs-adr0040/2026-09-07/`](https://github.com/samarthputhraya/modelpin/tree/main/reports/fp-runs-adr0040/2026-09-07/), and a test regenerates the published block and headline from them. `[M]` **This bound replaces a previously published 3.6% over 82 scored trials.** The same 710 stored replays were re-diffed by the same judge under a changed semantic rule (each candidate run is now compared to every baseline run rather than to one arbitrary modal run), which drives more trials to `p = 1.00` and so out of the denominator under our own exclusion rule. Zero false alarms under both engines; a smaller denominator is a weaker bound, not a worse engine. Full writeup, both rates per surface, and what the bound does *not* say: [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md).
-
-This section previously read "**0/8 false positives** on a held-out 8-scenario suite ... all `unchanged` at confidence 1.00". That claim is **withdrawn** as of 2026-08-23 and stays withdrawn: all 8 of those trials ran at temperature 0, and a trial in which *every* channel returned `p = 1.00` could not have produced a false alarm at any threshold — counting it as a passed trial credits the engine for a test it could not fail. Scored honestly that run is **0/0**, and `[M]` re-run on the current engine it is 0/0 again; it is kept as a continuity surface, contributes nothing to the conditional bound, and its 8 could-not-fire trials sit inside the 710.
-
-What the run of record supports on detection: **45 of 46** injected perturbations were flagged — 46 perturbed replays of **22 distinct perturbations** (the 12 `fp-suite` prompts on three models, the 7 `arg_*` on one, 3 of the 8 held-out scenarios on one), so the interval over 46 counts one perturbation up to three times; over distinct perturbations the reading is **21 of 22** detected on every surface. The 1 replay that was not flagged (`decline_pii` on `gpt-4o-mini`) is scored **MISSED** and we claim no credit for it either way — a miss is either a real change the engine did not see or a candidate that ignored the injected instruction, and the harness cannot tell which; here the model still declined on all 5 runs. `[M]` Two further replays were missed under the previous engine (`summarize_standup_notes` on `gpt-4.1-mini`, `triage_ticket_json` on `gpt-4o-mini`): the judge separated the sides on all five candidate runs, but also called two to four of the five *baseline* runs non-equivalent to the arbitrary modal baseline, so the permutation test never cleared the threshold. That was the engine's own defect, and it is now fixed — the semantic channel compares each candidate run to **every** baseline run, both are flagged at confidence 0.996 on the same stored traces, and `[M]` the change produced 0 new false alarms across all 710 same-model trials. **Read that increase with its cost:** `[M]` those two recovered replays are the same two the engine change was designed and accepted against, so they are in-sample and the 90.1% lower bound is optimistic by an unquantified amount; `[M]` the no-new-false-alarms check is weak on the channel it changed, whose scored exposure fell 51 trials → 8 (zero there bounds it only at 31.2%); and `[M]` on an exact enumeration of a modelled null the new rule is **1.6×–9.6× more prone to a false alarm** at the shipped `runs: 5`, with its measured safety conditional on judge leniency — a property of the judge model, which is user configuration, and not yet priced. One flag is labelled rather than celebrated: on `arg_numeric_rounding` the candidate kept converting to kilograms and the advisory argument gate fired on rounding jitter. These are synthetic system-prompt replacements, one run each, and the interval treats them as exchangeable trials, which by construction they are not. `[M]` The 95% one-sided *lower* bound the harness prints is **90.1%** at 45/46 — `1 - upper_bound_95(1, 46)` in [`scripts/fp_measurement.py`](https://github.com/samarthputhraya/modelpin/blob/main/scripts/fp_measurement.py). A `2/2` reading of the earlier held-out run, which dropped a resisted case from the denominator, is **withdrawn**: the harness cannot tell a resisted instruction from a dead engine, so it never excludes on that basis. See the correction notes in [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md). Over the 22 distinct perturbations it is **80.2%**. Detection is demonstrated, not characterised.
-
-The semantic judge's escalation threshold is **calibrated** on a labeled set in
-<!-- calibrated = confirmed FP-safe and detection-preserving on a labelled set, NOT fitted -->
-[`examples/calibration/`](https://github.com/samarthputhraya/modelpin/tree/main/examples/calibration/) that is **deliberately distinct from the held-out
-suite** (so it cannot leak into the held-out result). `[M]` On the independent-candidate run of
-record, equivalent pairs land at divergence **0.0–0.20** and real meaning changes at **0.60–1.0**,
-leaving a gap around the 0.5 floor. **"Calibrated" here means confirmed FP-safe and detection-preserving on that set — not *fitted*:** `[M]` the set cannot discriminate the value, the semantic sweep being flat from 0.1 to 0.9, so **0.5 is a conservative choice rather than a fitted one**. But `[M]` 5 of those 6 equivalent pairs return `p = 1.00` and
-could not have fired at all, so the honest score is **0/1 — 95% upper bound 95.0%**, not 0/6.
-(The cleaner "0.0 versus ≥0.8" figures quoted here previously are the *self-judge* run, which an
-adversarial audit demoted as circular — and which scores **0 trials** under the same predicate.)
-FP-safety was re-checked with an **independent judge** (a different model arbitrating) and
-re-validated on the held-out suite after promoting semantic divergence from `changed_minor` to a
-CI-failing `regression` — no verdict moved. That re-validation contributed **0 scored trials** under
-the corrected accounting, and `[M]` the two calibration runs share their scenarios and their
-perturbations and **both record `"judge": "gpt-4o-mini"`**, differing only in the candidate model.
-Since this floor gates the judge's own output, the judge is the factor that would have had to vary.
-So the floor rests on **one** labeled condition — and that one scores 0/1, not 0/6.
-
-**This is a first calibration. Do not over-trust it.** The honest limitations, documented in
-[`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md):
-- the calibration set is **small** (≈6+6 pairs) and the perturbations are **synthetic**, not
-  harvested from real migrations;
-- recall on subtle changes was 4/6 — `[M]` a 95% one-sided *lower* bound of **27.1%** on
-  true detection, `1 - upper_bound_95(2, 6)` in
-  [`scripts/fp_measurement.py`](https://github.com/samarthputhraya/modelpin/blob/main/scripts/fp_measurement.py). It can *miss* a subtle real
-  change (again, the safe direction);
-- every FP number above was measured with an **OpenAI judge**, and only with one. Since
-  2026-08-31 the judge also RUNS on Gemini and the four OpenAI-compatible hosts (MP-143),
-  but no FP rate has been measured on any of those **five** - a judge that works is not a
-  judge that is calibrated;
-- the structural floors are **not** FP-validated by the run of record, and `[M]` of
-  its 39 scored trials **30 could only have fired on the advisory argument gate, 8 on the semantic
-  channel and 1 on refusal — 0 on the tool-call channel and 0 on format/assertion**; `MIN_TOOL_TVD` saw no
-  exposure in those 710 trials. **Both of those channels have since been measured on corpora built for
-  them, and each produced a false alarm — the only same-model false positives we have ever observed.**
-  `[M]` The tool trajectory: **1 in 26 scored tool-exposed trials = 3.8%, one-sided 95% upper bound
-  17.0%** — and 24 of those 26 come from one scenario, so it is a bound over one shape, not over tool
-  use. `[M]` The assertion channel: **1 in 30 scored assertion-exposed trials = 3.3%, upper bound
-  14.9%**, over **7 distinct scenarios** — `1/7`, upper bound **52.1%**, which is the figure that
-  constrains. The tool-channel alarm is a **hard** one: an optional tool call made on 4 of 5 baseline
-  samples and 0 of 5 candidate samples publishes `regression` at confidence 0.952 and exit 1 on a
-  same-model, same-prompt null. It is open, pinned by a strict `xfail` in
-  `tests/test_mp220_tool_channel_false_positive.py`, and a scenario can work around it today by
-  declaring `"match": "subset"`. At the shipped `runs: 5` the floors are **inert** anyway — the p-value gate is
-  strictly stricter, and they first bind at N=9 (semantic), N=11 (tool), N=12 (refusal) — so no trial
-  count at `runs: 5` can validate them.
-
-Planned before any high-stakes reliance: ≥30 pairs including real migration traces, and the
-same measurement repeated with a non-OpenAI judge. We'd rather you know this than discover it.
-
-### Proof it actually *fires*: the Drift Map
-
-Quietness on equivalent behavior is the half **not** yet evidenced (above); the complement — that it catches
-*real* drift — is the **[Modelpin Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md)**. We replayed
-an open, deliberately-hard suite across **5 real migration pairs** (including cross-vendor), 5 runs
-each, judge on. `[M]` The engine stayed quiet on **50 of 60** comparisons and flagged the other
-10 — 9 `regression`, 1 `changed_minor`. **4 of the 5 pairs** carry a `regression` that survives
-a read of the raw traces: an agent that went from *asking for a missing date* to *hallucinating
-a flight booking*, prompt-injection resistance **flipping across a version bump**, and a
-multi-constraint format breaking on an upgrade. The fifth does not — the report says so, and
-says why. `[M]` Of the 9 `regression` flags, **6** are solid and **3** are soft; we publish
-that split rather than a precision rate, because the 9 land on only 4 distinct scenarios and
-are therefore not exchangeable trials. The exact raw traces and per-scenario verdicts are
-published in [`docs/reports/data/`](https://github.com/samarthputhraya/modelpin/tree/main/docs/reports/data/) — diff against ours without spending a cent.
-It also **discloses a false positive our own refusal detector produced** (a Unicode-apostrophe bug,
-since fixed): flagging our own measurement's soft spots is the whole point of being an independent
-voice. The same capability is wired behind `mp report` — point it at any model launch.
-
----
-
-## Cross-vendor (including a free third vendor)
-
-A model migration isn't always within one lab. Modelpin diffs **across vendors** through one engine;
-a separate judge model arbitrates meaning-equivalence. The **judge runs on any host in the table
-below** except the Anthropic stub — set `judge_provider:` when the model id does not name its own
-vendor (`gpt-*` and `gemini-*` do; `qwen/qwen3.8-27b` does not). Its FP rate has only ever
-been measured with an OpenAI judge.
-
-| Provider | Status |
-|---|---|
-| **OpenAI** | Live (Chat Completions), multi-turn tool loops |
-| **Google / Gemini** | Live (`google-genai`), multi-turn tool loops, cross-vendor live-validated |
-| **OpenAI-compatible hosts** — `groq`, `openrouter`, `together`, `cerebras` | Live (the OpenAI adapter pointed at the host's `base_url`) |
-| **Anthropic** | **Stub** — raises `NotImplementedError` (deferred until a paid key is in play) |
-
-**What we observed (open suite, our settings):**
-- `gpt-4o-mini` vs `gemini-3.1-flash-lite`, 5 runs × 8 scenarios, OpenAI judge on → **8/8
-  `unchanged`**: the cross-vendor judge genuinely fired and found the two vendors behaviorally
-  equivalent on this suite.
-- `gpt-4o-mini` vs `llama-3.3-70b-versatile` on **Groq**, same suite → **8/8 `unchanged`**.
-  `[M] 2026-08-31` Groq has since **retired** that model id (`404 model_not_found`). The result
-  stands as a measurement of a run that happened; the id is no longer runnable.
-
-**Free third vendor:** [Groq](https://console.groq.com) serves Llama models over the
-OpenAI-compatible API and has a free tier, so the *replay* side of a cross-vendor check costs
-nothing — `check` reads its baseline off disk and replays only the candidate:
-
-```bash
-export GROQ_API_KEY=...     # free at console.groq.com
-# Groq rotates its catalogue: check https://console.groq.com/docs/models for a current id.
-# [M] 2026-08-31 the model below is live; the one this example used before was retired.
-modelpin check --provider groq --from gpt-4o-mini --to qwen/qwen3.8-27b
+```text
+provider=openai from=gpt-4o-mini to=gpt-4.1-mini runs=5 match=strict | 8 scenario(s) from scenarios -> 40 replays, >=40 paid calls + up to 360 judge calls
 ```
 
-**The judge is a separate bill — but it can now be Groq's.** `mp init` scaffolds
-`judge_model: gpt-4o-mini`, so out of the box that run bills your `OPENAI_API_KEY`, or exits 4
-asking for it if only `GROQ_API_KEY` is set. Pick a judge that is **neither** model you are
-comparing — a model reading its own output is not an independent reading of it, and Modelpin
-says so on the console when it spots the collision. To keep the whole run on one free key, name the
-host as well — the model id alone cannot say which one it is:
+- **Replays** = scenarios × runs. A plain scenario is one model call per replay; an agent scenario
+  up to 6 (one per tool-loop turn).
+- **Judge calls** are an upper bound; identical answers skip the judge and it stops at the first
+  match, so the real number is usually much lower.
+- **Confirmation:** only a scenario flagged as a regression is replayed again, and the line above
+  says how much that adds.
 
-```yaml
-judge_model: qwen/qwen3.6-27b   # NOT the model under test -- see the caveat below
-judge_provider: groq            # openai | google | groq | openrouter | together | cerebras
-```
-
-**Do not name the model you are checking as the judge.** `mp check` warns when you do, and a
-model arbitrating its own output is not an independent reading -- it is the same circularity
-that demoted the self-judge calibration run above. Bear the other caveat in mind too: the FP
-rate was measured with an OpenAI judge and has not been re-measured on any other host. For a run with no judge at all, remove `judge_model:`
-from `modelpin.yaml`; the diff then stays purely structural, exactly as in
-[How the behavioral diff works](#how-the-behavioral-diff-works-the-moat). The judge cost is
-disclosed before it is spent, in the `+ up to N judge calls` clause of the pre-spend line.
-
-A caveat worth stating: open-model *hosts* rotate ids but don't retire on a lab's fixed schedule the
-way the big providers do, so Groq/OpenRouter/etc. are a genuine cross-vendor bonus and an
-architecture proof — not the core migration wedge.
-
----
-
-## Bring your own key
-
-Modelpin replays with **the end user's own API key**, always read from the environment, **never**
-hardcoded, shipped, or stored (cost stays yours; provider ToS stays clean):
-
-- `OPENAI_API_KEY`
-- `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
-- `GROQ_API_KEY` (and the equivalents for other OpenAI-compatible hosts)
-
-In CI, supply these as repo secrets (see the workflow above).
-
-**What gets redacted, and what does not.** Provider error messages are scrubbed of key-shaped
-tokens before Modelpin shows them — OpenAI and Anthropic `sk-`, Groq `gsk_`, Google `AIza` /
-`ya29.`, AWS `AKIA` / `ASIA`, GitHub `ghp_` / `github_pat_`, PEM private keys, Azure storage
-`AccountKey=`, and raw `Bearer` headers. Two limits, stated plainly: a key with **no distinctive
-prefix** (Azure OpenAI's bare hex keys, for instance) is not recognised, because a pattern for
-"32 hex characters" would also redact every git SHA and request id in the error you are trying
-to read; and **recorded traces are never rewritten** — if a key-shaped token appears in a
-model's output, `mp baseline` warns you rather than silently editing the evidence.
-
-### Google: billing Vertex AI instead of an API key
-
-Google sells Gemini through two doors, and **an AI Studio API key cannot spend Google Cloud
-credit** — that path bills a separate prepaid wallet. If your Gemini budget lives in Cloud
-billing, point Modelpin at Vertex instead. It uses Application Default Credentials, so there is
-no key at all:
-
-```bash
-gcloud auth application-default login          # once
-export GOOGLE_GENAI_USE_VERTEXAI=true          # or GOOGLE_GENAI_USE_ENTERPRISE=true
-export GOOGLE_CLOUD_PROJECT=your-project-id
-modelpin check --to gemini-3.5-flash --provider google
-```
-
-The variable names are the Google GenAI SDK's own. The API-key path stays the default and is
-unchanged.
-
-**Leave `GOOGLE_CLOUD_LOCATION` unset unless you need data residency.** It defaults to `global`,
-which is both the SDK's own default and the only location that serves current models: `[M]` every
-`gemini-3.x` id returns **404 on regional endpoints** such as `us-central1`, where only the legacy
-2.5 family is available. Setting a region keeps processing in that jurisdiction, at the cost of
-the newer models — `global` routes dynamically and makes no residency guarantee.
-
-The two doors do not offer the same catalogue: `[M]` `gemini-2.5-flash` currently returns
-*"no longer available to new users"* on AI Studio while still serving on Vertex — which is the
-sort of divergence Modelpin exists to notice.
-
----
+Rough guide: 8 plain scenarios at 5 runs is 40 candidate calls plus judge calls — cents on small
+models. `modelpin baseline` costs the same replays on your current model, once.
 
 ## CLI reference
 
 | Command | What it does |
 |---|---|
-| `modelpin init [dir]` | Scaffold `modelpin.yaml` + `scenarios/` (never overwrites). |
-| `modelpin scan [path]` | Detect which AI models the repo depends on, and where. |
-| `modelpin baseline` | Record current model behavior for your scenarios (N runs). |
-| `modelpin check --to <model>` | Replay scenarios on a new model, diff vs baseline, write the PR-style report, fail CI on a regression. |
-| `modelpin version` | Print the Modelpin version. |
-| `modelpin report --to <new> --from <incumbent> --suite-dir <dir>` | Replay a scenario suite across two models and draft a reproducible, opinion-framed Modelpin Report (Markdown + a JSON audit sidecar) under `reports/`. Unlike `check`, it **publishes** — exits 0 even on a regression. `--suite-dir` is required: the wheel ships no scenarios, so the **open public suite** lives in the repo at `examples/report-suite/` — clone it, or point this at your own. |
+| `modelpin init [dir]` | Write `modelpin.yaml` and a starter scenario, configured from the models your code calls. `--demo` writes the offline sandbox; `--agent-example` adds a tool-calling agent scenario. Never overwrites. |
+| `modelpin scan [path]` | List the model ids a repository (or a single file) uses, and where. |
+| `modelpin baseline` | Run every scenario N times on your current model and save the results. |
+| `modelpin check --to <model>` | Replay on a candidate, compare with the baseline, print verdicts, write the report, exit `0`/`1`/`3`/`4`. |
+| `modelpin report --to <new> --from <old> --suite-dir <dir>` | Replay a scenario suite on two models and write a reproducible, publishable Markdown report plus a JSON sidecar under `reports/`. Always exits 0. |
+| `modelpin version` | Print the version. |
 
+Common flags for `baseline` and `check`: `--provider`, `--runs`, `--config`, `--scenarios-dir`,
+`--store-dir`, and `--fixtures` (required with `--provider fake`). `baseline` takes `--model`;
+`check` takes `--from`, `--match strict|unordered|subset|superset` (how strictly tool-call
+sequences must agree; a scenario's own `"match"` overrides it) and `--no-confirm`. Run any command
+with `--help` for details.
 
-Every command is also available as **`mp`** — except in PowerShell, where `mp` is a
-built-in alias for `Move-ItemProperty` and will fail with a `ParameterBindingException`
-that names Modelpin nowhere. This table spells out `modelpin` for that reason; use
-`mp` freely in bash, zsh and cmd.
+## Troubleshooting
 
-Shared flags on `baseline` / `check`: `--from` / `--model`, `--provider`, `--runs`, `--config`,
-`--scenarios-dir`, `--store-dir`, and `--fixtures`, which is **required** with `--provider fake`
-(on `report` too). `check` and `report` additionally take `--match`
-(`strict\|unordered\|subset\|superset`); a scenario's own `"match"` field overrides it for that
-scenario, and both name every one that does in the run header. `baseline` only records traces,
-so it has no match mode.
+**`error: OPENAI_API_KEY is not set` (exit 4).** Export the key for the provider in
+`modelpin.yaml` (see [Providers and credentials](#providers-and-credentials)), or change
+`providers:` to one you have a key for.
 
----
+**`mp : Cannot find path ...` in PowerShell.** That is PowerShell's `mp` alias. Use `modelpin`.
 
-## Install
+**`rate limit or quota exceeded`.** Modelpin already retried with backoff. Wait for the quota
+window, lower `--runs`, or check billing. On Gemini's AI Studio, *"prepayment credits are
+depleted"* means that key bills a separate prepaid wallet; Vertex AI bills Google Cloud credit
+instead. Claude on Vertex AI needs a per-model quota granted in the Google Cloud console first.
 
-```bash
-pip install "modelpin[providers]"     # or: pipx install "modelpin[providers]"   (Python 3.12+)
-modelpin version
-```
+**`CERTIFICATE_VERIFY_FAILED`.** You are behind a TLS-inspecting proxy on Linux: set
+`SSL_CERT_FILE` to your organisation's CA bundle.
 
-The `providers` extra pulls in the `openai`, `google-genai`, and `anthropic` SDKs. The bare
-`pip install modelpin` (no extra) runs the offline `fake` path with no provider SDKs at all.
+**`scenario ... changed since its baseline`.** You edited the scenario after recording it, so
+comparing would measure your edit, not the model. Run `modelpin baseline` again. Upgrading from a
+version before 0.3.0 needs one fresh `modelpin baseline` for the same reason.
 
-From source (for development):
+**A scenario flags `regression` against the same model.** The prompt leaves the model real
+freedom (for example a tool it may call "when useful"). Tighten the instruction, or add
+`"match": "subset"` to that scenario. See
+[Writing scenarios](https://github.com/samarthputhraya/modelpin/blob/main/docs/writing-scenarios.md).
+
+**`insufficient_evidence`.** A model returned empty answers — often a wrong model id, a
+`max_tokens` too small for a reasoning model, or a content filter. The console note says which
+side was empty.
+
+**Exit 3 in CI.** The run could not answer for at least one scenario; the report lists which
+and why. It is deliberately not a pass.
+
+**A `warning: ... cannot report a regression` before the run.** `--runs` is too low for the
+statistics to ever reach significance. Use 5.
+
+## Limits, and the evidence behind the design
+
+Modelpin is designed so that **if it says it broke, it broke**, and it prefers to stay quiet on a
+borderline change rather than raise a false alarm. Know the trade-offs:
+
+- **It can miss subtle changes** — a behavior that shifts on only one run in five, or a meaning
+  change the judge considers equivalent. Missing a borderline change is the deliberate direction
+  of error.
+- **It only measures your scenarios.** Behavior no scenario exercises is invisible. Coverage gaps
+  are disclosed in every report.
+- **The judge is a model too.** Its sensitivity depends on the model you pick, and the project's
+  calibration so far used an OpenAI judge.
+- **It measures change, not quality.** It never says one model is better.
+
+The project publishes its own false-positive and detection measurements — how they were run,
+the confidence bounds, the two same-model false alarms it has observed, and what the numbers do
+*not* show — in **[docs/fp-measurement.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)**.
+Those measurements describe the engine without the confirmation replay, which can only remove
+alarms. A worked multi-model example is the
+**[Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md)**.
+
+**Not goals:** Modelpin is a migration check. It is not an eval platform, an observability tool,
+a prompt manager, a model gateway, or a leaderboard.
+
+## Contributing and development
 
 ```bash
 git clone https://github.com/samarthputhraya/modelpin
 cd modelpin
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,providers]"
+python -m pytest -q
 ```
 
----
-
-## What this is *not* (non-goals, on purpose)
-
-Modelpin is a **migration tool**, and stays one. It is **not**:
-
-- a general eval / observability platform,
-- prompt management,
-- a model gateway or host,
-- an absolute "which model is best" leaderboard.
-
-It measures **behavior change relative to your app** — not abstract quality. Saying no to that scope
-is what keeps the false-positive promise honest and the tool small enough to trust.
-
-### Honest-framing rules (this is a trust product)
-
-- Any public / measurement claim is phrased as *"on our open suite, under these settings, we
-  observed…"* — **never** "Model X is worse." The harness and scenarios are open source so anyone
-  can rerun and disagree. That's the whole point of being the independent voice.
-- We don't overclaim and we don't falsely undersell. The engine is real and cross-vendor live-validated;
-  *and* Anthropic is still a stub and the judge calibration is a documented first pass. All true at
-  once.
-
----
-
-## Status
-
-**Phase 0 (core engine MVP) — detection demonstrated but not characterised; the
-false-positive rate not established, but bounded. Read the CI-failing row first
-(ADR-0042).** Every bound below is one-sided 95%, and every one reads worse over
-distinct scenarios than over trials:
-
-| what it bounds | over trials | over distinct scenarios |
-|---|---|---|
-| **CI-failing channels** — can turn your build red | `0/9` → **28.3%** | 6 shapes, `0/6` → **39.3%** |
-| advisory channels — annotate, never fail a build alone | `0/30` → 9.5% | 3 shapes, `0/3` → 63.2% |
-| pooled — **not the number to quote**, 30 of the 39 sat on the advisory argument gate | `0/39` → 7.4% | 9 shapes, `0/9` → 28.3% ¹ |
-| tool trajectory, own corpus — **1 false alarm** | `1/26` → 17.0% | 24 of the 26 are one scenario ² |
-| format/assertion, own corpus — **1 false alarm** | `1/30` → 14.9% | 7 shapes, `1/7` → **52.1%** |
-
-¹ Not the same quantity as the CI-failing 28.3% above; the two collide on one numeral
-by arithmetic accident, and neither may be quoted bare.
-² So it bounds one shape, not tool use in general. We publish no shape-level number
-for it, because two scenarios is not a denominator.
-
-`[M]` The CI-failing bound has **zero tool-channel exposure** — its 9 trials are 8
-semantic + 1 refusal + 0 tool + 0 assertion, so it constrains the channel a migration
-tool exists for not at all. The two false alarms in the last two rows are the only
-same-model false positives we have ever observed. Method and artifacts:
-[`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md).
-
-The current release on PyPI is shown by the version badge above. Live-validated cross-vendor
-(OpenAI ↔ Google ↔ Groq); **the "0 in 8 held-out trials" claim stays withdrawn** (those 8 could not have
-fired; the 2026-09-07 run measured surfaces that can); multi-turn replay; a real
-GitHub Action; the public-report engine (`mp report`) + the open suite (in this repo, not
-in the wheel); the
-[Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md) published across 5 real migration pairs;
-`pip install "modelpin[providers]"`; `[M]` **1154 tests passing** (+2 `xfail`, pinning the
-MP-165 trajectory residual and the MP-220 tool-channel false positive, so 1156 collected — the three MP-05 scenario-id-collision `xfail`s are gone because MP-05 landed), `ruff` + `black` clean. The Anthropic
-adapter is still a stub (deferred until a paid key is in play); not yet listed on the GitHub
-Marketplace.
-
-The full false-positive measurement lives in [`docs/fp-measurement.md`](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md),
-and the multi-model Drift Map in [`docs/reports/`](https://github.com/samarthputhraya/modelpin/tree/main/docs/reports/). Next up: the first public
-**Modelpin Report** on a real model launch (the harness is launch-ready), then the Anthropic adapter.
+See [CONTRIBUTING.md](https://github.com/samarthputhraya/modelpin/blob/main/CONTRIBUTING.md)
+and [SECURITY.md](https://github.com/samarthputhraya/modelpin/blob/main/SECURITY.md).
 
 ## License
 
-**Apache-2.0.** See [`LICENSE`](https://github.com/samarthputhraya/modelpin/blob/main/LICENSE). The open-source core (CLI, engine, Action) is and stays
-open; any future hosted tier lives in a separate, proprietary package.
-
-Repo: <https://github.com/samarthputhraya/modelpin>
+**Apache-2.0.** See [LICENSE](https://github.com/samarthputhraya/modelpin/blob/main/LICENSE).
+The open-source core (CLI, engine, Action) stays open.
