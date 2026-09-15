@@ -21,6 +21,7 @@ from collections.abc import Sequence, Set as AbstractSet
 from typing import IO, Any, NoReturn, Optional, cast
 
 import typer
+from pydantic import ValidationError
 from rich.box import ASCII as ASCII_BOX
 from rich.console import Console
 from rich.markup import escape as _rich_escape
@@ -265,6 +266,12 @@ def _adapter(provider: str, fixtures: Optional[str]) -> ProviderAdapter:
         return get_adapter(provider)
     except FileNotFoundError as exc:
         _fail(f"fixtures file not found: {exc}")
+    except (json.JSONDecodeError, TypeError, ValidationError) as exc:
+        # A malformed fixtures file raised a raw traceback (first-run review, 2026-09-15).
+        _fail(
+            f"fixtures file {fixtures} is not a JSON array of trace objects "
+            f"({type(exc).__name__}). `modelpin init --demo` writes an example traces.json."
+        )
     except ValueError as exc:  # unknown provider
         _fail(str(exc))
 
@@ -437,9 +444,18 @@ def _load_config_or_fail(config_path: str) -> ModelpinConfig:
     if config_path != DEFAULT_CONFIG_FILE and not Path(config_path).exists():
         _fail(f"config file not found: {config_path}")
     try:
-        return load_config(config_path)
+        cfg = load_config(config_path)
     except ConfigError as exc:
         _fail(str(exc))
+    if "regression_threshold" in cfg.model_fields_set:
+        # Accepted so existing configs keep loading, but nothing reads it: the decision rule
+        # is fixed (docs/how-it-works.md). Silently accepting a tuning knob that does nothing
+        # is the defect MP-142 removed for assertion fields (first-run review, 2026-09-15).
+        console.print(
+            "[yellow]note:[/] `regression_threshold` in modelpin.yaml has no effect and can be "
+            "removed; the decision rule is fixed (see docs/how-it-works.md)."
+        )
+    return cfg
 
 
 #: How the directory we searched was chosen — quoted back to the user, because
@@ -1081,24 +1097,23 @@ def init(
                 f"[bold]{setup.provider}[/] ({_rich_escape(setup.model_source)}), judged by "
                 f"[bold]{_rich_escape(setup.judge_model)}[/]. Edit modelpin.yaml if that is wrong."
             )
-        console.print("\nNext:")
-        console.print(
-            "  1. Put a few real cases from your app in scenarios/ "
+        steps = [
+            "Put a few real cases from your app in scenarios/ "
             "(copy the starter file; one JSON file per case)."
-        )
+        ]
         if setup is not None:
-            if has_credentials(setup.provider, os.environ):
-                console.print(
-                    f"  2. Credentials for {setup.provider} are already set in your environment."
-                )
-            else:
-                console.print(f"  2. Set {CREDENTIAL_HINT[setup.provider]} in your environment.")
-        console.print(
-            "  3. [bold]modelpin baseline[/]            # record how your current model behaves"
+            steps.append(
+                f"Credentials for {setup.provider} are already set in your environment."
+                if has_credentials(setup.provider, os.environ)
+                else f"Set {CREDENTIAL_HINT[setup.provider]} in your environment."
+            )
+        steps.append(
+            "[bold]modelpin baseline[/]            # record how your current model behaves"
         )
-        console.print(
-            "  4. [bold]modelpin check --to <model>[/]  # replay on a candidate and compare"
-        )
+        steps.append("[bold]modelpin check --to <model>[/]  # replay on a candidate and compare")
+        console.print("\nNext:")
+        for number, step in enumerate(steps, start=1):
+            console.print(f"  {number}. {step}")
         console.print(
             "[dim]No API key yet? Run `modelpin init --demo` for a free offline walkthrough.[/]"
         )

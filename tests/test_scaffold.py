@@ -137,3 +137,34 @@ def test_init_end_to_end_reads_the_repo(tmp_path, monkeypatch):
     assert "MP-" not in (tmp_path / "modelpin.yaml").read_text(
         encoding="utf-8"
     ), "internal backlog ids must not leak into a user's config"
+
+
+def test_init_numbers_its_next_steps_without_gaps(tmp_path, monkeypatch):
+    """Re-running init with --agent-example skipped step 2 and printed 1, 3, 4."""
+    import re
+
+    assert runner.invoke(app, ["init", str(tmp_path)]).exit_code == 0
+    second = runner.invoke(app, ["init", str(tmp_path), "--agent-example"])
+    numbers = [int(n) for n in re.findall(r"^\s+(\d)\. ", second.output, re.M)]
+    assert numbers == list(range(1, len(numbers) + 1)), second.output
+
+
+def test_a_malformed_fixtures_file_is_a_setup_error_not_a_traceback(tmp_path):
+    fixtures = tmp_path / "traces.json"
+    fixtures.write_text('["not a trace"]', encoding="utf-8")
+    (tmp_path / "scenarios").mkdir()
+    (tmp_path / "scenarios" / "s.json").write_text(_SAMPLE_SCENARIO, encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["baseline", "--provider", "fake", "--fixtures", str(fixtures), "--model", "m",
+         "--scenarios-dir", str(tmp_path / "scenarios"), "--store-dir", str(tmp_path / "s")],
+    )  # fmt: skip
+    assert result.exit_code == 4, result.output
+    assert "not a JSON array of trace objects" in " ".join(result.output.split())
+
+
+def test_a_dead_regression_threshold_setting_is_called_out(tmp_path):
+    cfg = tmp_path / "modelpin.yaml"
+    cfg.write_text("models: [m]\nregression_threshold: 0.5\n", encoding="utf-8")
+    result = runner.invoke(app, ["baseline", "--config", str(cfg), "--provider", "fake"])
+    assert "regression_threshold" in " ".join(result.output.split()), result.output

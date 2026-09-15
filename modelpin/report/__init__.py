@@ -761,6 +761,12 @@ def render_pr_comment(
     elif regs or minors:
         lines.append(
             f"→ Pin to {_md_code(from_model)} until resolved, or review the full diff above."
+            + (
+                ""
+                if regs
+                else " These are minor changes: they do not fail the build, so the decision "
+                "is yours."
+            )
         )
     elif unmeasured:
         # MP-49 was exactly this line rendering over a run that measured nothing. "Safe to
@@ -909,6 +915,13 @@ def render_cli(
     if regs or minors:
         lines.append("")
         lines.append(f"[yellow]-> Pin to[/] [bold]{escape(from_model)}[/] until resolved.")
+        if not regs:
+            # A minors-only run exits 0. Without this line "Pin to ... until resolved" reads the
+            # same as a build-breaking regression (first-run review, 2026-09-15).
+            lines.append(
+                "[dim]   These are minor changes: they do not fail the build, so the decision "
+                "is yours.[/]"
+            )
         # ADR-0032, the interim it requires. `[M] 2026-08-29` the dogfood flagged 6 of 12
         # scenarios at confidence 1.00 -- all 6 confirmed TRUE positives by an independent
         # oracle -- printed "Pin to ... until resolved", and EXITED 0, because a violated
