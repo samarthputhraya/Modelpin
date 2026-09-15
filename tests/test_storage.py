@@ -109,3 +109,34 @@ def test_corrupt_baseline_raises_baseline_error(tmp_path):
     path.write_text("{ this is not valid json")
     with pytest.raises(BaselineError, match="corrupt"):
         load_baseline("gpt-4o-mini", tmp_path)
+
+
+def test_the_store_ignores_everything_but_baselines(tmp_path):
+    """Only baselines are meant to be committed; reports and run archives are per-run output."""
+    import subprocess
+
+    from modelpin.storage import STORE_GITIGNORE
+
+    store = tmp_path / ".modelpin"
+    save_baseline({"s": [Trace(scenario_id="s", model_id="m", final_output="x")]}, "m", store)
+    assert (store / ".gitignore").read_text(encoding="utf-8") == STORE_GITIGNORE
+    (store / "last-report.md").write_text("r", encoding="utf-8")
+    (store / "runs").mkdir()
+    (store / "runs" / "check.md").write_text("r", encoding="utf-8")
+    if subprocess.run(["git", "init", "-q", str(tmp_path)], capture_output=True).returncode:
+        return  # git unavailable; the file content is asserted above
+    ignored = subprocess.run(
+        ["git", "-C", str(tmp_path), "check-ignore", "--no-index",
+         ".modelpin/last-report.md", ".modelpin/runs/check.md", ".modelpin/baseline-m.json"],
+        capture_output=True, text=True,
+    ).stdout  # fmt: skip
+    assert "last-report.md" in ignored and "runs/check.md" in ignored
+    assert "baseline-m.json" not in ignored
+
+
+def test_an_existing_store_gitignore_is_never_overwritten(tmp_path):
+    store = tmp_path / ".modelpin"
+    store.mkdir()
+    (store / ".gitignore").write_text("mine\n", encoding="utf-8")
+    save_baseline({"s": [Trace(scenario_id="s", model_id="m", final_output="x")]}, "m", store)
+    assert (store / ".gitignore").read_text(encoding="utf-8") == "mine\n"

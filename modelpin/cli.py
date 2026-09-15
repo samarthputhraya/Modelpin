@@ -85,6 +85,7 @@ from modelpin.scaffold import CREDENTIAL_HINT, infer_setup, render_config
 from modelpin.scenarios.starter import AGENT_STARTER_FILENAME, write_agent_starter
 from modelpin.storage import (
     STORE_DIRNAME,
+    ensure_store,
     BaselineError,
     load_baseline,
     load_baseline_fingerprints,
@@ -719,7 +720,7 @@ def _publish_report(markdown: str, store_dir: str, from_model: str, to: str) -> 
     notes: list[str] = []
     report_path = Path(store_dir) / "last-report.md"
     try:
-        report_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_store(report_path.parent)
         report_path.write_text(markdown, encoding="utf-8")
         notes.append(
             f"[dim]PR-style Markdown report written to {_rich_escape(str(report_path))}[/]"
