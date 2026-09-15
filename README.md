@@ -143,6 +143,13 @@ Templates for classifiers, JSON extraction, refusal policies, tool-using agents 
 answers: **[Writing scenarios](https://github.com/samarthputhraya/modelpin/blob/main/docs/writing-scenarios.md)**.
 `modelpin init --agent-example` adds a runnable tool-calling agent scenario.
 
+**Faster: draft them from your code.** `modelpin draft app/support.py` sends that one file to your
+configured model (one call, your key, key-shaped strings redacted first) and writes draft
+scenarios to `scenarios/.drafts/`, which `baseline` and `check` ignore. The system prompt and
+tools are copied only if they appear in the file; the user messages, canned tool results and
+suggested assertions are invented and marked as such. Review each draft, then move it into
+`scenarios/`.
+
 **3. Record your current model.**
 
 ```bash
@@ -212,6 +219,9 @@ The full explanation, in plain language, with the exact rule at the end:
 | `2` | usage error: an unknown option or a missing `--to` |
 
 Every flagged scenario shows one example run from each model, so you can see what changed.
+Each check also writes `.modelpin/runs/check-<from>-to-<to>-<time>.json`: the exit code, every
+verdict with its signals, and every candidate run — for scripts, and for reading the full runs
+behind a verdict.
 
 "Regression" means *your app's behavior changed from the baseline* — Modelpin does not judge
 which model is better. A new model that starts calling a tool your prompt asked for is a change
@@ -322,6 +332,7 @@ current model, once.
 |---|---|
 | `modelpin init [dir]` | Write `modelpin.yaml` and a starter scenario, configured from the models your code calls. `--demo` writes the offline sandbox; `--agent-example` adds a tool-calling agent scenario. Never overwrites. |
 | `modelpin scan [path]` | List the model ids a repository (or a single file) uses, and where. |
+| `modelpin draft <file>` | Draft scenarios from one file of your app into `scenarios/.drafts/` for review (one model call). `--count`, `--model`, `--provider`. |
 | `modelpin baseline` | Run every scenario N times on your current model and save the results. |
 | `modelpin check --to <model>` | Replay on a candidate, compare with the baseline, print verdicts, write the report, exit `0`/`1`/`3`/`4`. |
 | `modelpin report --to <new> --from <old> --suite-dir <dir>` | Replay a scenario suite on two models and write a reproducible, publishable Markdown report plus a JSON sidecar under `reports/`. Always exits 0. |

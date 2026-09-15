@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verdict.
 - **Progress while a live run works:** one line per scenario, so a long `baseline` or `check`
   no longer looks hung.
+- **`modelpin draft <file>`** drafts scenarios from one file of your app, using your configured
+  model (one call). Drafts go to `scenarios/.drafts/`, which `baseline` and `check` ignore. The
+  system prompt and tools are kept only if they appear in the file; user messages, canned tool
+  results and suggested assertions are marked as invented, and suggestions never become live
+  assertions. Key-shaped strings are redacted before the file is sent.
+
+### Fixed
+
+Found by a live validation campaign on Gemini (Vertex AI):
+
+- **A prompt Gemini's safety filter blocks is a refusal, not an error.** `gemini-3.8-flash`
+  returned no candidates (`block_reason: SAFETY`) for an unsafe prompt in a public suite, and the
+  whole `baseline` exited 4.
+- **`baseline` keeps every scenario it could record.** One scenario the provider rejects is named
+  and skipped; the rest are saved and the command exits 3. Recording nothing at all still exits 4.
+- **Archived reports no longer vanish on Windows in deep folders.** The archive name carries both
+  model ids; past the Windows path limit it now falls back to a short name instead of failing.
+- **Examples beside a verdict say when a run stopped early** (the tool-call limit, the token
+  limit, the content filter).
 
 ### Changed
 
