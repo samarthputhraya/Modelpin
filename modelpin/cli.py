@@ -37,7 +37,13 @@ from modelpin.config import (
     load_config,
 )
 from modelpin.demo import DEMO_DIRNAME, DEMO_FIXTURES, DEMO_TO, write_demo
-from modelpin.detector import MAX_SCAN_BYTES, scan_repo
+from modelpin.detector import (
+    DEFAULT_EXTS,
+    ENV_TEMPLATE_NAMES,
+    MAX_SCAN_BYTES,
+    ScanRefusedError,
+    scan_repo,
+)
 from modelpin.diff import (
     MatchMode,
     ALPHA,
@@ -912,12 +918,25 @@ def version() -> None:
 
 
 @app.command()
-def scan(path: str = typer.Argument(".", help="Repo root to scan.")) -> None:
+def scan(path: str = typer.Argument(".", help="Repo root, or a single file, to scan.")) -> None:
     """Detect which AI models this repo depends on, and where."""
     skipped: list[str] = []
-    hits = scan_repo(path, skipped=skipped)
+    scanned: list[str] = []
+    try:
+        hits = scan_repo(path, skipped=skipped, scanned=scanned)
+    except FileNotFoundError:
+        # `[M] 2026-09-15` A missing path walked nothing and printed "No model identifiers
+        # found.", exit 0 -- a typo read exactly like a clean repo.
+        _fail(f"path not found: {path}")
+    except ScanRefusedError as exc:
+        _fail(str(exc))
     if not hits:
-        console.print("No model identifiers found.")
+        # Say how much was read, so "found nothing" cannot be mistaken for "read nothing".
+        n = len(scanned)
+        console.print(f"No model identifiers found in {n} file{'' if n == 1 else 's'} scanned.")
+        if not n:
+            exts = " ".join(sorted(DEFAULT_EXTS | ENV_TEMPLATE_NAMES))
+            console.print(f"[dim]scan reads these file types: {exts}[/]")
         _print_scan_skips(skipped)
         return
 

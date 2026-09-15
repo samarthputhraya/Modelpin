@@ -145,11 +145,14 @@ def test_two_genuinely_different_ids_on_one_line_both_survive(tmp_path) -> None:
 # --- the file-matching half --------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", [".env", ".env.example", ".env.local", ".env.sample"])
+@pytest.mark.parametrize("name", [".env.example", ".env.sample", ".env.template"])
 def test_env_variants_are_scanned(tmp_path, name: str) -> None:
     """`.env` was matched by exact NAME, so `.env.example` -- the file a repo commits precisely
     because it is the readable record of its configuration -- was invisible. Its `suffix` is
-    `.example`, so the extension test could not see it either."""
+    `.example`, so the extension test could not see it either.
+
+    `[M] 2026-09-15` `.env` and `.env.local` were dropped from this list: they hold live
+    secrets and are no longer opened (`tests/test_scan_first_run_trust.py`)."""
     (tmp_path / name).write_text("MODEL_NAME=llama-3.1-8b-instant\n", encoding="utf-8")
     assert "llama-3.1-8b-instant" in models_used(tmp_path)
 

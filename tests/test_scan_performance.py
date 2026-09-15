@@ -97,15 +97,21 @@ def test_a_minified_bundle_line_scans_in_well_under_a_second() -> None:
     muted, and a muted guard is worse than none. The fixed algorithm does this in
     milliseconds; the broken one cannot come anywhere near the budget.
     """
-    line = "var o1=a,o3=b,o4=c;" * (64 * 1024 // 19)
-    t0 = time.perf_counter()
-    hits = _models_in(line)
-    elapsed = time.perf_counter() - t0
-    assert elapsed < 2.0, (
-        f"scanning one 64 KB minified line took {elapsed:.2f} s. The per-line de-dupe has "
-        "gone quadratic again; a front-end repository's first `scan` will appear to hang."
-    )
-    assert {m for m, _ in hits} == {"o1", "o3", "o4"}, hits
+    # `[M] 2026-09-15` The bare-identifier line no longer yields any span at all: `o1` after
+    # `var ` is a minifier's local, not a model. The QUOTED line keeps the de-dupe under load,
+    # which is what this budget guards.
+    for line, expected in (
+        ("var o1=a,o3=b,o4=c;" * (64 * 1024 // 19), set()),
+        ("x=\"o1\",y='o3',z=`o4`;" * (64 * 1024 // 21), {"o1", "o3", "o4"}),
+    ):
+        t0 = time.perf_counter()
+        hits = _models_in(line)
+        elapsed = time.perf_counter() - t0
+        assert elapsed < 2.0, (
+            f"scanning one 64 KB minified line took {elapsed:.2f} s. The per-line de-dupe has "
+            "gone quadratic again; a front-end repository's first `scan` will appear to hang."
+        )
+        assert {m for m, _ in hits} == expected, hits
 
 
 # ------------------------------------------------------------------------ the size cap
