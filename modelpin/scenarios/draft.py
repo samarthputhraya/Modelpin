@@ -168,7 +168,7 @@ def draft_scenarios(
                 if kept:
                     scenario_input["tool_results"] = kept
                     invented.append("tool_results")
-        doc = {
+        doc: dict[str, Any] = {
             "id": sid,
             "name": str(item.get("name") or sid),
             "input": scenario_input,
@@ -189,7 +189,7 @@ def draft_scenarios(
                 ],
             },
         }
-        Scenario(**{k: v for k, v in doc.items() if not k.startswith("_")})  # must load
+        Scenario.model_validate({k: v for k, v in doc.items() if not k.startswith("_")})
         path = out_dir / f"{sid}.json"
         n = 2
         while path.exists():
