@@ -59,7 +59,14 @@ picks this up:
     `score` set** (ADR-0025 / ADR-0038). That is the block that does not negotiate; the rule
     must be chosen on a labelled set that does not exist yet (MP-224).
 
-So this file pins the defect and is expected to stay `xfail` for some time. The customer-facing
+So this file pins the defect and is expected to stay `xfail` for some time.
+
+`[M] 2026-09-15` What a USER meets has changed, and this file deliberately has not: `mp check`
+now replays a flagged scenario and fails the build only if the same channel regresses again on
+the fresh sample (`modelpin/diff/confirm.py`). Re-checked against the nine other same-model
+samples in this run of record, this trial's alarm is withheld every time
+(`tests/test_confirm_regression.py`). The single-sample engine measured here is unchanged, so
+the published 1/26 stands and this xfail stays. The customer-facing
 half is MP-227 (a per-scenario `match` mode, outside `modelpin/diff/`), which does not change
 what this test measures: `examples/fp-suite-v2` is `score` under ADR-0025 and stays `strict`.
 

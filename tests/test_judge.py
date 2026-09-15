@@ -112,3 +112,30 @@ def test_build_judge_refuses_to_GUESS_a_host():
     only honest answer."""
     with pytest.raises(ProviderError, match="judge_provider"):
         build_judge("llama-3.3-70b-versatile")
+
+
+# --- MP-209: a judge that thinks out loud must not manufacture a false alarm ------------
+
+
+def test_a_draft_verdict_before_the_real_answer_does_not_win():
+    reply = (
+        'Let me think. At first glance {"equivalent": false} because the wording differs, '
+        'but both give the same total.\n{"equivalent": true, "reason": "same total"}'
+    )
+    assert _parse_equivalent(reply) is True
+
+
+def test_visible_think_blocks_are_ignored():
+    reply = '<think>they are not equivalent? {"equivalent": false}</think>\n{"equivalent": true}'
+    assert _parse_equivalent(reply) is True
+
+
+def test_prose_mentioning_not_equivalent_before_a_clean_answer_does_not_flag():
+    reply = "One might say these are not equivalent, but on reflection they match.\nEquivalent."
+    assert _parse_equivalent(reply) is True
+
+
+def test_a_real_false_verdict_is_still_read():
+    reply = 'Reasoning: the totals differ.\n{"equivalent": false, "reason": "42 vs 24"}'
+    assert _parse_equivalent(reply) is False
+    assert _parse_equivalent("Reasoning here.\nVerdict: not equivalent") is False

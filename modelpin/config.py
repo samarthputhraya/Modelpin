@@ -12,8 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 DEFAULT_CONFIG_FILE = "modelpin.yaml"
 
-#: The default provider when none is given. OpenAI is the implemented adapter; the
-#: Anthropic adapter is still a stub, so zero-config must not route to it.
+#: The default provider when none is given. Every live adapter bills the user's own
+#: credentials, so the default is the one `mp init` scaffolds and documents (`OPENAI_API_KEY`);
+#: changing it would silently move a zero-config run onto a different account.
 DEFAULT_PROVIDER = "openai"
 
 #: Replays per scenario per side when neither `--runs` nor a `runs:` key is given.

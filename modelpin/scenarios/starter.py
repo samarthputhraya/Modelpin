@@ -1,7 +1,7 @@
 """The worked agent scenario written by ``modelpin init --agent-example``.
 
 `[M] 2026-09-09` first-run audit of 0.3.0. ``modelpin init`` scaffolded exactly one
-scenario, ``scenarios/greeting.json`` -- ``kind: single``, no tools -- so the tool-call
+scenario, ``scenarios/sentiment.json`` -- ``kind: single``, no tools -- so the tool-call
 trajectory diff, the differentiating signal the README calls the moat, had **no runnable
 example anywhere in the installed wheel**. The eight worked examples the README points at
 live in ``examples/suite/``, which ADR-0011 deliberately does not ship: the wheel is code
@@ -200,7 +200,7 @@ tool-trajectory channel is what does.
 
 ## Before you run it
 
-This scenario costs more than `greeting.json`. A `kind: single` replay is one model call;
+This scenario costs more than `sentiment.json`. A `kind: single` replay is one model call;
 an agent replay drives up to **{MAX_TOOL_TURNS}** model calls as the tool loop turns, so at
 the scaffolded `runs:` this one scenario can be several times the bill of the other.
 `modelpin baseline` prints the size of the run before it spends anything - read that line.

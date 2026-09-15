@@ -10,14 +10,15 @@ see the project's `docs/`). Modelpin never ships or stores keys.
 
 ## Quickstart
 
-1. In your repo, run `mp init`, add a few scenarios, then record a baseline for the model
-   you depend on today and **commit it**:
+1. In your repo, run `modelpin init` (it configures `modelpin.yaml` from the model your code
+   already calls), add a few scenarios, then record a baseline for the model you depend on
+   today and **commit it**:
    ```bash
    pip install "modelpin[providers]"
-   mp init
-   # ...edit modelpin.yaml + scenarios/...
-   mp baseline --model gpt-4o-mini --provider openai   # writes .modelpin/baseline-*.json
-   git add modelpin.yaml scenarios/ .modelpin/baseline-*.json && git commit -m "modelpin baseline"
+   modelpin init
+   # ...add real cases to scenarios/, check modelpin.yaml...
+   modelpin baseline                 # writes .modelpin/baseline-<model>.json
+   git add modelpin.yaml scenarios/ .modelpin/ && git commit -m "modelpin baseline"
    ```
 
    > **Know what you are committing — especially to a public repository.**
@@ -27,17 +28,12 @@ see the project's `docs/`). Modelpin never ships or stores keys.
    > store your prompts. If your scenarios, or the answers a model gives to them, contain
    > anything you would not put in a public commit — a system prompt you consider
    > proprietary, a real customer record, an internal URL, a credential — keep this in a
-   > private repository, or use synthetic data in the scenarios. `mp baseline` warns when it
+   > private repository, or use synthetic data in the scenarios. `modelpin baseline` warns when it
    > sees a key-shaped token, but it cannot recognise a trade secret or a person's details.
    >
    > Only `baseline-*.json` needs committing. The rest of `.modelpin/` (`last-report.md`,
-   > `runs/`) is per-run output, and `modelpin init` does **not** ignore it for you — add
-   > these two lines to your `.gitignore` so it is never committed by accident:
-   >
-   > ```gitignore
-   > .modelpin/*
-   > !.modelpin/baseline-*.json
-   > ```
+   > `runs/`) is per-run output, and Modelpin writes `.modelpin/.gitignore` so that only the
+   > baselines (and that file) are picked up by `git add`.
 2. Add a workflow that checks a candidate model on every PR (or when a model bumps):
 
    ```yaml
@@ -55,15 +51,16 @@ see the project's `docs/`). Modelpin never ships or stores keys.
          - uses: actions/checkout@v7
          - uses: samarthputhraya/modelpin@v1     # this action (pin to a tag)
            with:
-             from: gpt-4o-mini             # your committed baseline model
-             to: gpt-5.5                    # the new model to test
-             provider: openai
+             to: gpt-4.1-mini               # the new model to test
+             # from / provider default to modelpin.yaml
            env:
              OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
    ```
 
 On each PR you get a **sticky comment** (updated in place, never spammed) with the
-behavioral diff, and the job **fails on a regression** so the bump can't merge silently.
+behavioral diff and an example run from each model for every flagged scenario, and the job
+**fails on a regression** so the bump can't merge silently. A scenario that looks like a
+regression is replayed once more first, and only fails the job if the regression reproduces.
 
 ## Cross-vendor
 
@@ -81,9 +78,9 @@ your OpenAI baseline against Google or a free Llama host:
 ```
 
 `provider` accepts `openai | google | anthropic | groq | openrouter | together | cerebras`.
-A free Groq/Llama key (`GROQ_API_KEY`) adds a third vendor whose *replays* cost nothing.
-The judge is billed separately and is OpenAI-only — that is what the `OPENAI_API_KEY` line
-above is for. Omit `judge_model` to keep the run structural and free.
+Claude needs `ANTHROPIC_API_KEY`. A free Groq key (`GROQ_API_KEY`) adds a vendor whose
+*replays* cost nothing. The judge is billed separately on whichever provider `judge_model`
+names — that is what the second key above is for. Omit `judge_model` to skip judge calls.
 
 ## Inputs
 
@@ -91,11 +88,12 @@ above is for. Omit `judge_model` to keep the run structural and free.
 |---|---|---|
 | `to` | — (required) | New model id to test against the baseline. |
 | `from` | config | Baseline model id (else first `models:` in `modelpin.yaml`). |
-| `provider` | `openai` | Candidate provider adapter. |
+| `provider` | config | Candidate provider adapter (else first `providers:` in `modelpin.yaml`). |
 | `config` | `modelpin.yaml` | Path to the config. |
 | `scenarios-dir` | config | Scenarios directory. |
 | `runs` | config | Replays per scenario (≥5 recommended). |
 | `match` | `strict` | Tool-call match: `strict\|unordered\|subset\|superset`. |
+| `confirm` | `true` | Replay a flagged scenario again and fail only if the regression reproduces. `false` fails on the first sample. |
 | `baseline` | `false` | Record a fresh baseline for `from` first (needs the old model still available; usually you commit the baseline instead). |
 | `comment` | `true` | Post/update a sticky PR comment. |
 | `fail-on-regression` | `true` | Fail the job on a regression (the migration gate). |
@@ -116,10 +114,12 @@ above is for. Omit `judge_model` to keep the run structural and free.
 - **Keys** are passed via job `env:` from repo **secrets** — never inline. The candidate
   provider needs its key (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, …); if
   `judge_model` is set in `modelpin.yaml`, that judge's provider key is needed too.
-- **Permissions:** the job needs `pull-requests: write` to comment.
+- **Permissions:** the job needs `pull-requests: write` to comment. On a pull request from a
+  fork, GitHub gives no repository secrets and a read-only token: the check itself fails with
+  exit 4 (missing key), and a comment that cannot be posted does not add a failure of its own.
 - **Baseline strategy:** committing the baseline (recorded while the old model still worked)
   is the migration-true flow — the new model is diffed against known-good behavior. Use
   `baseline: true` only when the old model is still callable in CI.
 - **Version pinning:** `modelpin` is on PyPI, so the default `modelpin-spec: modelpin[providers]`
-  works. Pin a release with `modelpin-spec: "modelpin[providers]==0.1.0"`, or install an unreleased
+  works. Pin a release with `modelpin-spec: "modelpin[providers]==0.4.0"`, or install an unreleased
   commit with `"modelpin[providers] @ git+https://github.com/samarthputhraya/modelpin@TAG"`.

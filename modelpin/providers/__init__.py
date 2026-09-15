@@ -17,16 +17,23 @@ __all__ = [
     "FakeProvider",
     "get_adapter",
     "UNIMPLEMENTED_PROVIDERS",
+    "LIVE_PROVIDERS",
     "provider_help",
 ]
 
 #: Providers this package can NAME but cannot RUN. `[M] 2026-08-27` (MP-128) `anthropic` was
 #: advertised without a marker in five places -- `action.yml`, three `--provider` help strings,
-#: and this module's own unknown-provider message -- while `providers/anthropic.py:17` is
-#: `raise NotImplementedError`. Following the documentation reached a crash. Deliberately NOT
-#: removed from the list: a user who types `--provider anthropic` deserves to be told it is
-#: coming, not that it is unknown. See MP-20 for the dated trigger to implement it.
-UNIMPLEMENTED_PROVIDERS: tuple[str, ...] = ("anthropic",)
+#: and this module's own unknown-provider message -- while its adapter was
+#: `raise NotImplementedError`. Following the documentation reached a crash.
+#:
+#: EMPTY since the Anthropic adapter shipped (API key or Vertex AI). The mechanism is kept, not
+#: deleted: the next provider that is named before it runs goes here, and
+#: `tests/test_advertised_providers.py` fails the build the moment this list and the adapters'
+#: source disagree in either direction.
+UNIMPLEMENTED_PROVIDERS: tuple[str, ...] = ()
+
+#: Every provider that runs against a real model, in the order the help text lists them.
+LIVE_PROVIDERS: tuple[str, ...] = ("openai", "google", "anthropic")
 
 
 def provider_help(include_fake: bool = True) -> str:
@@ -38,11 +45,16 @@ def provider_help(include_fake: bool = True) -> str:
     """
     from modelpin.providers.openai import OPENAI_COMPATIBLE_PROVIDERS
 
-    live = ["openai", "google", *OPENAI_COMPATIBLE_PROVIDERS]
+    live = [*LIVE_PROVIDERS, *OPENAI_COMPATIBLE_PROVIDERS]
     if include_fake:
         live.append("fake")
+    text = " | ".join(live)
+    if not UNIMPLEMENTED_PROVIDERS:
+        # No trailing caveat at all: an empty `(: NOT yet implemented ...)` would disclaim
+        # nothing while reading as though something were broken.
+        return text
     tail = ", ".join(UNIMPLEMENTED_PROVIDERS)
-    return f"{' | '.join(live)}. ({tail}: NOT yet implemented and will fail the run.)"
+    return f"{text}. ({tail}: NOT yet implemented and will fail the run.)"
 
 
 def get_adapter(provider: str) -> ProviderAdapter:

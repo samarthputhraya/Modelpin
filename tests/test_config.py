@@ -17,7 +17,7 @@ def test_defaults_when_file_missing(tmp_path):
     assert isinstance(cfg, ModelpinConfig)
     assert cfg.runs == DEFAULT_RUNS == 5
     assert cfg.scenarios_dir == "scenarios"
-    # Zero-config must route to the implemented adapter, never the Anthropic stub.
+    # Zero-config routes to the provider `mp init` scaffolds and documents (OPENAI_API_KEY).
     assert cfg.providers == [DEFAULT_PROVIDER] == ["openai"]
 
 

@@ -4,6 +4,88 @@ All notable changes to Modelpin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Nothing yet.
+
+## [0.4.0] - 2026-09-15
+
+This release is about the first hour a new user spends with Modelpin: a config that works on
+the first try, a verdict that shows its evidence, a CI build that does not go red on a fluke,
+and Claude support.
+
+### Changed — how a build fails
+
+- **A regression must reproduce before `modelpin check` exits 1.** When a scenario looks like a
+  regression, Modelpin replays the candidate again and diffs the fresh runs on their own against
+  the same baseline. The build fails only if the same kind of change (tool calls, refusals, or
+  meaning) shows up again. A change that does not reproduce is reported as `changed_minor`,
+  with the first finding in full; one whose second sample recorded nothing exits 3. `[M]` On the
+  one tool-channel false alarm this project has recorded (MP-220), the fresh-sample check
+  withholds the alarm against all nine other same-model samples from the same run (an in-sample
+  check on the alarm this change was built against, not a rate). `[M]` Exact enumeration at
+  `runs: 5` (modelled: one optional call, binomial runs): a same-model alarm on an optional tool call made on half of runs
+  falls from 2.15% to 0.25% per scenario. The cost is recall on borderline changes: a tool call
+  dropping from 80% to 20% of runs is caught 22% of the time instead of 38%; complete changes
+  are caught as before. It does not fix an unusual baseline, which is recorded once and reused.
+  The pre-spend line states the extra calls. Disable with `--no-confirm`
+  (Action input `confirm: false`). The published false-positive measurements in
+  `docs/fp-measurement.md` describe the engine without this step and are unchanged.
+- **A judge or confirmation call that still fails after retries costs that scenario (exit 3),
+  not the whole run.** Before, one failed judge call discarded every paid replay.
+
+### Added
+
+- **Anthropic (Claude) provider and judge.** `providers: [anthropic]` with `ANTHROPIC_API_KEY`,
+  or Claude on Vertex AI with `ANTHROPIC_VERTEX_PROJECT_ID` and application-default credentials.
+  Multi-turn tool calls, refusal and stop-reason mapping, SDK retries. Newer Claude models accept
+  only default sampling, so a scenario's `temperature`/`top_p` is sent only to models that accept
+  it. `claude-*` judge ids route to Anthropic without `judge_provider:`. The adapter is verified
+  offline against the SDK's real request shapes; no live Claude run has been recorded yet.
+- **Example runs beside every flagged verdict**, on the console and in the PR comment: one
+  baseline run and one candidate run, so a reviewer can see what changed.
+- **`modelpin init` configures itself from your repository.** It reads the model your code calls
+  and the credentials you have set, and writes a matching `providers:` and a
+  `judge_model:` different from your current model. The starter scenario is now a sentiment classifier whose case-sensitive
+  assertion a model can actually meet; the old greeting starter's `must_contain: ["hello"]`
+  failed on most runs in a live Gemini check.
+- **`.modelpin/.gitignore`** is written the first time the store is created, so `git add` picks
+  up baselines and ignores per-run reports.
+- **New docs:** [How Modelpin works](https://github.com/samarthputhraya/modelpin/blob/main/docs/how-it-works.md)
+  and [Writing scenarios](https://github.com/samarthputhraya/modelpin/blob/main/docs/writing-scenarios.md).
+  The README is rewritten as a guide for a first-time user.
+
+### Fixed
+
+- **Google: a transient `429` or `5xx` no longer ends the run.** `google-genai` retries nothing
+  unless told to; `[M]` one shared-quota 429 on Vertex killed a whole `baseline`. Requests now
+  retry with backoff through the SDK. The SDK's "automatic function calling" warning no longer
+  prints into every run.
+- **Google: a namespaced call to a declared tool (`default_api.request_box`) is recorded under
+  its declared name (MP-237).** The prefix alone made one tool look like two.
+- **GitHub Action: `provider` no longer overrides `modelpin.yaml`.** It defaulted to `openai`
+  and was always passed, so a Gemini or Claude repo's CI replayed on OpenAI. It now defaults to
+  the config. The sticky comment lookup is paginated, and a comment that cannot be posted no
+  longer fails the job by itself.
+- **`--config` naming a file that does not exist is an error** (exit 4) instead of silently
+  running on defaults.
+- **Live calls work behind a TLS-inspecting corporate proxy on Windows and macOS**: Modelpin
+  trusts the operating system's certificate store (`truststore`, now in the `providers` extra).
+  Opt out with `MODELPIN_NO_TRUSTSTORE=1`.
+- **`modelpin scan`:**
+  - a path that does not exist is an error (exit 4), not "No model identifiers found"; a single
+    file can be scanned;
+  - `.tsx`, `.jsx`, `.mjs`, `.cjs`, Go, Ruby, Java, Kotlin, C#, PHP, Rust and Swift files are
+    read — a Next.js app's model calls were invisible;
+  - minified bundles and lockfiles are skipped, and bare `o1`/`o3`/`o4` count only in a model
+    context, so minifier variables are no longer reported as models;
+  - ids used as filenames (`gpt-4o-mini.csv`) and version wildcards (`gemini-3.x`) are dropped;
+  - Vertex (`claude-...@20251001`), Bedrock (`us.anthropic.claude-...`), vendor-prefixed and more
+    open-model ids are reported in full;
+  - only `.env.example`, `.env.sample` and `.env.template` are read; `.env` and `.env.local`
+    are no longer opened;
+  - the judge in Modelpin's own `modelpin.yaml` is not reported as an app dependency.
+
 ## [0.3.1] - 2026-09-12
 
 ### Security
@@ -1282,6 +1364,7 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...HEAD
 [0.3.1]: https://github.com/samarthputhraya/modelpin/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/samarthputhraya/modelpin/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...v0.2.1
