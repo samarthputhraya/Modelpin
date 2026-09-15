@@ -380,8 +380,10 @@ borderline change rather than raise a false alarm. Know the trade-offs:
   of error.
 - **It only measures your scenarios.** Behavior no scenario exercises is invisible. Coverage gaps
   are disclosed in every report.
-- **The judge is a model too.** Its sensitivity depends on the model you pick, and the project's
-  calibration so far used an OpenAI judge.
+- **The judge is a model too.** Its sensitivity depends on the model you pick. The project's
+  semantic threshold was calibrated with an OpenAI judge; re-scoring the published measurements
+  with a Gemini judge changed no alarm decision on 732 paired trials, but other judges are
+  unmeasured.
 - **It measures change, not quality.** It never says one model is better.
 
 The project publishes its own false-positive and detection measurements — how they were run,
