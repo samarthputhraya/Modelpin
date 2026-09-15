@@ -1236,14 +1236,34 @@ def baseline(
     console.print(f"[dim]provider={prov} model={_rich_escape(from_model)} runs={n} | {plan}[/]")
     _preflight_or_fail(adapter, prov)
 
+    failed: list[tuple[str, str]] = []
+
     def _record_all() -> dict[str, list[Trace]]:
         recorded: dict[str, list[Trace]] = {}
         for i, s in enumerate(scenarios, start=1):
             _progress(i, len(scenarios), s.id, prov)
-            recorded[s.id] = replay(s, from_model, adapter, runs=n)
+            try:
+                recorded[s.id] = replay(s, from_model, adapter, runs=n)
+            except ProviderError as exc:
+                # One scenario the provider rejects must not throw away every other paid
+                # recording -- the same rule `check` follows (MP-148). `[M] 2026-09-15` a
+                # Gemini safety block on one of 8 scenarios exited 4 and saved nothing.
+                console.print(
+                    f"[yellow]note:[/] scenario {_rich_escape(repr(s.id))} could not be "
+                    f"recorded: {_rich_escape(str(exc))}"
+                )
+                failed.append((s.id, str(exc)))
         return recorded
 
     traces = _guard_replay(prov, _record_all)
+    if not traces:
+        # Nothing recorded at all: almost always one cause for every scenario (a model id that
+        # does not exist, a rejected key), so it is the setup failure it looks like.
+        _fail(
+            f"no scenario could be recorded. First error: {failed[0][1]}"
+            if failed
+            else "no scenario could be recorded."
+        )
     # MP-197. A store that cannot be written is a setup failure, not a traceback. `_fail`
     # gives it the friendly message and EXIT_SETUP_FAILED (ADR-0035), which is right: nothing
     # was measured, so nothing is claimed.
@@ -1261,8 +1281,14 @@ def baseline(
         _fail(str(exc))
     console.print(
         f"[green]Baseline recorded[/] for [bold]{_rich_escape(from_model)}[/]: "
-        f"{len(scenarios)} scenario(s) x{n} runs -> {path}"
+        f"{len(traces)} scenario(s) x{n} runs -> {path}"
     )
+    if failed:
+        console.print(
+            f"[yellow]warning:[/] {len(failed)} scenario(s) were NOT recorded and have no "
+            f"baseline: {_rich_escape(', '.join(sid for sid, _ in failed))}. `modelpin check` "
+            "will skip them until a `modelpin baseline` records them."
+        )
 
     # MP-189. Recording used to be unconditionally green, which made two failure modes silent.
     # `[M] 2026-09-06` A side whose every run is degenerate exits 0 here, and the later `check`
@@ -1296,6 +1322,11 @@ def baseline(
             "output and tool-call arguments verbatim and is NOT git-ignored by default. "
             "Review both before committing, and rotate the credential if it is real."
         )
+
+    if failed:
+        # Exit 3, not 0: the store is usable but incomplete, and a CI step recording baselines
+        # must not read a partial recording as a clean one.
+        raise typer.Exit(code=EXIT_UNMEASURED)
 
 
 @app.command()

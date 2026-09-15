@@ -35,8 +35,15 @@ def replay(
     limit = DEFAULT_WORKERS if workers is None else workers
     if runs <= 1 or limit <= 1 or not getattr(adapter, "parallel_safe", False):
         return [adapter.run(scenario, model_id, run_idx=i) for i in range(runs)]
-    with ThreadPoolExecutor(max_workers=min(limit, runs)) as pool:
-        futures = [pool.submit(adapter.run, scenario, model_id, i) for i in range(runs)]
+    # The FIRST run goes alone. A request the provider rejects (a 400 on an unsupported
+    # parameter) then costs one call instead of five in flight. `[M] 2026-09-15` one live job
+    # also failed on its first scenario with a client-side pydantic `ValidationError` inside
+    # google-genai while five calls started at once; 60 further concurrent calls did not
+    # reproduce it. `[A]` a cold-start race in the SDK's request models, which one warm-up
+    # call would avoid -- falsified if the error recurs with this ordering in place.
+    first = adapter.run(scenario, model_id, run_idx=0)
+    with ThreadPoolExecutor(max_workers=min(limit, runs - 1)) as pool:
+        futures = [pool.submit(adapter.run, scenario, model_id, i) for i in range(1, runs)]
         # `.result()` in submission order: traces come back in run order, and the first error
         # (a provider rejection) propagates exactly as it did from the sequential loop.
-        return [f.result() for f in futures]
+        return [first, *(f.result() for f in futures)]

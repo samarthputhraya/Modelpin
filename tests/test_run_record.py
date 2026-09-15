@@ -53,3 +53,62 @@ def test_the_record_is_next_to_its_report_and_ignored_by_git(tmp_path, monkeypat
     (md,) = runs.glob("check-*.md")
     assert md.with_suffix(".json").is_file()
     assert "!baseline-*.json" in (runs.parent / ".gitignore").read_text(encoding="utf-8")
+
+
+def test_a_baseline_keeps_every_scenario_it_could_record(tmp_path, monkeypatch):
+    """One scenario the provider rejects no longer throws away the others (exit 3, not 4)."""
+    from modelpin import cli
+    from modelpin.models import Trace
+    from modelpin.providers.base import ProviderAdapter, ProviderError
+    from modelpin.storage import load_baseline
+
+    class _RejectsOne(ProviderAdapter):
+        def run(self, scenario, model_id, run_idx=0):
+            if scenario.id == "bad":
+                raise ProviderError("blocked by the provider")
+            return Trace(
+                scenario_id=scenario.id, model_id=model_id, run_idx=run_idx, final_output="ok"
+            )
+
+    scen = tmp_path / "scenarios"
+    scen.mkdir()
+    for sid in ("good", "bad"):
+        (scen / f"{sid}.json").write_text(
+            json.dumps(
+                {"id": sid, "name": sid, "input": {"messages": [{"role": "user", "content": sid}]}}
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(cli, "_adapter", lambda provider, fixtures: _RejectsOne())
+    result = runner.invoke(
+        app, ["baseline", "--model", "m", "--provider", "openai", "--scenarios-dir", str(scen),
+              "--store-dir", str(tmp_path / "store")],
+    )  # fmt: skip
+    assert result.exit_code == 3, result.output
+    assert set(load_baseline("m", tmp_path / "store")) == {"good"}
+    assert "NOT recorded" in " ".join(result.output.split())
+
+
+def test_a_baseline_that_records_nothing_is_a_setup_error(tmp_path, monkeypatch):
+    from modelpin import cli
+    from modelpin.providers.base import ProviderAdapter, ProviderError
+
+    class _RejectsAll(ProviderAdapter):
+        def run(self, scenario, model_id, run_idx=0):
+            raise ProviderError("model not found [404]")
+
+    scen = tmp_path / "scenarios"
+    scen.mkdir()
+    (scen / "s.json").write_text(
+        json.dumps(
+            {"id": "s", "name": "s", "input": {"messages": [{"role": "user", "content": "x"}]}}
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "_adapter", lambda provider, fixtures: _RejectsAll())
+    result = runner.invoke(
+        app, ["baseline", "--model", "m", "--provider", "openai", "--scenarios-dir", str(scen),
+              "--store-dir", str(tmp_path / "store")],
+    )  # fmt: skip
+    assert result.exit_code == 4, result.output
+    assert "404" in result.output

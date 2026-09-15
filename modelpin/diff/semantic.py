@@ -92,11 +92,13 @@ def _judge_each(jobs: list[tuple[str, list[str]]], judge: Judge, task: Optional[
     """
     if not getattr(judge, "parallel_safe", False) or len(jobs) <= 1:
         return [_equivalent_to_any(out, pool, judge, task) for out, pool in jobs]
-    with ThreadPoolExecutor(max_workers=min(JUDGE_WORKERS, len(jobs))) as executor:
+    # The first job alone, for the same reason `replay` sends its first run alone.
+    first = _equivalent_to_any(jobs[0][0], jobs[0][1], judge, task)
+    with ThreadPoolExecutor(max_workers=min(JUDGE_WORKERS, len(jobs) - 1)) as executor:
         futures = [
-            executor.submit(_equivalent_to_any, out, pool, judge, task) for out, pool in jobs
+            executor.submit(_equivalent_to_any, out, pool, judge, task) for out, pool in jobs[1:]
         ]
-        return [f.result() for f in futures]
+        return [first, *(f.result() for f in futures)]
 
 
 def semantic_divergence_flags(

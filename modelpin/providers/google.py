@@ -387,6 +387,14 @@ def _function_response_content(
     return {"role": "user", "parts": parts}
 
 
+def _prompt_blocked(response: Any) -> bool:
+    """True when Gemini returned no candidate because it blocked the prompt itself."""
+    if getattr(response, "candidates", None):
+        return False
+    feedback = getattr(response, "prompt_feedback", None)
+    return bool(feedback is not None and getattr(feedback, "block_reason", None))
+
+
 class GoogleAdapter(ProviderAdapter):
     name = "google"
     #: The SDK client is thread-safe, so `replay` may send a scenario's runs together.
@@ -412,7 +420,7 @@ class GoogleAdapter(ProviderAdapter):
             raise
         except Exception as exc:  # SDK/network error → friendly, key-safe ProviderError
             raise ProviderError(_explain_api_error(exc, model_id)) from exc
-        if not (getattr(response, "candidates", None) or []):
+        if not (getattr(response, "candidates", None) or []) and not _prompt_blocked(response):
             raise ProviderError(
                 f"Gemini returned no candidates for scenario {scenario_id!r} on {model_id!r}."
             )
@@ -440,6 +448,15 @@ class GoogleAdapter(ProviderAdapter):
 
         for _turn in range(MAX_TOOL_TURNS):
             response = self._generate(client, model_id, contents, config, scenario.id)
+            if _prompt_blocked(response):
+                # Gemini's safety filter declined the PROMPT: no candidate at all. That is a
+                # refusal -- the behavior the refusal channel exists to see -- not a failed
+                # call. `[M] 2026-09-15` gemini-3.8-flash blocked a voicerag-suite prompt on
+                # every run, and treating it as an error killed the whole `baseline`.
+                refused = True
+                incomplete = incomplete or IncompleteReason.content_filter
+                final_text = ""
+                break
             candidate = response.candidates[0]
             parts = _candidate_parts(candidate)
             final_text = _part_text(parts)
