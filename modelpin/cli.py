@@ -1206,6 +1206,79 @@ def init(
 
 
 @app.command()
+def draft(
+    source: str = typer.Argument(..., help="ONE source file of your app that builds its prompts."),
+    count: int = typer.Option(3, "--count", help="How many draft scenarios to write."),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="Model that writes the drafts (default: models[0] in config)."
+    ),
+    provider: Optional[str] = typer.Option(None, "--provider", help=provider_help(False)),
+    config_path: str = typer.Option("modelpin.yaml", "--config"),
+    scenarios_dir: Optional[str] = typer.Option(None, "--scenarios-dir"),
+) -> None:
+    """Draft scenarios from one file of your app, for you to review (one model call).
+
+    Drafts go to scenarios/.drafts/, which baseline and check ignore. The system prompt and
+    tools are kept only if they appear in the file; user messages are invented and marked so.
+    """
+    from modelpin.scenarios.draft import DRAFTS_DIRNAME, draft_scenarios
+
+    path = Path(source)
+    if not path.is_file():
+        _fail(f"file not found: {source}")
+    if count < 1:
+        _fail("--count must be at least 1.")
+    cfg = _load_config_or_fail(config_path)
+    model_id = model or (cfg.models[0] if cfg.models else None)
+    if not model_id:
+        _fail("no model to draft with. Pass --model or run `modelpin init` first.")
+    prov = _resolve_provider(provider, cfg)
+    if prov == "fake":
+        _fail("`draft` needs a live model; the offline `fake` provider cannot write scenarios.")
+    adapter = _adapter(prov, None)
+    target = Path(scenarios_dir or cfg.scenarios_dir)
+    size = path.stat().st_size
+    console.print(
+        f"[dim]sending {_rich_escape(str(path))} ({size:,} bytes) to "
+        f"{_rich_escape(model_id)} on {prov} -> 1 paid call. Key-shaped strings are redacted "
+        "first.[/]"
+    )
+    _preflight_or_fail(adapter, prov)
+    try:
+        result = draft_scenarios(path, target, adapter, model_id, count=count)
+    except (ProviderError, ValueError) as exc:
+        _fail(str(exc))
+    except NotImplementedError:
+        _fail(_unimplemented_msg(prov))
+    if result.redacted_secrets:
+        console.print(
+            "[yellow]note:[/] the file contained key-shaped strings; they were replaced with "
+            "[redacted] before sending. Rotate any real credential kept in source code."
+        )
+    if result.dropped_system_prompt:
+        console.print(
+            "[yellow]note:[/] the model's system prompt did not appear in the file word for "
+            "word, so it was left out. Paste your real system prompt into each draft."
+        )
+    if result.dropped_tools:
+        console.print(
+            f"[yellow]note:[/] tools not found in the file were left out: "
+            f"{_rich_escape(', '.join(result.dropped_tools))}."
+        )
+    if not result.written:
+        _fail("the model returned no usable scenarios. Nothing was written; try again.")
+    console.print(f"[green]Drafted {len(result.written)} scenario(s)[/] (not used yet):")
+    for p in result.written:
+        console.print(f"  - {_rich_escape(str(p))}")
+    console.print(
+        f"\nReview each one: replace the invented user message with a real request, add "
+        f"`tool_results` and `assertions` you expect, then move it from "
+        f"{_rich_escape(str(target / DRAFTS_DIRNAME))} into {_rich_escape(str(target))}. "
+        "Only then does `modelpin baseline` use it."
+    )
+
+
+@app.command()
 def baseline(
     model: Optional[str] = typer.Option(
         None, "--model", help="Model to baseline (default: config)."
