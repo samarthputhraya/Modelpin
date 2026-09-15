@@ -186,7 +186,14 @@ def _explain_api_error(
     if code == 404:
         return f"{base}: model not found — check the id [{name} 404]."
     if code == 429:
-        return f"{base}: rate limit or quota exceeded [{name} 429]."
+        # Retries were already spent by the SDK (`RETRY_OPTIONS`), so say so: `[M] 2026-09-15` a
+        # heavily loaded Vertex project exhausted all of them, and the bare "rate limit" line
+        # read as if nothing had been tried.
+        return (
+            f"{base}: rate limit or quota exceeded, and it did not clear after "
+            f"{RETRY_OPTIONS['attempts'] - 1} automatic retries with backoff -- wait and re-run, "
+            f"lower --runs, or raise the model's quota [{name} 429]."
+        )
     detail = elide(scrub_secrets(str(getattr(exc, "message", None) or exc)))
     suffix = f" {code}" if code else ""
     return f"{base} [{name}{suffix}: {detail}]."
