@@ -301,6 +301,18 @@ def _guard_replay(provider: str, fn):
         _fail(str(exc))
 
 
+def _progress(done: int, total: int, scenario_id: str, provider: str) -> None:
+    """One dim line as each scenario starts on a live run.
+
+    `[M] 2026-09-15` a 12-scenario live `baseline` on Gemini printed its plan line and then
+    nothing for several minutes: indistinguishable from a hang to someone watching it, and in
+    CI a silent step. The offline `fake` provider finishes instantly, so it stays quiet.
+    """
+    if provider == "fake":
+        return
+    console.print(f"[dim]  {done}/{total} {_rich_escape(scenario_id)}[/]")
+
+
 def _replay_plan(
     count: int,
     src_dir: str,
@@ -1223,9 +1235,15 @@ def baseline(
     plan = _replay_plan(len(scenarios), src_dir, n, prov, judge_model=None)
     console.print(f"[dim]provider={prov} model={_rich_escape(from_model)} runs={n} | {plan}[/]")
     _preflight_or_fail(adapter, prov)
-    traces = _guard_replay(
-        prov, lambda: {s.id: replay(s, from_model, adapter, runs=n) for s in scenarios}
-    )
+
+    def _record_all() -> dict[str, list[Trace]]:
+        recorded: dict[str, list[Trace]] = {}
+        for i, s in enumerate(scenarios, start=1):
+            _progress(i, len(scenarios), s.id, prov)
+            recorded[s.id] = replay(s, from_model, adapter, runs=n)
+        return recorded
+
+    traces = _guard_replay(prov, _record_all)
     # MP-197. A store that cannot be written is a setup failure, not a traceback. `_fail`
     # gives it the friendly message and EXIT_SETUP_FAILED (ADR-0035), which is right: nothing
     # was measured, so nothing is claimed.
@@ -1471,7 +1489,8 @@ def check(
     _unverified_ids = set(_unverified)
 
     def _run_check() -> None:
-        for s in scenarios:
+        for _i, s in enumerate(scenarios, start=1):
+            _progress(_i, len(scenarios), s.id, prov)
             if s.id in _stale_ids or s.id in _unverified_ids:
                 # The store holds traces recorded against a DIFFERENT definition of this
                 # scenario. Comparing them measures the edit, not the model, and it does so
