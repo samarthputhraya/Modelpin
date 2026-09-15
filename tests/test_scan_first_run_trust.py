@@ -49,7 +49,7 @@ def test_a_missing_path_fails_naming_the_path(tmp_path: Path) -> None:
     result = runner.invoke(app, ["scan", str(missing)])
     out = _flat(result.output)
     assert result.exit_code == EXIT_SETUP_FAILED, out
-    assert "does-not-exist-dir" in out, out
+    assert "does-not-exist-dir" in "".join(result.output.split()), out  # rich wraps long paths
     assert (
         "No model identifiers found" not in out
     ), f"a typo'd path must not read like a clean repo.\n\n{out}"
