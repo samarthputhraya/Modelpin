@@ -412,6 +412,8 @@ def _incomplete_reason(stop_reason: str | None) -> IncompleteReason | None:
 
 class AnthropicAdapter(ProviderAdapter):
     name = "anthropic"
+    #: The SDK client is thread-safe, so `replay` may send a scenario's runs together.
+    parallel_safe = True
 
     def __init__(self, client: Any | None = None, label: str = "Anthropic") -> None:
         # An injected client makes the adapter unit-testable with no network or credentials.

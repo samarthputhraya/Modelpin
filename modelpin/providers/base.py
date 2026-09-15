@@ -18,6 +18,9 @@ class ProviderError(Exception):
 
 class ProviderAdapter(ABC):
     name: str = "base"
+    #: Whether `run` may be called from several threads at once. Off by default: an adapter
+    #: that keeps per-call state (the offline fake, a scripted test double) must opt in.
+    parallel_safe: bool = False
 
     def preflight(self) -> None:
         """Cheap, no-network readiness check (key present, SDK importable).

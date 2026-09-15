@@ -332,6 +332,8 @@ def build_openai_client(
 
 class OpenAIAdapter(ProviderAdapter):
     name = "openai"
+    #: The SDK client is thread-safe, so `replay` may send a scenario's runs together.
+    parallel_safe = True
 
     def __init__(
         self,

@@ -389,6 +389,8 @@ def _function_response_content(
 
 class GoogleAdapter(ProviderAdapter):
     name = "google"
+    #: The SDK client is thread-safe, so `replay` may send a scenario's runs together.
+    parallel_safe = True
 
     def __init__(self, client: Any | None = None) -> None:
         self._client = client
