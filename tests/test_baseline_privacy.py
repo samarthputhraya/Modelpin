@@ -117,7 +117,11 @@ def test_nothing_the_diff_reads_is_the_transcript() -> None:
     readers = []
     for path in [*sorted((root / "diff").rglob("*.py")), root / "judge.py"]:
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if ".messages" in line and not line.lstrip().startswith("#"):
+            # `client.messages.create(` is the Anthropic SDK's Messages RESOURCE (the Claude
+            # judge's API call), not `Trace.messages`. Only that exact call shape is exempt; any
+            # other `.messages` on the same line still counts.
+            code = line.replace("client.messages.create(", "client.<sdk-resource>.create(")
+            if ".messages" in code and not line.lstrip().startswith("#"):
                 readers.append(f"{path.relative_to(root.parent)}:{i}: {line.strip()}")
     assert not readers, (
         "code that decides a verdict now reads Trace.messages -- the premise of ADR-0043 no "

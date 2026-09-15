@@ -13,7 +13,7 @@ import pytest
 
 from modelpin.models import Scenario
 from modelpin.providers import ProviderError, get_adapter
-from modelpin.providers.google import GoogleAdapter
+from modelpin.providers.google import _HTTP_OPTIONS, GoogleAdapter
 
 # --- fakes mirroring the google-genai response shape ------------------------------
 
@@ -279,7 +279,9 @@ def test_the_api_key_path_is_still_the_default(spy_genai, monkeypatch):
     from modelpin.providers.google import build_google_client
 
     build_google_client()
-    assert spy_genai.calls == [{"api_key": "AIzaTESTKEY", "vertexai": False}], spy_genai.calls
+    assert spy_genai.calls == [
+        {"api_key": "AIzaTESTKEY", "vertexai": False, "http_options": _HTTP_OPTIONS}
+    ], spy_genai.calls
 
 
 def test_vertex_is_selected_by_the_sdks_own_env_var(spy_genai, monkeypatch):
@@ -291,7 +293,12 @@ def test_vertex_is_selected_by_the_sdks_own_env_var(spy_genai, monkeypatch):
 
     build_google_client()
     assert spy_genai.calls == [
-        {"vertexai": True, "project": "proj-123", "location": "global"}
+        {
+            "vertexai": True,
+            "project": "proj-123",
+            "location": "global",
+            "http_options": _HTTP_OPTIONS,
+        }
     ], spy_genai.calls
 
 
@@ -329,7 +336,9 @@ def test_a_falsey_switch_leaves_the_api_key_path_alone(spy_genai, monkeypatch, v
     from modelpin.providers.google import build_google_client
 
     build_google_client()
-    assert spy_genai.calls == [{"api_key": "AIzaTESTKEY", "vertexai": False}], (
+    assert spy_genai.calls == [
+        {"api_key": "AIzaTESTKEY", "vertexai": False, "http_options": _HTTP_OPTIONS}
+    ], (
         value,
         spy_genai.calls,
     )
@@ -471,3 +480,48 @@ def test_the_api_key_path_pins_the_backend_against_the_sdks_own_env_reading(spy_
     assert (
         spy_genai.calls[0].get("vertexai") is False
     ), f"the API-key path left the backend for the SDK to re-decide: {spy_genai.calls}"
+
+
+# --- MP-237: the SDK's synthetic namespace on a declared tool name ---------------------
+
+
+@pytest.mark.parametrize("sent", ["default_api.request_box", "default_api_request_box"])
+def test_a_namespaced_call_to_a_declared_tool_is_recorded_under_its_declared_name(sent):
+    """`[M] 2026-09-09` gemini-2.5-flash-lite sent these for a tool declared `request_box`.
+    Recorded raw, one tool looked like two to the trajectory channel."""
+    turn1 = _response([_fn_part(sent, {"size": "M"})])
+    final = _response([_text_part("Box requested.")])
+    client = FakeClient([turn1, final])
+    scenario = _scenario(tools=["request_box"], tool_results={"request_box": {"ok": True}})
+    trace = GoogleAdapter(client=client).run(scenario, "gemini-2.5-flash-lite")
+
+    assert [tc.name for tc in trace.tool_calls] == ["request_box"]
+    response_turn = client.last_kwargs["contents"][-1]
+    fr = response_turn["parts"][0]["function_response"]
+    assert fr["name"] == sent, "the reply must answer the name the model actually sent"
+    assert fr["response"] == {"ok": True}, "the canned result is found under the declared name"
+
+
+def test_an_undeclared_tool_is_recorded_as_sent():
+    """A model calling a tool it was never given (the built-in `run_code`) is real behavior."""
+    turn1 = _response([_fn_part("run_code", {})])
+    final = _response([_text_part("done")])
+    trace = GoogleAdapter(client=FakeClient([turn1, final])).run(
+        _scenario(tools=["request_box"]), "gemini-2.5-flash-lite"
+    )
+    assert [tc.name for tc in trace.tool_calls] == ["run_code"]
+
+
+def test_a_prefix_that_does_not_name_a_declared_tool_is_left_alone():
+    turn1 = _response([_fn_part("default_api.something_else", {})])
+    final = _response([_text_part("done")])
+    trace = GoogleAdapter(client=FakeClient([turn1, final])).run(
+        _scenario(tools=["request_box"]), "gemini-2.5-flash-lite"
+    )
+    assert [tc.name for tc in trace.tool_calls] == ["default_api.something_else"]
+
+
+def test_automatic_function_calling_is_disabled_on_every_request():
+    client = FakeClient(_response([_text_part("ok")]))
+    GoogleAdapter(client=client).run(_scenario(), "gemini-2.5-flash")
+    assert client.last_kwargs["config"]["automatic_function_calling"] == {"disable": True}

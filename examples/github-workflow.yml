@@ -19,9 +19,11 @@
 # a scheduled run spends real API calls on your key every week. See COST below.
 #
 # Cost, before you enable the schedule:
-#   calls ~= scenarios x runs x 2 models x (1 + avg_tool_turns), plus up to one judge call per
-#   scenario per side. An 8-scenario suite at runs: 5 is ~80 completions per run before tool
-#   turns. `mp check` prints the bound before it spends. Weekly x 52 is the number to price.
+#   calls ~= scenarios x runs x (1 + avg_tool_turns) on the CANDIDATE only (the baseline is read
+#   from the committed file), plus judge calls if `judge_model` is set, plus one more set of runs
+#   for any scenario flagged as a regression. An 8-scenario suite at runs: 5 is ~40 completions
+#   per run before tool turns. `modelpin check` prints the bound before it spends. Weekly x 52
+#   is the number to price.
 #
 # THREE GITHUB BEHAVIOURS THAT WILL BITE YOU, none of them ours:
 #   1. `schedule` fires ONLY on your default branch. It does nothing on a feature branch, so
@@ -31,9 +33,10 @@
 #      safety net switches itself off precisely when you have stopped looking. Re-enable it
 #      from the Actions tab, and do not treat "no red runs" as "no drift" without checking
 #      the workflow is still enabled.
-#   3. The scheduled run needs your `from` model still reachable on your key. When the provider
-#      RETIRES it, the job goes red because the baseline model is gone, not because behaviour
-#      changed. Read the error before you read the verdict.
+#   3. If you set `baseline: "true"`, the run records a fresh baseline and so needs your `from`
+#      model still reachable on your key. When the provider RETIRES it, the job goes red because
+#      the baseline model is gone, not because behaviour changed. A committed baseline avoids
+#      this: `check` reads it from disk.
 
 name: Modelpin
 
@@ -59,13 +62,11 @@ jobs:
       - name: Modelpin check
         uses: samarthputhraya/modelpin@v1     # pin to a release tag
         with:
-          from: gpt-4o-mini             # the model you depend on today (committed baseline)
-          to: gpt-5.5                    # the new model to test before adopting
-          provider: openai
-          runs: "5"
+          to: gpt-4.1-mini               # the new model to test before adopting
+          # from, provider and runs default to modelpin.yaml
         env:
-          # BYO-key from repo secrets — never inline a key.
+          # BYO-key from repo secrets — never inline a key. Use the one(s) your providers need:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # If modelpin.yaml sets a judge_model on another provider, add its key too, e.g.:
+          # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}

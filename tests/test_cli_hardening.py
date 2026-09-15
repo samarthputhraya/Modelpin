@@ -209,7 +209,9 @@ def test_check_warns_about_skipped_scenarios(tmp_path):
     assert "greet_alpha" not in note
 
 
-def test_init_scaffolds_openai_not_anthropic_stub(tmp_path):
+def test_init_scaffolds_openai_as_the_documented_default(tmp_path):
+    # The scaffold names ONE provider and its key; it must match DEFAULT_PROVIDER rather than
+    # drift to another vendor's account now that more than one adapter runs.
     runner.invoke(app, ["init", str(tmp_path)])
     cfg = (tmp_path / "modelpin.yaml").read_text()
     assert "openai" in cfg

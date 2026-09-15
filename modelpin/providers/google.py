@@ -45,6 +45,26 @@ def _import_genai() -> Any:
     return genai
 
 
+#: Transient-failure retries for every Gemini request, run by the SDK's own retry loop.
+#:
+#: `[M] 2026-09-15` live on Vertex: `google-genai` 2.19.0 builds its retry policy from
+#: `http_options.retry_options`, and when that is absent it uses `stop_after_attempt(1)` --
+#: NO retry at all (`_api_client.py::retry_args`). One transient `429 RESOURCE_EXHAUSTED`
+#: from Vertex's shared quota therefore killed `modelpin baseline` (10 replays, exit 4) and
+#: `modelpin check` after every candidate call had already been paid for. The same commands
+#: re-run a minute later succeeded. The OpenAI adapter already gets this from its SDK
+#: (`REPLAY_MAX_RETRIES`); this puts the Google path on equal footing.
+#:
+#: Retrying cannot bias a measurement: the SDK retries only requests that returned an error
+#: status (408, 429, 5xx) or a transport failure, so no model output is ever discarded and
+#: re-rolled. Worst case is roughly 2+4+8+16+32+60+60 s of backoff on one call before the
+#: error surfaces, which is the right trade against losing a whole paid run.
+RETRY_OPTIONS: dict[str, Any] = {"attempts": 8, "initial_delay": 2.0, "max_delay": 60.0}
+_HTTP_OPTIONS: dict[str, Any] = {"retry_options": RETRY_OPTIONS}
+#: Sent in every request config; see `_build_config`.
+AFC_DISABLED: dict[str, bool] = {"disable": True}
+
+
 def _truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
@@ -122,7 +142,9 @@ def build_google_client(api_key_envs: tuple[str, ...] = _API_KEY_ENVS) -> Any:
             # mid-replay with a raw `DefaultCredentialsError` - after the user has been told
             # what the run will cost.
             google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-            return genai.Client(vertexai=True, project=project, location=location)
+            return genai.Client(
+                vertexai=True, project=project, location=location, http_options=_HTTP_OPTIONS
+            )
         except Exception as exc:  # noqa: BLE001 - SDK raises several unrelated types here
             raise ProviderError(
                 f"Could not build a Vertex client for project {scrub_secrets(project)!r} in "
@@ -142,7 +164,7 @@ def build_google_client(api_key_envs: tuple[str, ...] = _API_KEY_ENVS) -> Any:
     # `vertexai=False` is NOT redundant. [M] Left unpinned, the SDK re-reads the environment and
     # silently builds a VERTEX client here when GOOGLE_GENAI_USE_ENTERPRISE is set - posting this
     # AI Studio key to aiplatform.googleapis.com. Pin the backend the branch decided on.
-    return genai.Client(api_key=api_key, vertexai=False)
+    return genai.Client(api_key=api_key, vertexai=False, http_options=_HTTP_OPTIONS)
 
 
 def _explain_api_error(
@@ -211,7 +233,12 @@ def _to_tools(raw: Any) -> list[dict[str, Any]] | None:
 def _build_config(
     system_instruction: str | None, tools: list[dict[str, Any]] | None, gen: dict
 ) -> dict[str, Any]:
-    config: dict[str, Any] = {}
+    # Modelpin drives the tool loop itself with the scenario's canned results, so the SDK's
+    # automatic function calling is never what we replay. It must be disabled EXPLICITLY, and on
+    # every request: `[M] 2026-09-15` google-genai 2.19.0 treats an unset flag as "enabled" even
+    # when no tools are sent, and logs "Direct use of automatic function calling (AFC) ... is
+    # not recommended" onto the user's console in the middle of every live run.
+    config: dict[str, Any] = {"automatic_function_calling": AFC_DISABLED}
     if system_instruction:
         config["system_instruction"] = system_instruction
     if tools:
@@ -233,15 +260,51 @@ def _candidate_parts(candidate: Any) -> list[Any]:
     return getattr(content, "parts", None) or []
 
 
-def _parse_function_calls(parts: list[Any]) -> list[ToolCall]:
-    calls: list[ToolCall] = []
+#: Namespaces Gemini sometimes prepends to a DECLARED function's name.
+#:
+#: `[M] 2026-09-09` `gemini-2.5-flash-lite` called `default_api.request_box` and
+#: `default_api_charge_customer` for tools declared as `request_box` / `charge_customer`, in 13
+#: of 540 runs (MP-237). The trajectory channel keys on the name, so the prefix alone made one
+#: tool look like two, and 4 prefixed runs of 5 is enough to publish a hard regression on a
+#: same-model null. The prefix is stripped only when what remains is a tool the scenario
+#: declared; any other undeclared name (e.g. the built-in `run_code`) is recorded as-is,
+#: because a model calling a tool it was never given IS behavior worth seeing.
+_SDK_NAMESPACE_PREFIXES: tuple[str, ...] = ("default_api.", "default_api_")
+
+
+def _declared_name(raw: str, declared: frozenset[str]) -> str:
+    if raw in declared:
+        return raw
+    for prefix in _SDK_NAMESPACE_PREFIXES:
+        if raw.startswith(prefix) and raw[len(prefix) :] in declared:
+            return raw[len(prefix) :]
+    return raw
+
+
+def _declared_tool_names(tools: list[dict[str, Any]] | None) -> frozenset[str]:
+    return frozenset(
+        str(d.get("name"))
+        for group in tools or []
+        for d in group.get("function_declarations", [])
+        if isinstance(d, dict) and d.get("name")
+    )
+
+
+def _parse_function_calls(
+    parts: list[Any], declared: frozenset[str] = frozenset()
+) -> list[tuple[str, ToolCall]]:
+    """Each function call as (the name the model sent, the call as recorded)."""
+    calls: list[tuple[str, ToolCall]] = []
     for part in parts:
         fc = getattr(part, "function_call", None)
         name = getattr(fc, "name", None)
         if not name:
             continue
         args = getattr(fc, "args", None)
-        calls.append(ToolCall(name=name, arguments=args if isinstance(args, dict) else {}))
+        recorded = ToolCall(
+            name=_declared_name(name, declared), arguments=args if isinstance(args, dict) else {}
+        )
+        calls.append((name, recorded))
     return calls
 
 
@@ -313,13 +376,14 @@ def _model_turn_content(parts: list[Any], text: str) -> dict[str, Any]:
 
 
 def _function_response_content(
-    calls: list[ToolCall], tool_results: dict[str, Any]
+    calls: list[tuple[str, ToolCall]], tool_results: dict[str, Any]
 ) -> dict[str, Any]:
     parts = []
-    for call in calls:
+    for sent_name, call in calls:
         result = tool_results.get(call.name, _DEFAULT_TOOL_RESULT)
         response = result if isinstance(result, dict) else {"result": result}
-        parts.append({"function_response": {"name": call.name, "response": response}})
+        # Answered under the name the model SENT, so the conversation stays well-formed.
+        parts.append({"function_response": {"name": sent_name, "response": response}})
     return {"role": "user", "parts": parts}
 
 
@@ -355,6 +419,7 @@ class GoogleAdapter(ProviderAdapter):
     def run(self, scenario: Scenario, model_id: str, run_idx: int = 0) -> Trace:
         system_instruction, contents = _to_contents(list(scenario.input.get("messages", [])))
         tools = _to_tools(scenario.input.get("tools"))
+        declared = _declared_tool_names(tools)
         gen = {
             k: scenario.input[k]
             for k in ("temperature", "top_p", "max_tokens", "max_output_tokens", "seed")
@@ -376,8 +441,8 @@ class GoogleAdapter(ProviderAdapter):
             candidate = response.candidates[0]
             parts = _candidate_parts(candidate)
             final_text = _part_text(parts)
-            turn_calls = _parse_function_calls(parts)
-            all_tool_calls.extend(turn_calls)
+            turn_calls = _parse_function_calls(parts, declared)
+            all_tool_calls.extend(call for _, call in turn_calls)
             refused = refused or _detect_refusal(
                 candidate, getattr(response, "prompt_feedback", None), final_text
             )

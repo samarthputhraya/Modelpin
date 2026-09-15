@@ -47,6 +47,32 @@ def baseline_path(model_id: str, store_dir: str | Path = STORE_DIRNAME) -> Path:
 FINGERPRINTS_KEY = "fingerprints"
 
 
+#: Written into the store the first time Modelpin creates it. Only baselines are meant to be
+#: committed (so CI can check a candidate without calling the old model); reports and run
+#: archives are per-run output. `actions/README.md` used to ask every user to add these rules
+#: by hand, and a user who skipped that step committed `last-report.md` and `runs/` on the
+#: next `git add .`.
+STORE_GITIGNORE = (
+    "# Written by Modelpin: commit baselines, ignore per-run output.\n"
+    "*\n"
+    "!.gitignore\n"
+    "!baseline-*.json\n"
+)
+
+
+def ensure_store(store_dir: str | Path) -> Path:
+    """Create the store directory if needed, with its `.gitignore`. Never overwrites one."""
+    store = Path(store_dir)
+    store.mkdir(parents=True, exist_ok=True)
+    ignore = store / ".gitignore"
+    if not ignore.exists():
+        try:
+            ignore.write_text(STORE_GITIGNORE, encoding="utf-8")
+        except OSError:
+            pass  # a read-only store is reported by the write that actually needs it
+    return store
+
+
 def save_baseline(
     traces_by_scenario: dict[str, list[Trace]],
     model_id: str,
@@ -64,7 +90,10 @@ def save_baseline(
     a half-written baseline that would later fail to parse.
     """
     path = baseline_path(model_id, store_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        ensure_store(path.parent)
+    except OSError:
+        pass  # the atomic write below reports an unwritable store with a friendly error
     payload = {
         "model_id": model_id,
         # `messages` is deliberately NOT persisted -- see ADR-0043. This is the file our docs

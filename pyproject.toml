@@ -1,6 +1,6 @@
 [project]
 name = "modelpin"
-version = "0.3.1"
+version = "0.4.0"
 description = "Dependabot for AI models — catch model-migration regressions before they hit production."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,7 +28,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-providers = ["openai>=1.40", "google-genai>=1.0", "anthropic>=0.34"]
+providers = [
+  "openai>=1.40",
+  "google-genai>=1.0",
+  "anthropic[vertex]>=1.0",
+  # Lets the SDKs trust a corporate proxy's root certificate on Windows/macOS (cli.py).
+  "truststore>=0.9",
+]
 # setuptools is NOT redundant with [build-system].requires: that only populates the
 # isolated BUILD env. tests/test_packaging_contents.py shells out to the setuptools
 # backend at TEST time, and Python 3.12+ venvs no longer bundle it -- without this, a

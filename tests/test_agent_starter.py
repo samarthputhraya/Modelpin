@@ -80,7 +80,7 @@ def test_init_scaffolds_no_agent_example_by_default(tmp_path):
     result = _init(tmp_path)
     assert result.exit_code == 0, result.output
     scenarios = sorted(p.name for p in (tmp_path / "scenarios").glob("*.json"))
-    assert scenarios == ["greeting.json"], (
+    assert scenarios == ["sentiment.json"], (
         f"`modelpin init` scaffolded {scenarios}. The agent example costs up to "
         f"{MAX_TOOL_TURNS} model calls per replay and belongs behind --agent-example; if "
         "this default is being changed on purpose, change this test and say why."
@@ -220,7 +220,7 @@ def test_the_notes_are_written_and_are_inert_to_the_loader(tmp_path):
     assert notes.is_file()
     assert "tool_results" in notes.read_text(encoding="utf-8")
     assert {s.id for s in load_scenarios(tmp_path / "scenarios")} == {
-        "greeting",
+        "sentiment",
         AGENT_STARTER_ID,
     }
 

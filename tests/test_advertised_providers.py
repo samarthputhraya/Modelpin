@@ -14,6 +14,11 @@ claim that "the CLI itself is honest" was true of the RUNTIME path (`_preflight_
 The durable fix is one source of truth (`provider_help()`), and these tests tie the text to
 the CODE rather than to a reviewer noticing. They are also SYMMETRIC: the day the Anthropic
 adapter lands, the stale caveat fails the build instead of quietly outliving the stub.
+
+That day came: the adapter runs (API key or Vertex AI), `UNIMPLEMENTED_PROVIDERS` is empty, and
+the tests below now hold the other half of the promise -- a working provider is advertised
+WITHOUT a caveat, everywhere the list is shown. Each test stays written against the list rather
+than against `anthropic`, so the next provider named before it runs is caught the same way.
 """
 
 from __future__ import annotations
@@ -58,14 +63,26 @@ def test_the_help_string_marks_every_stub():
     text = provider_help()
     for name in UNIMPLEMENTED_PROVIDERS:
         assert name in text, f"{name} is not even mentioned; a typo would say 'unknown'"
-    assert "NOT yet implemented" in text
+    assert ("NOT yet implemented" in text) == bool(UNIMPLEMENTED_PROVIDERS), text
 
 
 def test_the_help_string_does_not_mark_a_working_provider():
     """Symmetry. A caveat that outlives the defect is its own false claim."""
-    marker_tail = provider_help().split("(", 1)[1]
-    for name in ("openai", "google", *OPENAI_COMPATIBLE_PROVIDERS):
+    text = provider_help()
+    marker_tail = text.split("(", 1)[1] if "(" in text else ""
+    working = [name for name in ADVERTISABLE if name not in UNIMPLEMENTED_PROVIDERS]
+    for name in working:
+        assert name in text, f"{name} works, but the help text does not offer it"
         assert name not in marker_tail, f"{name} works, but the help text disclaims it"
+
+
+def test_anthropic_is_advertised_as_a_working_provider():
+    """The adapter shipped. `[M] 2026-09-15` before this change `provider_help()` ended in
+    `(anthropic: NOT yet implemented and will fail the run.)` -- true then, false now."""
+    assert "anthropic" not in UNIMPLEMENTED_PROVIDERS
+    assert not _is_stub("anthropic")
+    assert "anthropic" in provider_help()
+    assert "NOT yet implemented" not in provider_help()
 
 
 def test_the_unknown_provider_error_uses_the_same_marked_list():
@@ -75,7 +92,7 @@ def test_the_unknown_provider_error_uses_the_same_marked_list():
         get_adapter("gpt5")
     message = str(exc.value)
     assert "anthropic" in message
-    assert "NOT yet implemented" in message
+    assert ("NOT yet implemented" in message) == bool(UNIMPLEMENTED_PROVIDERS), message
     # `[M]` first-run review, 2026-08-31: this read `... run.))`. `provider_help()` ends in
     # its own parenthetical, and the caller wrapped it in another. A message a confused user
     # is reading is the worst place for a stray bracket.
@@ -100,6 +117,17 @@ def test_the_action_input_marks_every_stub():
                 f"action.yml advertises {name!r} with no marker; "
                 "following the documentation would reach a crash"
             )
+
+
+def test_the_action_input_offers_every_working_provider_without_a_caveat():
+    """Symmetry for `action.yml`: the stale `anthropic ... NOT yet implemented` caveat is the
+    one a CI user would copy from, so it must not outlive the stub there either."""
+    description = _action_provider_description()
+    for name in ADVERTISABLE:
+        if name not in UNIMPLEMENTED_PROVIDERS:
+            assert name in description, f"action.yml does not offer working provider {name!r}"
+    if not UNIMPLEMENTED_PROVIDERS:
+        assert "NOT yet implemented" not in description, description
 
 
 def test_the_readme_provider_table_marks_every_stub():
