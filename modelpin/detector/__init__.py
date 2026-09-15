@@ -156,7 +156,15 @@ _URL_ON_LINE = re.compile(r"(?:https?://|www\.)\S+", re.I)
 
 
 #: Where a model id is WIRED UP: source and configuration the program actually reads.
-CODE_EXTS = {".py", ".yaml", ".yml", ".json", ".toml", ".js", ".ts"}
+#: `[M] 2026-09-15` only `.js`/`.ts` covered the JavaScript family, so a Next.js or React app --
+#: whose model calls live in `.tsx`/`.jsx`/`.mjs` -- scanned as having no models at all. The
+#: other server languages are here for the same reason: a model id in a Go or Java service is
+#: exactly as wired-up as one in Python.
+CODE_EXTS = {
+    ".py", ".yaml", ".yml", ".json", ".toml",
+    ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs", ".mts", ".cts",
+    ".go", ".rb", ".java", ".kt", ".cs", ".php", ".rs", ".swift",
+}  # fmt: skip
 
 #: The only `.env*` files `scan` opens. `[M] 2026-09-15` it opened every name starting with
 #: `.env` -- `.env`, `.env.local`, `.env.production` -- which is where live API keys live. A
@@ -225,6 +233,20 @@ _COMMENT_TOKEN = {
     ".env": "#",
     ".js": "//",
     ".ts": "//",
+    ".jsx": "//",
+    ".tsx": "//",
+    ".mjs": "//",
+    ".cjs": "//",
+    ".mts": "//",
+    ".cts": "//",
+    ".go": "//",
+    ".java": "//",
+    ".kt": "//",
+    ".cs": "//",
+    ".rs": "//",
+    ".swift": "//",
+    ".php": "//",
+    ".rb": "#",
 }
 
 #: Modelpin's own config, under both spellings YAML permits. Bound to the constant rather
@@ -482,6 +504,11 @@ def scan_repo(
         token = _COMMENT_TOKEN.get(suffix)
         own_config = f.name.lower() in _OWN_CONFIG_NAMES
         for i, line in enumerate(text.splitlines(), start=1):
+            # The judge is Modelpin's own tooling, not a model the app calls. `modelpin init`
+            # writes an independent judge, so counting it would make the scaffold add a model
+            # to "what does this repo use?" that the app never touches.
+            if own_config and line.lstrip().startswith("judge_model:"):
+                continue
             # A documentation file is commentary end to end, so the cut is 0. A format with
             # no line comment (`.json`) has no cut at all.
             cut = 0 if suffix in DOC_EXTS else (_comment_cut(line, token) if token else len(line))
