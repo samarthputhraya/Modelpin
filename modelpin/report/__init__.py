@@ -16,6 +16,7 @@ from rich.markup import escape
 
 from modelpin.config import DEFAULT_RUNS
 from modelpin.models import DiffResult, DiffVerdict
+from modelpin.report.evidence import Example
 
 #: The run count the persisted artifact tells a reader to re-run at. [M] MP-117: the CLI's
 #: pre-spend warning said `Use --runs 5` while `last-report.md` -- the file `action.yml` posts,
@@ -105,6 +106,27 @@ def _md_code(text: Any, *, table: bool = False) -> str:
     fence = "`" * (longest + 1)
     pad = " " if (not s or s.startswith("`") or s.endswith("`")) else ""
     return f"{fence}{pad}{s}{pad}{fence}"
+
+
+def _md_examples(
+    examples: Optional[Mapping[str, tuple[Example, Example]]], scenario_id: str
+) -> list[str]:
+    """A collapsed baseline-vs-candidate example under a flagged verdict.
+
+    Model output is untrusted text in a comment we post, so each side is a complete code span
+    (`_md_code`), inside which nothing renders as a link, image or HTML (MP-239).
+    """
+    pair = (examples or {}).get(scenario_id)
+    if not pair:
+        return []
+    return [
+        "<details><summary>example runs</summary>",
+        "",
+        f"- baseline: {_md_code(pair[0].describe())}",
+        f"- candidate: {_md_code(pair[1].describe())}",
+        "",
+        "</details>",
+    ]
 
 
 def _bucket(results: list[DiffResult]) -> dict[DiffVerdict, list[DiffResult]]:
@@ -525,6 +547,7 @@ def render_pr_comment(
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
     match_overrides: Optional[Mapping[str, str]] = None,
+    examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
 ) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
@@ -674,6 +697,7 @@ def render_pr_comment(
                 f"{_MD_MARK[r.verdict]} **{_md_inline(r.scenario_id)}** — {_md_inline(r.explanation)}"
             )
             lines.append(f"&nbsp;&nbsp;&nbsp;&nbsp;confidence {r.confidence:.2f}")
+            lines.extend(_md_examples(examples, r.scenario_id))
         lines.append("")
     if unmeasured:
         lines.append(f"**COULD NOT MEASURE ({len(unmeasured)})**")
@@ -681,6 +705,7 @@ def render_pr_comment(
             lines.append(
                 f"{_MD_MARK[r.verdict]} {_md_inline(r.scenario_id)} — {_md_inline(r.explanation)}"
             )
+            lines.extend(_md_examples(examples, r.scenario_id))
         lines.append("")
     if minors:
         lines.append(f"**MINOR CHANGES ({len(minors)})**")
@@ -688,6 +713,7 @@ def render_pr_comment(
             lines.append(
                 f"{_MD_MARK[r.verdict]} {_md_inline(r.scenario_id)} — {_md_inline(r.explanation)}"
             )
+            lines.extend(_md_examples(examples, r.scenario_id))
         lines.append("")
     _blind_set = set(underpowered)
     blind_ids = [r.scenario_id for r in unchanged if r.scenario_id in _blind_set]
@@ -789,6 +815,7 @@ def render_cli(
     census: Optional[ChannelCensus] = None,
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
+    examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
 ) -> str:
     """The CLI summary — ASCII text + rich color markup (safe on any console)."""
     _b = _bucket(results)
@@ -843,6 +870,10 @@ def render_cli(
             f"{_CLI_MARK[r.verdict]} [bold]{escape(r.scenario_id)}[/]: "
             f"{escape(r.explanation)} [dim](confidence {r.confidence:.2f})[/]"
         )
+        pair = (examples or {}).get(r.scenario_id)
+        if pair:
+            lines.append(f"   [dim]baseline : {escape(pair[0].describe())}[/]")
+            lines.append(f"   [dim]candidate: {escape(pair[1].describe())}[/]")
     if unchanged:
         # MP-138. Same rule as the Markdown bucket: no green marker over a bucket that could
         # not have gone red. `[M]` The first cut guarded only the Markdown side, so the CLI --

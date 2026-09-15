@@ -66,6 +66,7 @@ from modelpin.report import (
     render_report_md,
     to_report_sidecar,
 )
+from modelpin.report.evidence import Example, pick_examples
 from modelpin.report.suite import (
     compute_suite_hash,
     read_manifest,
@@ -1387,6 +1388,8 @@ def check(
     #: a loop local and `DiffResult` carries no traces, so a census computed after the loop
     #: has nothing left to read and used to fall back on the declaration.
     tool_active: set[str] = set()
+    #: One baseline and one candidate run per flagged scenario, shown beside its verdict.
+    examples: dict[str, tuple[Example, Example]] = {}
     #: (scenario_id, provider message) for scenarios the provider REFUSED outright. A
     #: different condition from `skipped` (no baseline recorded) and from an
     #: `insufficient_evidence` verdict (replayed, but nothing usable came back).
@@ -1484,6 +1487,10 @@ def check(
                 continue
             if _exercised_tools(base_traces, cand):
                 tool_active.add(s.id)
+            if result.verdict != DiffVerdict.unchanged:
+                pair = pick_examples(base_traces, cand)
+                if pair:
+                    examples[s.id] = pair
             results.append(result)
 
     # NotImplementedError stays a HARD failure: an unimplemented adapter is a config error
@@ -1587,7 +1594,9 @@ def check(
     # cannot see because it is not a function of N.
     census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
-    _summary = render_cli(results, from_model, to, n, underpowered, census, rejected, skipped)
+    _summary = render_cli(
+        results, from_model, to, n, underpowered, census, rejected, skipped, examples=examples
+    )
 
     # Decide the CI exit code BEFORE any side effect, so a report-write failure
     # can never silently mask a real regression.
@@ -1616,6 +1625,7 @@ def check(
         # so here or the PR reviewer cannot see it at all. Read off `compared`, so a scenario
         # that declared a mode but was never diffed does not claim to have been.
         match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
+        examples=examples,
     )
     _publish_notes = _publish_report(markdown, store_dir, from_model, to)
     console.print(_summary)
