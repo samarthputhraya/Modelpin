@@ -22,6 +22,7 @@ bitten twice by writing provider calls from memory.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional, Protocol
 
 from modelpin.providers.anthropic import _explain_api_error as _explain_anthropic_error
@@ -48,19 +49,36 @@ _SYSTEM = (
 )
 
 
+_THINK_BLOCK = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", re.S | re.I)
+
+
 def _parse_equivalent(content: str) -> bool:
     """Parse the judge's JSON verdict. FP-safe default: anything unparseable -> equivalent
-    (no flag), so a malformed judge response can never manufacture a false alarm."""
-    text = (content or "").strip()
-    start, end = text.find("{"), text.rfind("}")
-    if start != -1 and end > start:
+    (no flag), so a malformed judge response can never manufacture a false alarm.
+
+    The verdict is the LAST JSON object carrying an `equivalent` key. MP-209: `[M]` this used
+    to take the WIDEST `{...}` span and, when that failed to parse, search the WHOLE reply for
+    "not equivalent" -- so a reasoning judge that drafted `{"equivalent": false}` while
+    thinking out loud and then answered `{"equivalent": true}` produced a false alarm. Visible
+    `<think>` blocks are dropped first, and the prose fallback reads only the final line.
+    """
+    text = _THINK_BLOCK.sub(" ", content or "").strip()
+    decoder = json.JSONDecoder()
+    verdict: bool | None = None
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
         try:
-            obj = json.loads(text[start : end + 1])
-            return bool(obj.get("equivalent", True))
-        except (json.JSONDecodeError, TypeError, AttributeError):
-            pass
-    low = text.lower()
-    if '"equivalent": false' in low or '"equivalent":false' in low or "not equivalent" in low:
+            obj, _ = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("equivalent"), bool):
+            verdict = obj["equivalent"]
+    if verdict is not None:
+        return verdict
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    last = re.sub(r"\s+", " ", lines[-1].lower()) if lines else ""
+    if '"equivalent": false' in last or '"equivalent":false' in last or "not equivalent" in last:
         return False
     return True  # FP-safe default
 
