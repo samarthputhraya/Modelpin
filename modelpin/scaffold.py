@@ -41,7 +41,7 @@ PROVIDER_CREDENTIALS: tuple[tuple[str, tuple[str, ...]], ...] = (
 DEFAULT_MODEL: dict[str, str] = {
     "openai": "gpt-4o-mini",
     "anthropic": "claude-haiku-4-5",
-    "google": "gemini-2.5-flash",
+    "google": "gemini-3.1-flash-lite",
     "groq": "openai/gpt-oss-20b",
     "openrouter": "openai/gpt-4o-mini",
     "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -52,7 +52,7 @@ DEFAULT_MODEL: dict[str, str] = {
 JUDGE_MODEL: dict[str, tuple[str, str]] = {
     "openai": ("gpt-4.1-mini", "gpt-4o-mini"),
     "anthropic": ("claude-haiku-4-5", "claude-sonnet-4-5"),
-    "google": ("gemini-2.5-flash", "gemini-2.5-flash-lite"),
+    "google": ("gemini-3.5-flash", "gemini-3.1-flash-lite"),
     "groq": ("openai/gpt-oss-120b", "openai/gpt-oss-20b"),
     "openrouter": ("openai/gpt-4.1-mini", "openai/gpt-4o-mini"),
     "together": ("openai/gpt-oss-120b", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),

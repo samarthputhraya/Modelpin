@@ -28,7 +28,7 @@ see the project's `docs/`). Modelpin never ships or stores keys.
    > store your prompts. If your scenarios, or the answers a model gives to them, contain
    > anything you would not put in a public commit — a system prompt you consider
    > proprietary, a real customer record, an internal URL, a credential — keep this in a
-   > private repository, or use synthetic data in the scenarios. `mp baseline` warns when it
+   > private repository, or use synthetic data in the scenarios. `modelpin baseline` warns when it
    > sees a key-shaped token, but it cannot recognise a trade secret or a person's details.
    >
    > Only `baseline-*.json` needs committing. The rest of `.modelpin/` (`last-report.md`,
@@ -115,8 +115,8 @@ names — that is what the second key above is for. Omit `judge_model` to skip j
   provider needs its key (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, …); if
   `judge_model` is set in `modelpin.yaml`, that judge's provider key is needed too.
 - **Permissions:** the job needs `pull-requests: write` to comment. On a pull request from a
-  fork GitHub grants a read-only token, so the comment is skipped (the step does not fail the
-  job) and the report is still in the log and at `report-path`.
+  fork, GitHub gives no repository secrets and a read-only token: the check itself fails with
+  exit 4 (missing key), and a comment that cannot be posted does not add a failure of its own.
 - **Baseline strategy:** committing the baseline (recorded while the old model still worked)
   is the migration-true flow — the new model is diffed against known-good behavior. Use
   `baseline: true` only when the old model is still callable in CI.

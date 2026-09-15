@@ -30,11 +30,11 @@ useful.
 |---|---|---|
 | `id` | yes | Unique, stable name. Baselines are stored per `id`; renaming it means re-recording. |
 | `name` | yes | Human description, shown in reports. |
-| `kind` | no | `single` (default): one model call per replay. `agent`: Modelpin runs a tool loop, feeding canned tool results back, up to 6 model calls per replay. |
+| `kind` | no | A label: `single` (default) or `agent`. It does not change how the scenario runs: any scenario with `tools` runs a tool loop, feeding canned results back, up to 6 model calls per replay; a scenario without tools is one call. |
 | `input.messages` | yes | Chat messages in OpenAI style: `system`, `user`, `assistant` roles. Modelpin converts them for Anthropic and Gemini. |
 | `input.tools` | no | Tools the model may call: either bare names (`["lookup_order"]`) or full function specs (`{"type": "function", "function": {"name", "description", "parameters"}}`). Full specs let the model send arguments, which Modelpin also compares. |
 | `input.tool_results` | no | Canned result per tool name, returned every time the model calls that tool. Tools without one get `{"status": "ok"}`. No real tool ever runs. |
-| `input.temperature`, `top_p`, `max_tokens`, `seed` | no | Passed to the provider when set. Use what your app uses. |
+| `input.temperature`, `top_p`, `max_tokens`, `seed` | no | Passed to the provider when set and supported. Exceptions: OpenAI reasoning models (`o1`, `o3`, `o4`, `gpt-5*`) get no `temperature`/`top_p`; Claude gets only one of `temperature`/`top_p`, none on models newer than Opus 4.6, and never `seed`; Claude's `max_tokens` defaults to 4096. Use what your app uses. |
 | `assertions.must_contain` | no | Strings every good answer contains. **Case-sensitive.** |
 | `assertions.must_not_contain` | no | Strings no good answer contains. **Case-sensitive.** |
 | `match` | no | How strictly this scenario's tool calls are compared: `strict` (default), `unordered`, `subset`, `superset`. See below. |
@@ -176,7 +176,8 @@ Declare that on the scenario:
 `superset` for the reverse. Keep the default `strict` for flows where every call is required.
 
 **Keep the judge independent.** `judge_model` should be neither the model you run today nor the
-candidate. Modelpin warns when it is.
+candidate. Modelpin warns when the ids match exactly (it does not recognise a dated alias of the
+same model, such as `claude-haiku-4-5@20251001`).
 
 **Do not put secrets in scenarios.** Scenario files and baselines are meant to be committed. If a
 key-shaped string shows up in a recorded run, `modelpin baseline` warns you.
@@ -189,6 +190,6 @@ would measure your edit, not the model) and tells you to re-run `modelpin baseli
 ## Checking your suite before spending
 
 `modelpin init --demo` writes a sandbox that runs offline for free. For your own suite, start
-small: `modelpin baseline --runs 5` on two or three scenarios, then `modelpin check --to <the same
-model>`. A same-model check should come back `unchanged`; if a scenario flags against itself, its
+small: copy two or three scenarios into a scratch folder, run `modelpin baseline --scenarios-dir
+<folder>`, then `modelpin check --to <the same model> --scenarios-dir <folder>`. A same-model check should come back `unchanged`; if a scenario flags against itself, its
 prompt leaves the model too much freedom — tighten the instruction or declare `match`.

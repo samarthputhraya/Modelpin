@@ -22,11 +22,13 @@ and Claude support.
   meaning) shows up again. A change that does not reproduce is reported as `changed_minor`,
   with the first finding in full; one whose second sample recorded nothing exits 3. `[M]` On the
   one tool-channel false alarm this project has recorded (MP-220), the fresh-sample check
-  withholds the alarm against all nine other same-model samples from the same run. `[M]` Exact
-  enumeration at `runs: 5`: a same-model alarm on an optional tool call made on half of runs
+  withholds the alarm against all nine other same-model samples from the same run (an in-sample
+  check on the alarm this change was built against, not a rate). `[M]` Exact enumeration at
+  `runs: 5` (modelled: one optional call, binomial runs): a same-model alarm on an optional tool call made on half of runs
   falls from 2.15% to 0.25% per scenario. The cost is recall on borderline changes: a tool call
   dropping from 80% to 20% of runs is caught 22% of the time instead of 38%; complete changes
-  are caught as before. The pre-spend line states the extra calls. Disable with `--no-confirm`
+  are caught as before. It does not fix an unusual baseline, which is recorded once and reused.
+  The pre-spend line states the extra calls. Disable with `--no-confirm`
   (Action input `confirm: false`). The published false-positive measurements in
   `docs/fp-measurement.md` describe the engine without this step and are unchanged.
 - **A judge or confirmation call that still fails after retries costs that scenario (exit 3),
@@ -43,10 +45,10 @@ and Claude support.
 - **Example runs beside every flagged verdict**, on the console and in the PR comment: one
   baseline run and one candidate run, so a reviewer can see what changed.
 - **`modelpin init` configures itself from your repository.** It reads the model your code calls
-  and the credentials you have set, and writes a matching `providers:` and an independent
-  `judge_model:`. The starter scenario is now a sentiment classifier whose case-sensitive
+  and the credentials you have set, and writes a matching `providers:` and a
+  `judge_model:` different from your current model. The starter scenario is now a sentiment classifier whose case-sensitive
   assertion a model can actually meet; the old greeting starter's `must_contain: ["hello"]`
-  failed on most runs of most models.
+  failed on most runs in a live Gemini check.
 - **`.modelpin/.gitignore`** is written the first time the store is created, so `git add` picks
   up baselines and ignores per-run reports.
 - **New docs:** [How Modelpin works](https://github.com/samarthputhraya/modelpin/blob/main/docs/how-it-works.md)
@@ -63,8 +65,8 @@ and Claude support.
   its declared name (MP-237).** The prefix alone made one tool look like two.
 - **GitHub Action: `provider` no longer overrides `modelpin.yaml`.** It defaulted to `openai`
   and was always passed, so a Gemini or Claude repo's CI replayed on OpenAI. It now defaults to
-  the config. The sticky comment lookup is paginated, and a comment that cannot be posted (a fork
-  pull request) no longer fails the job by itself.
+  the config. The sticky comment lookup is paginated, and a comment that cannot be posted no
+  longer fails the job by itself.
 - **`--config` naming a file that does not exist is an error** (exit 4) instead of silently
   running on defaults.
 - **Live calls work behind a TLS-inspecting corporate proxy on Windows and macOS**: Modelpin

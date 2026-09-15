@@ -64,7 +64,7 @@ compares the candidate's runs with the baseline's runs. It looks at several **si
 | **Meaning (LLM judge)** | the answers no longer mean the same thing, even if they are worded differently. Needs `judge_model` set | yes |
 | **Your text assertions** | answers started violating the scenario's `must_contain` / `must_not_contain` | no — reported as a minor change |
 | **Tool-call arguments** | the right tool was called with different arguments | no — reported as a minor change |
-| **Latency and tokens** | speed and length moved | no — shown for information only |
+| **Latency and tokens** | speed and length moved | no — recorded in the baseline and listed in `modelpin report` tables; `check` does not show them |
 
 Each signal is compared as a **distribution**: "the baseline called the tool on 5 of 5 runs, the
 candidate on 0 of 5" rather than "run 1 differs from run 1".
@@ -76,15 +76,19 @@ A difference only counts as a **regression** when all of these hold:
 1. **It is statistically significant.** Modelpin uses an exact permutation test: it asks how
    often you would see a difference this large if both sets of runs came from the *same* model.
    If that happens more than 5% of the time, it is treated as noise.
-2. **It is large enough to matter.** A statistically significant but tiny shift (say, one refusal
-   in fifty runs) is ignored. Each signal has a minimum effect size.
+2. **It is large enough to matter.** A statistically significant but small shift (say, a refusal
+   rate rising from 0% to 20% over 50 runs per side) is ignored: tool calls, refusals and meaning
+   each have a minimum effect size.
 3. **It reproduces.** When a scenario looks like a regression, Modelpin replays the candidate N
    more times and checks those fresh runs on their own. If the regression does not show up again,
    it is reported as *not confirmed* and does **not** fail your build. This is what stops a
-   one-off unlucky sample from turning a pull request red. (Turn it off with `--no-confirm`.)
+   one-off unlucky candidate sample from turning a pull request red. (Turn it off with
+   `--no-confirm`.) It does not re-record the baseline: if a scenario keeps flagging against the
+   same model, the baseline itself may be unusual, and `modelpin baseline` re-records it.
 
 The semantic judge is a separate model that reads a baseline answer and a candidate answer and
-says whether they are equivalent. It runs at temperature 0, it is optional, and it should be a
+says whether they are equivalent. It runs at temperature 0 where the judge model allows it
+(reasoning models and the newest Claude models accept only their default sampling), it is optional, and it should be a
 model that is *not* one of the two you are comparing.
 
 ## Verdicts
@@ -103,13 +107,14 @@ model that is *not* one of the two you are comparing.
 | `0` | no regression | nothing — but read any `changed_minor` lines |
 | `1` | at least one reproduced regression | read the report; pin your current model until you have looked |
 | `3` | the run could not fully answer: a scenario could not be measured, the provider rejected one, or nothing could be compared | read the notes in the output; it is **not** a clearance |
-| `4` | Modelpin never ran: missing key, bad flag, unreadable config, no scenarios | fix the setup error printed above |
+| `4` | Modelpin never ran: missing key, invalid flag value, unreadable config, no scenarios | fix the setup error printed above |
+| `2` | usage error: an unknown option or a missing `--to` | check the command |
 
 ## Why N runs, and why 5
 
 A single run cannot tell a change from randomness, so Modelpin refuses `--runs 1`. Small N also
 limits what the permutation test can ever conclude: with 2 runs per side no signal can reach
-significance at all, and with 3 the tool-call signal cannot. From 4 runs every signal can fire;
+significance at all, and with 3 the tool-call signal cannot in the default `strict` match mode. From 4 runs every signal can fire;
 **5 is the default** and the setting the project's own measurements use. More runs give more
 sensitivity and cost proportionally more. Modelpin prints a warning before spending when your run
 count is too low to detect anything.
@@ -119,13 +124,13 @@ count is too low to detect anything.
 Before it spends anything, `check` prints the size of the run, for example:
 
 ```
-provider=openai from=gpt-4o-mini to=gpt-4.1-mini runs=5 match=strict | 8 scenario(s) from scenarios -> 40 replays, >=40 paid calls + up to 360 judge calls
+provider=openai from=gpt-4o-mini to=gpt-4.1 runs=5 match=strict | 8 scenario(s) from scenarios -> 40 replays, >=40 paid calls + up to 360 judge calls
 ```
 
-- **Replays:** scenarios × runs. A `single` scenario is one model call per replay; an `agent`
-  scenario is up to 6 (one per tool-loop turn).
-- **Confirmation:** only a scenario that looks like a regression is replayed again (another
-  `runs` replays for that scenario).
+- **Replays:** scenarios × runs. A scenario without tools is one model call per replay; a scenario
+  with tools can take up to 6 (one per tool-loop turn).
+- **Confirmation:** only a scenario that looks like a regression is replayed again: another `runs`
+  replays, plus judge calls to score them. A second pre-spend line states the bound.
 - **Judge calls:** an upper bound. Identical answers skip the judge, and it stops at the first
   equivalent baseline answer, so the real number is usually far lower.
 
@@ -161,6 +166,8 @@ For readers who want the exact definition (source: `modelpin/diff/__init__.py`,
   baseline answer; each baseline answer is scored against the other baseline answers, so the
   baseline's own natural variety is part of the comparison.
 - Confirmation: a `regression` on the first candidate sample triggers N fresh candidate runs,
-  diffed alone against the same baseline. The verdict stays `regression` only if that diff is also
-  a `regression`; otherwise it becomes `changed_minor`. Confirmation can remove a regression but
-  never create one.
+  diffed alone against the same baseline. The verdict stays `regression` only if the fresh runs
+  regress on a channel (tool calls, refusal, meaning) that also fired on the first runs; only those
+  channels are reported. If the fresh runs regress on a different channel, or not at all, it becomes
+  `changed_minor`. If they recorded nothing usable, it becomes `insufficient_evidence` (exit 3).
+  Confirmation can remove a regression but never create one.
