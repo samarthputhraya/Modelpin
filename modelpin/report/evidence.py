@@ -14,19 +14,24 @@ the verdict, and can never move one.
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import dataclass
 
+from modelpin.diff.argkey import canonical_arguments
 from modelpin.models import Trace
 
 #: Characters of model output shown per side. Enough to recognise an answer, short enough that
 #: a PR comment stays readable and a long output cannot swamp it.
 EXAMPLE_CHARS = 160
+#: Characters shown per tool-call argument value. A changed argument is often the finding (the
+#: argument channel reports `issue_refund(reason (changed))`), so the value has to be visible.
+ARG_CHARS = 40
 
 
 def _behavior(trace: Trace) -> tuple[tuple[str, ...], str, bool]:
     return (
-        tuple(call.name for call in trace.tool_calls),
+        tuple(f"{call.name}:{canonical_arguments(call.arguments)}" for call in trace.tool_calls),
         " ".join((trace.final_output or "").split()).lower(),
         trace.refused,
     )
@@ -41,6 +46,20 @@ def _modal(traces: list[Trace], exclude: set | None = None) -> Trace | None:
     return next(t for t in traces if _behavior(t) == top)
 
 
+def _shorten(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+
+
+def _call(name: str, arguments: dict | None) -> str:
+    if not arguments:
+        return name
+    shown = ", ".join(
+        f"{key}={_shorten(json.dumps(value, ensure_ascii=False), ARG_CHARS)}"
+        for key, value in sorted(arguments.items())
+    )
+    return f"{name}({shown})"
+
+
 @dataclass(frozen=True)
 class Example:
     """A short, display-ready description of one run."""
@@ -51,10 +70,11 @@ class Example:
 
     @classmethod
     def of(cls, trace: Trace) -> "Example":
-        text = " ".join((trace.final_output or "").split())
-        if len(text) > EXAMPLE_CHARS:
-            text = text[: EXAMPLE_CHARS - 3].rstrip() + "..."
-        return cls(tuple(call.name for call in trace.tool_calls), text, trace.refused)
+        return cls(
+            tuple(_call(call.name, call.arguments) for call in trace.tool_calls),
+            _shorten(" ".join((trace.final_output or "").split()), EXAMPLE_CHARS),
+            trace.refused,
+        )
 
     def describe(self) -> str:
         parts = []

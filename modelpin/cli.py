@@ -1480,11 +1480,12 @@ def check(
                         "it was flagged as a regression, but re-checking it on fresh "
                         "candidate runs failed"
                     )
+
+                    def _replay_more(s: Scenario = s) -> list[Trace]:
+                        return replay(s, to, adapter, runs=n)
+
                     result, cand = confirm_regression(
-                        result,
-                        cand,
-                        replay_more=lambda s=s: replay(s, to, adapter, runs=n),
-                        rediff=_diff,
+                        result, cand, replay_more=_replay_more, rediff=_diff
                     )
             except ProviderError as exc:
                 # The judge spends a provider call too, and so does a confirmation replay.

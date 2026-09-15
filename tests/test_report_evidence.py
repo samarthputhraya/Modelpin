@@ -86,3 +86,26 @@ def test_unchanged_scenarios_and_runs_without_examples_render_as_before():
     assert render_pr_comment(results, "a", "b", 5, "openai") == render_pr_comment(
         results, "a", "b", 5, "openai", examples={}
     )
+
+
+def test_a_changed_tool_argument_is_visible_in_the_example():
+    base = [
+        Trace(
+            scenario_id="s",
+            model_id="m",
+            final_output="done",
+            tool_calls=[ToolCall(name="issue_refund", arguments={"amount": 49.99})],
+        )
+    ]
+    cand = [
+        Trace(
+            scenario_id="s",
+            model_id="m",
+            final_output="done",
+            tool_calls=[ToolCall(name="issue_refund", arguments={"amount": 4999.0})],
+        )
+    ]
+    pair = pick_examples(base, cand)
+    assert pair is not None
+    assert "issue_refund(amount=49.99)" in pair[0].describe()
+    assert "issue_refund(amount=4999.0)" in pair[1].describe()
