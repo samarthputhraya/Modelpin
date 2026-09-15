@@ -14,8 +14,8 @@ wrong-but-confident answer at all; only a refusal could fail their build.
 The adapters already solved this shape once, so the judges follow them rather than inventing
 a second pattern: the four OpenAI-compatible hosts reuse the OpenAI judge with a different
 ``base_url`` and key env (exactly as ``build_openai_compatible_adapter`` reuses the OpenAI
-adapter), and Gemini gets a thin judge whose SDK calls mirror ``GoogleAdapter`` line for line
--- the shapes there are already verified against the installed SDK, and this project has been
+adapter), and Gemini and Claude each get a thin judge whose SDK calls mirror their adapter
+line for line -- the shapes there are already verified against the installed SDK, and this project has been
 bitten twice by writing provider calls from memory.
 """
 
@@ -24,6 +24,8 @@ from __future__ import annotations
 import json
 from typing import Any, Optional, Protocol
 
+from modelpin.providers.anthropic import _explain_api_error as _explain_anthropic_error
+from modelpin.providers.anthropic import accepts_sampling, build_anthropic_client
 from modelpin.providers.base import ProviderError
 from modelpin.providers.google import AFC_DISABLED, build_google_client
 from modelpin.providers.google import _explain_api_error as _explain_google_error
@@ -212,6 +214,67 @@ class GoogleJudge:
         return _parse_equivalent("".join(getattr(p, "text", None) or "" for p in parts))
 
 
+class AnthropicJudge:
+    """Claude equivalence judge. Every SDK shape here mirrors ``AnthropicAdapter``.
+
+    The rubric goes in the top-level ``system`` (the Messages API has no system role), the
+    prompt is the one user turn, and the verdict is read off the ``text`` blocks of
+    ``content`` -- the same facts the adapter uses, verified against the installed SDK.
+
+    ``temperature: 0`` is sent only where the model accepts it, through ``extra_body``: the
+    SDK's 1.x signature no longer has the parameter, and Claude models after Opus 4.6 reject
+    any non-default value with a 400 (see ``accepts_sampling``). On those models the judge runs
+    at the model's default sampling, which is a determinism cost, not a correctness one.
+
+    ``max_tokens`` is 1024, not the ~200 the verdict needs, because current Claude models think
+    by default and thinking counts against the cap. A cap hit during thinking would return no
+    text, which ``_parse_equivalent`` reads as EQUIVALENT -- FP-safe, but a judge silently
+    agreeing with everything is a false negative on the very channel that reads meaning.
+    """
+
+    def __init__(self, model: str, client: Any | None = None, label: str = "Anthropic") -> None:
+        self._model = model
+        self._client = client
+        self.label = label
+        self._credential_hint: str | None = None
+
+    def preflight(self) -> None:
+        self._get_client()
+
+    def _get_client(self) -> Any:
+        if self._client is None:
+            self._client, backend = build_anthropic_client()
+            self.label, self._credential_hint = backend.label, backend.credential_hint
+        return self._client
+
+    def equivalent(self, reference: str, candidate: str, task: Optional[str] = None) -> bool:
+        client = self._get_client()
+        request: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": 1024,
+            "system": _SYSTEM,
+            "messages": [{"role": "user", "content": _judge_prompt(reference, candidate, task)}],
+        }
+        if accepts_sampling(self._model):
+            request["extra_body"] = {"temperature": 0}  # deterministic judging
+        try:
+            response = client.messages.create(**request)
+        except ProviderError:
+            raise
+        except Exception as exc:
+            raise ProviderError(
+                _explain_anthropic_error(exc, self._model, self.label, self._credential_hint)
+            ) from exc
+        content = getattr(response, "content", None) or []
+        return _parse_equivalent(
+            "".join(
+                getattr(b, "text", None) or ""
+                for b in content
+                if getattr(b, "type", "text") == "text"
+            )
+        )
+
+
 #: Model-id prefixes that name their own vendor unambiguously. Used ONLY to spare the common
 #: case a config key -- never to guess for an id that could belong to two hosts. `[M]` A Groq
 #: id (`llama-3.3-70b-versatile`) and an OpenRouter id (`openai/gpt-oss-120b`) are
@@ -219,6 +282,10 @@ class GoogleJudge:
 #: so a `vendor/model` parse would misroute rather than fail. Those cases must say which host.
 _OPENAI_PREFIXES = ("gpt-", "o1", "o3", "o4", "chatgpt")
 _GOOGLE_PREFIXES = ("gemini-", "models/gemini")
+#: `claude-` names Anthropic whichever backend serves it: the first-party API and Vertex use
+#: the same bare ids (Vertex adds only an `@date` snapshot suffix), and both are reached through
+#: the one `anthropic` host. Bedrock's `anthropic.claude-...` is deliberately not matched.
+_ANTHROPIC_PREFIXES = ("claude-",)
 
 
 def infer_judge_provider(model: str) -> str | None:
@@ -227,13 +294,20 @@ def infer_judge_provider(model: str) -> str | None:
         return "openai"
     if model.startswith(_GOOGLE_PREFIXES):
         return "google"
+    if model.startswith(_ANTHROPIC_PREFIXES):
+        return "anthropic"
     return None
 
 
 #: Every host a judge can run on. `fake` is absent on purpose: `_build_judge` disables the
 #: judge entirely on the offline provider, so a "fake judge" would be a second, divergent way
 #: to express the same thing.
-JUDGE_PROVIDERS: tuple[str, ...] = ("openai", "google", *OPENAI_COMPATIBLE_PROVIDERS)
+JUDGE_PROVIDERS: tuple[str, ...] = (
+    "openai",
+    "google",
+    "anthropic",
+    *OPENAI_COMPATIBLE_PROVIDERS,
+)
 
 
 def build_judge(model: str, provider: str | None = None, client: Any | None = None) -> Judge:
@@ -243,7 +317,8 @@ def build_judge(model: str, provider: str | None = None, client: Any | None = No
     any host's judge. `provider` is resolved in this order:
 
       1. what the caller passed (`judge_provider:` in modelpin.yaml, or the replay provider);
-      2. what the model id unambiguously names (`gpt-*` -> OpenAI, `gemini-*` -> Google);
+      2. what the model id unambiguously names (`gpt-*` -> OpenAI, `gemini-*` -> Google,
+         `claude-*` -> Anthropic);
       3. nothing -- and then this raises, naming the key to set. It must not guess: routing a
          Groq id to OpenAI would spend the wrong key against the wrong host and report the
          failure as a judge error.
@@ -258,6 +333,8 @@ def build_judge(model: str, provider: str | None = None, client: Any | None = No
         return OpenAIJudge(model, client=client)
     if resolved == "google":
         return GoogleJudge(model, client=client)
+    if resolved == "anthropic":
+        return AnthropicJudge(model, client=client)
     if resolved in OPENAI_COMPATIBLE_PROVIDERS:
         cfg = OPENAI_COMPATIBLE_PROVIDERS[resolved]
         return OpenAIJudge(
