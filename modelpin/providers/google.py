@@ -260,15 +260,51 @@ def _candidate_parts(candidate: Any) -> list[Any]:
     return getattr(content, "parts", None) or []
 
 
-def _parse_function_calls(parts: list[Any]) -> list[ToolCall]:
-    calls: list[ToolCall] = []
+#: Namespaces Gemini sometimes prepends to a DECLARED function's name.
+#:
+#: `[M] 2026-09-09` `gemini-2.5-flash-lite` called `default_api.request_box` and
+#: `default_api_charge_customer` for tools declared as `request_box` / `charge_customer`, in 13
+#: of 540 runs (MP-237). The trajectory channel keys on the name, so the prefix alone made one
+#: tool look like two, and 4 prefixed runs of 5 is enough to publish a hard regression on a
+#: same-model null. The prefix is stripped only when what remains is a tool the scenario
+#: declared; any other undeclared name (e.g. the built-in `run_code`) is recorded as-is,
+#: because a model calling a tool it was never given IS behavior worth seeing.
+_SDK_NAMESPACE_PREFIXES: tuple[str, ...] = ("default_api.", "default_api_")
+
+
+def _declared_name(raw: str, declared: frozenset[str]) -> str:
+    if raw in declared:
+        return raw
+    for prefix in _SDK_NAMESPACE_PREFIXES:
+        if raw.startswith(prefix) and raw[len(prefix) :] in declared:
+            return raw[len(prefix) :]
+    return raw
+
+
+def _declared_tool_names(tools: list[dict[str, Any]] | None) -> frozenset[str]:
+    return frozenset(
+        str(d.get("name"))
+        for group in tools or []
+        for d in group.get("function_declarations", [])
+        if isinstance(d, dict) and d.get("name")
+    )
+
+
+def _parse_function_calls(
+    parts: list[Any], declared: frozenset[str] = frozenset()
+) -> list[tuple[str, ToolCall]]:
+    """Each function call as (the name the model sent, the call as recorded)."""
+    calls: list[tuple[str, ToolCall]] = []
     for part in parts:
         fc = getattr(part, "function_call", None)
         name = getattr(fc, "name", None)
         if not name:
             continue
         args = getattr(fc, "args", None)
-        calls.append(ToolCall(name=name, arguments=args if isinstance(args, dict) else {}))
+        recorded = ToolCall(
+            name=_declared_name(name, declared), arguments=args if isinstance(args, dict) else {}
+        )
+        calls.append((name, recorded))
     return calls
 
 
@@ -340,13 +376,14 @@ def _model_turn_content(parts: list[Any], text: str) -> dict[str, Any]:
 
 
 def _function_response_content(
-    calls: list[ToolCall], tool_results: dict[str, Any]
+    calls: list[tuple[str, ToolCall]], tool_results: dict[str, Any]
 ) -> dict[str, Any]:
     parts = []
-    for call in calls:
+    for sent_name, call in calls:
         result = tool_results.get(call.name, _DEFAULT_TOOL_RESULT)
         response = result if isinstance(result, dict) else {"result": result}
-        parts.append({"function_response": {"name": call.name, "response": response}})
+        # Answered under the name the model SENT, so the conversation stays well-formed.
+        parts.append({"function_response": {"name": sent_name, "response": response}})
     return {"role": "user", "parts": parts}
 
 
@@ -382,6 +419,7 @@ class GoogleAdapter(ProviderAdapter):
     def run(self, scenario: Scenario, model_id: str, run_idx: int = 0) -> Trace:
         system_instruction, contents = _to_contents(list(scenario.input.get("messages", [])))
         tools = _to_tools(scenario.input.get("tools"))
+        declared = _declared_tool_names(tools)
         gen = {
             k: scenario.input[k]
             for k in ("temperature", "top_p", "max_tokens", "max_output_tokens", "seed")
@@ -403,8 +441,8 @@ class GoogleAdapter(ProviderAdapter):
             candidate = response.candidates[0]
             parts = _candidate_parts(candidate)
             final_text = _part_text(parts)
-            turn_calls = _parse_function_calls(parts)
-            all_tool_calls.extend(turn_calls)
+            turn_calls = _parse_function_calls(parts, declared)
+            all_tool_calls.extend(call for _, call in turn_calls)
             refused = refused or _detect_refusal(
                 candidate, getattr(response, "prompt_feedback", None), final_text
             )

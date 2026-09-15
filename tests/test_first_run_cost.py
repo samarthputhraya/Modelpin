@@ -352,8 +352,6 @@ def test_report_states_the_size_of_the_run_before_spending(
             "5",
             "--suite-dir",
             str(REPORT_SUITE),
-            "--config",
-            str(tmp_path / "absent.yaml"),
             "--output-dir",
             str(tmp_path / "reports"),
         ],

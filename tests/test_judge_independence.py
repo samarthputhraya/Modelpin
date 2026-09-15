@@ -104,5 +104,5 @@ def test_the_scaffold_still_loads(tmp_path) -> None:
     p = tmp_path / "modelpin.yaml"
     p.write_text(cli._SAMPLE_CONFIG, encoding="utf-8")
     loaded = load_config(p)
-    assert loaded.judge_model == "gpt-4o-mini"
+    assert loaded.judge_model == "gpt-4.1-mini"
     assert loaded.models == ["gpt-4o-mini"]

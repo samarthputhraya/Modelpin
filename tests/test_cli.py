@@ -484,7 +484,7 @@ def test_init_scaffolds_when_the_dir_holds_only_reserved_files(tmp_path):
     r = runner.invoke(app, ["init", str(tmp_path)])
     assert r.exit_code == 0, r.output
     assert (
-        scen / "greeting.json"
+        scen / "sentiment.json"
     ).is_file(), f"init wrote no starter scenario, so the advice loops.\n{r.output}"
 
     # ...and the command that sent the user here now gets past the scenarios check.
