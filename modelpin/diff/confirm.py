@@ -68,8 +68,10 @@ def confirm_regression(
     recorded = candidate_traces + fresh_traces
 
     if second.verdict == DiffVerdict.regression:
-        note = f"{CONFIRMED_NOTE}, confidence {second.confidence:.3f}"
-        return first.model_copy(update={"explanation": f"{first.explanation} ({note})"}), recorded
+        return (
+            first.model_copy(update={"explanation": f"{first.explanation} ({CONFIRMED_NOTE})"}),
+            recorded,
+        )
 
     return (
         first.model_copy(

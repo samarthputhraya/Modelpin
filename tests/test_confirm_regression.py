@@ -93,7 +93,7 @@ def test_a_reproduced_regression_stands():
     assert final.verdict is DiffVerdict.regression
     assert final.confidence == 0.992
     assert "tool-call behavior changed" in final.explanation
-    assert CONFIRMED_NOTE in final.explanation and "0.960" in final.explanation
+    assert CONFIRMED_NOTE in final.explanation
     assert len(traces) == 2
 
 

@@ -12,6 +12,7 @@ Replays use the END USER's API key from the environment (BYO-key, spec section 9
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import sys
 from datetime import datetime, timezone
@@ -1927,7 +1928,33 @@ def report(
     # NB: report() never exits non-zero on a regression — it publishes findings, not a CI gate.
 
 
+def _use_os_trust_store() -> None:
+    """Verify TLS against the operating system's certificate store on Windows and macOS.
+
+    The provider SDKs verify against `certifi`'s bundled CA list, which knows nothing about a
+    corporate TLS-inspecting proxy's root certificate. `[M]` On such a network every live call
+    fails with `CERTIFICATE_VERIFY_FAILED` although the machine itself trusts the proxy -- a
+    stranger's first `modelpin baseline` dies before it measures anything. `truststore` makes
+    Python ask the OS instead. Verification stays ON; only the source of trusted roots changes.
+
+    Windows and macOS only: their system store is always present and authoritative. A minimal
+    Linux container may have no system CA bundle at all, where `certifi` is the one that works.
+    Opt out with MODELPIN_NO_TRUSTSTORE=1. Absent `truststore`, nothing changes.
+    """
+    if sys.platform not in ("win32", "darwin") or os.environ.get("MODELPIN_NO_TRUSTSTORE"):
+        return
+    try:
+        import truststore
+    except ImportError:
+        return
+    try:
+        truststore.inject_into_ssl()
+    except Exception:  # noqa: BLE001 - never let TLS plumbing stop the CLI from starting
+        return
+
+
 def main() -> None:
+    _use_os_trust_store()
     app()
 
 
