@@ -11,6 +11,7 @@ Replays use the END USER's API key from the environment (BYO-key, spec section 9
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shlex
@@ -1826,6 +1827,10 @@ def check(
 REPORT_ARCHIVE_DIRNAME = "runs"
 
 
+#: Longest archive path written as-is; a longer one gets a short name (see `_archive_path`).
+_MAX_ARCHIVE_PATH = 240
+
+
 def _archive_path(store: Path, from_model: str, to_model: str, stamp: str | None = None) -> Path:
     """A collision-free, citable path for THIS run's report.
 
@@ -1838,6 +1843,14 @@ def _archive_path(store: Path, from_model: str, to_model: str, stamp: str | None
     directory = store / REPORT_ARCHIVE_DIRNAME
     directory.mkdir(parents=True, exist_ok=True)
     stem = f"check-{slug(from_model)}-to-{slug(to_model)}-{stamp}"
+    # Windows refuses a path over 260 characters unless long paths are enabled, and both model
+    # ids go into this name. `[M] 2026-09-15` a project four directories deep in the user's
+    # temp folder, checking `gemini-2.5-flash-lite` against itself, lost its archived report
+    # (`[Errno 2] No such file or directory`) and the run record with it. Over the limit, the
+    # ids are replaced by a short digest; the report itself still names both models.
+    if len(str((directory / f"{stem}-99.json").resolve())) > _MAX_ARCHIVE_PATH:
+        digest = hashlib.sha1(f"{from_model}|{to_model}".encode()).hexdigest()[:8]
+        stem = f"check-{stamp}-{digest}"
     candidate = directory / f"{stem}.md"
     n = 2
     while candidate.exists():
