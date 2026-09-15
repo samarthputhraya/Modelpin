@@ -295,15 +295,22 @@ def test_scan_repo_reports_what_it_read(tmp_path: Path) -> None:
     assert scanned == ["a.py"]
 
 
-@pytest.mark.parametrize("name", ["app/page.tsx", "src/App.jsx", "server.mjs", "api.cjs", "main.go"])
+@pytest.mark.parametrize(
+    "name", ["app/page.tsx", "src/App.jsx", "server.mjs", "api.cjs", "main.go"]
+)
 def test_javascript_family_and_server_languages_are_scanned(tmp_path: Path, name: str) -> None:
     """A Next.js or React app keeps its model calls in `.tsx`/`.jsx`/`.mjs`; they were never read."""
     _write(tmp_path, name, 'const model = "gpt-4o"; // or gpt-5.5 later\n')
     hits = scan_repo(tmp_path)
-    assert {(h["model"], h["context"]) for h in hits} == {("gpt-4o", "code"), ("gpt-5.5", "comment")}
+    assert {(h["model"], h["context"]) for h in hits} == {
+        ("gpt-4o", "code"),
+        ("gpt-5.5", "comment"),
+    }
 
 
-def test_the_judge_modelpin_init_writes_is_not_reported_as_an_app_dependency(tmp_path: Path) -> None:
+def test_the_judge_modelpin_init_writes_is_not_reported_as_an_app_dependency(
+    tmp_path: Path,
+) -> None:
     _write(tmp_path, "app.py", 'MODEL = "gpt-4o"\n')
     _write(tmp_path, "modelpin.yaml", "models:\n  - gpt-4o\njudge_model: gpt-4.1-mini\n")
     assert {h["model"] for h in scan_repo(tmp_path)} == {"gpt-4o"}

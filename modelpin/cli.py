@@ -429,29 +429,6 @@ def _build_judge(
     return judge
 
 
-class _MemoJudge:
-    """Ask the judge each distinct question once per run.
-
-    Confirming a regression re-diffs the pooled candidate sample, which contains the first
-    sample's runs again; without this every one of those comparisons would be billed twice.
-    A cached answer is the answer the judge already gave on identical inputs, so the verdict
-    cannot move -- only the bill does.
-    """
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-        self._cache: dict[tuple[str, str, Optional[str]], bool] = {}
-
-    def preflight(self) -> None:
-        self._inner.preflight()
-
-    def equivalent(self, reference: str, candidate: str, task: Optional[str] = None) -> bool:
-        key = (reference, candidate, task)
-        if key not in self._cache:
-            self._cache[key] = self._inner.equivalent(reference, candidate, task)
-        return self._cache[key]
-
-
 def _load_config_or_fail(config_path: str) -> ModelpinConfig:
     # A `--config` the user typed that does not exist is a typo, not a fresh repo. `[M]`
     # first-run audit 2026-09-15: `baseline --config typo-config.yaml` beside a valid
@@ -1390,15 +1367,22 @@ def check(
     if _note := _match_override_note(scenarios, mode):
         console.print(f"[dim]{_rich_escape(_note)}[/]")
     if confirm and prov != "fake":
+        # ADR-0019: the confirmation is a paid axis, so its size is disclosed before spending.
+        # Per flagged scenario the fresh sample is `n` replays, and re-diffing it can ask the
+        # judge up to `b(b-1)` baseline leave-one-out questions plus `n*b` candidate ones.
+        _deepest = max(ref_runs, default=n)
+        _judge_extra = (
+            f", up to {_deepest * max(_deepest - 1, 0) + n * _deepest} judge calls"
+            if cfg.judge_model
+            else ""
+        )
         console.print(
-            f"[dim]a scenario flagged as a regression is replayed {n} more time(s) on "
-            f"{_rich_escape(to)} and must reproduce before it can fail the build "
-            "(--no-confirm to skip)[/]"
+            f"[dim]a scenario flagged as a regression is replayed again before it can fail "
+            f"the build: +{n} replays{_judge_extra} per flagged scenario (--no-confirm to "
+            "skip)[/]"
         )
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to, from_model=from_model)
-    if judge is not None:
-        judge = _MemoJudge(judge)
 
     results = []
     skipped: list[str] = []
@@ -1484,9 +1468,14 @@ def check(
                     judge=judge,
                 )
 
+            stage = "the semantic judge failed"
             try:
                 result = _diff(cand)
-                if confirm:
+                if confirm and result.verdict == DiffVerdict.regression:
+                    stage = (
+                        "it was flagged as a regression, but re-checking it on fresh "
+                        "candidate runs failed"
+                    )
                     result, cand = confirm_regression(
                         result,
                         cand,
@@ -1497,12 +1486,13 @@ def check(
                 # The judge spends a provider call too, and so does a confirmation replay.
                 # One that fails after the SDK's own retries must cost this scenario its
                 # verdict, not the whole run: every other scenario's paid replays still stand.
-                # Same disclosure and exit path as a replay the provider rejected (MP-148).
+                # Same disclosure and exit path as a replay the provider rejected (MP-148),
+                # and the stage is named so a flagged first sample is not silently lost.
                 console.print(
                     f"[yellow]note:[/] scenario {_rich_escape(repr(s.id))} could not be "
-                    f"compared: {_rich_escape(str(exc))}"
+                    f"compared ({stage}): {_rich_escape(str(exc))}"
                 )
-                rejected.append((s.id, str(exc)))
+                rejected.append((s.id, f"{stage}: {exc}"))
                 continue
             if _exercised_tools(base_traces, cand):
                 tool_active.add(s.id)

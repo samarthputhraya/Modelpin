@@ -82,13 +82,13 @@ def test_a_non_regression_replays_nothing():
 
 
 def test_a_reproduced_regression_stands():
-    first = _result(DiffVerdict.regression, "tool-call behavior changed", 0.992)
+    first = _result(DiffVerdict.regression, "tool-call behavior changed: [a] -> []", 0.992)
     fresh = [_trace("s", "b", [])]
     final, traces = confirm_regression(
         first,
         [_trace("s", "b", [])],
         replay_more=lambda: fresh,
-        rediff=lambda t: _result(DiffVerdict.regression, "again", 0.96),
+        rediff=lambda t: _result(DiffVerdict.regression, "tool-call behavior changed: x", 0.96),
     )
     assert final.verdict is DiffVerdict.regression
     assert final.confidence == 0.992
@@ -97,8 +97,39 @@ def test_a_reproduced_regression_stands():
     assert len(traces) == 2
 
 
+def test_only_the_channel_that_reproduced_is_published():
+    first = _result(
+        DiffVerdict.regression, "tool-call behavior changed: [a] -> []; refusal rate 0% -> 100%"
+    )
+    final, _ = confirm_regression(
+        first, [], lambda: [], lambda t: _result(DiffVerdict.regression, "refusal rate 0% -> 80%")
+    )
+    assert final.verdict is DiffVerdict.regression
+    assert final.explanation.startswith("refusal rate 0% -> 100%")
+    assert "tool-call" not in final.explanation, "the tool change did not reproduce"
+
+
+def test_a_regression_on_a_different_channel_does_not_confirm():
+    """FP review: a first-sample tool alarm must not 'reproduce' through a refusal alarm."""
+    first = _result(DiffVerdict.regression, "tool-call behavior changed: [a, b] -> [a]")
+    final, _ = confirm_regression(
+        first, [], lambda: [], lambda t: _result(DiffVerdict.regression, "refusal rate 0% -> 100%")
+    )
+    assert final.verdict is DiffVerdict.changed_minor
+
+
+def test_an_unmeasurable_second_sample_is_not_reported_as_did_not_reproduce():
+    first = _result(DiffVerdict.regression, "tool-call behavior changed: [a] -> []")
+    final, _ = confirm_regression(
+        first, [], lambda: [], lambda t: _result(DiffVerdict.insufficient_evidence, "empty")
+    )
+    assert final.verdict is DiffVerdict.insufficient_evidence
+    assert final.confidence == 0.0
+    assert "could not confirm" in final.explanation
+
+
 def test_an_unreproduced_regression_is_reported_but_does_not_fail_the_build():
-    first = _result(DiffVerdict.regression, "tool-call behavior changed")
+    first = _result(DiffVerdict.regression, "tool-call behavior changed: [a] -> []")
     final, _ = confirm_regression(
         first,
         [],
@@ -133,7 +164,7 @@ def test_confirmation_can_never_create_a_regression():
             _result(verdict),
             [],
             replay_more=lambda: [],
-            rediff=lambda t: _result(DiffVerdict.regression),
+            rediff=lambda t: _result(DiffVerdict.regression, "refusal rate 0% -> 100%"),
         )
         assert final.verdict is verdict
 
@@ -331,3 +362,47 @@ def test_the_offline_demo_still_fails_on_its_real_regressions(tmp_path, monkeypa
     assert runner.invoke(app, ["baseline", "--fixtures", "traces.json"]).exit_code == 0
     result = runner.invoke(app, ["check", "--to", "demo-model-v2", "--fixtures", "traces.json"])
     assert result.exit_code == 1, result.output
+
+
+def test_an_empty_second_sample_exits_3_through_the_cli(tmp_path, monkeypatch):
+    _project(tmp_path)
+
+    class _EmptySecond(_ScriptedAdapter):
+        def run(self, scenario, model_id, run_idx=0):
+            trace = super().run(scenario, model_id, run_idx)
+            if self.replays >= 1 and not (self.replays == 1 and run_idx == 4):
+                return trace.model_copy(update={"tool_calls": [], "final_output": ""})
+            return trace
+
+    result = _check(tmp_path, monkeypatch, _EmptySecond([_DROPPED, _DROPPED]))
+    assert result.exit_code == cli.EXIT_UNMEASURED, result.output
+    assert "could not confirm" in " ".join(result.output.split())
+
+
+def test_the_confirmation_asks_the_judge_afresh(tmp_path, monkeypatch):
+    """No cached judge answers: the fresh sample must not inherit the first sample's readings."""
+    _project(tmp_path)
+    calls: list[tuple[str, str]] = []
+
+    class _CountingJudge:
+        def preflight(self) -> None:
+            return None
+
+        def equivalent(self, reference, candidate, task=None):
+            calls.append((reference, candidate))
+            return True
+
+    monkeypatch.setattr(cli, "_build_judge", lambda *a, **k: _CountingJudge())
+    adapter = _ScriptedAdapter([_DROPPED, _DROPPED])
+    base_run = adapter.run
+
+    def run(scenario, model_id, run_idx=0):
+        return base_run(scenario, model_id, run_idx).model_copy(
+            update={"final_output": f"reworded {run_idx}"}
+        )
+
+    adapter.run = run  # type: ignore[method-assign]
+    result = _check(tmp_path, monkeypatch, adapter)
+    assert result.exit_code == 1, result.output
+    first_sample = [c for c in calls[: len(calls) // 2]]
+    assert len(calls) == 2 * len(first_sample), "the second diff re-asks every question"

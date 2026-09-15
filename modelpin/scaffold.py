@@ -198,4 +198,3 @@ def render_config(setup: Setup) -> str:
             "# judge_provider: groq   # only needed when the judge id does not name its vendor"
         )
     return "\n".join(lines) + "\n"
-

@@ -20,9 +20,14 @@ inputs:
   provider:
     # MP-128: this list is checked against the adapters by tests/test_advertised_providers.py,
     # so a provider named here that cannot run fails the build rather than a user's CI.
-    description: "Provider for the candidate replay: openai | google | anthropic | groq | openrouter | together | cerebras. `anthropic` reads ANTHROPIC_API_KEY, or runs Claude on Vertex AI when ANTHROPIC_VERTEX_PROJECT_ID is set (Application Default Credentials)."
+    #
+    # Default "" and passed only when set. It defaulted to "openai" and was ALWAYS passed as
+    # `--provider`, which overrides `providers:` in modelpin.yaml -- so a Gemini or Claude repo
+    # that configured its provider in the file, as `modelpin init` writes it, had its CI
+    # replay on OpenAI and fail asking for OPENAI_API_KEY.
+    description: "Provider for the candidate replay: openai | google | anthropic | groq | openrouter | together | cerebras. Defaults to `providers:` in modelpin.yaml. `anthropic` reads ANTHROPIC_API_KEY, or runs Claude on Vertex AI when ANTHROPIC_VERTEX_PROJECT_ID is set (Application Default Credentials)."
     required: false
-    default: "openai"
+    default: ""
   config:
     description: "Path to modelpin.yaml."
     required: false
@@ -39,6 +44,10 @@ inputs:
     description: "Tool-call match mode: strict | unordered | subset | superset."
     required: false
     default: "strict"
+  confirm:
+    description: "Replay a flagged scenario again and fail only if the regression reproduces (recommended). Set to 'false' to fail on the first sample."
+    required: false
+    default: "true"
   baseline:
     description: "Record a fresh baseline for `from` before checking (needs the old model still available). Usually you commit the baseline instead."
     required: false
@@ -112,7 +121,8 @@ runs:
         MP_SCENARIOS_DIR: ${{ inputs.scenarios-dir }}
         MP_RUNS: ${{ inputs.runs }}
       run: |
-        args=(--provider "$MP_PROVIDER" --config "$MP_CONFIG")
+        args=(--config "$MP_CONFIG")
+        [ -n "$MP_PROVIDER" ] && args+=(--provider "$MP_PROVIDER")
         [ -n "$MP_FROM" ] && args+=(--model "$MP_FROM")
         [ -n "$MP_SCENARIOS_DIR" ] && args+=(--scenarios-dir "$MP_SCENARIOS_DIR")
         [ -n "$MP_RUNS" ] && args+=(--runs "$MP_RUNS")
@@ -132,9 +142,12 @@ runs:
         MP_SCENARIOS_DIR: ${{ inputs.scenarios-dir }}
         MP_RUNS: ${{ inputs.runs }}
         MP_WORKDIR: ${{ inputs.working-directory }}
+        MP_CONFIRM: ${{ inputs.confirm }}
       run: |
         set +e
-        args=(--to "$MP_TO" --provider "$MP_PROVIDER" --match "$MP_MATCH" --config "$MP_CONFIG")
+        args=(--to "$MP_TO" --match "$MP_MATCH" --config "$MP_CONFIG")
+        [ -n "$MP_PROVIDER" ] && args+=(--provider "$MP_PROVIDER")
+        [ "$MP_CONFIRM" = "false" ] && args+=(--no-confirm)
         [ -n "$MP_FROM" ] && args+=(--from "$MP_FROM")
         [ -n "$MP_SCENARIOS_DIR" ] && args+=(--scenarios-dir "$MP_SCENARIOS_DIR")
         [ -n "$MP_RUNS" ] && args+=(--runs "$MP_RUNS")
@@ -146,6 +159,10 @@ runs:
 
     - name: Post PR comment
       if: ${{ inputs.comment == 'true' && github.event.pull_request.number }}
+      # A comment that cannot be posted (a pull request from a fork gets a read-only token)
+      # must not turn the job red by itself: the verdict is gated by the step below, and the
+      # report is still in the job log and at `report-path`.
+      continue-on-error: true
       # MP-244, same reason as setup-python above. [S] 2026-09-11 GitHub API: `v9` and
       # `v9.0.0` are two annotated tag objects that both dereference to this one commit,
       # and they are the only v9 tags -- so this is exactly what `@v9` resolved to.
@@ -166,7 +183,9 @@ runs:
           }
           const { owner, repo } = context.repo;
           const issue_number = context.payload.pull_request.number;
-          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+          // Paginated: a busy pull request has more than one page of comments, and missing
+          // the marker on page 2 would post a duplicate report on every run.
+          const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
           const existing = comments.find(c => c.body && c.body.includes(marker));
           if (existing) {
             await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
