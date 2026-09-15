@@ -13,7 +13,7 @@ import pytest
 
 from modelpin.models import Scenario
 from modelpin.providers import ProviderError, get_adapter
-from modelpin.providers.google import GoogleAdapter
+from modelpin.providers.google import _HTTP_OPTIONS, GoogleAdapter
 
 # --- fakes mirroring the google-genai response shape ------------------------------
 
@@ -279,7 +279,9 @@ def test_the_api_key_path_is_still_the_default(spy_genai, monkeypatch):
     from modelpin.providers.google import build_google_client
 
     build_google_client()
-    assert spy_genai.calls == [{"api_key": "AIzaTESTKEY", "vertexai": False}], spy_genai.calls
+    assert spy_genai.calls == [
+        {"api_key": "AIzaTESTKEY", "vertexai": False, "http_options": _HTTP_OPTIONS}
+    ], spy_genai.calls
 
 
 def test_vertex_is_selected_by_the_sdks_own_env_var(spy_genai, monkeypatch):
@@ -291,7 +293,12 @@ def test_vertex_is_selected_by_the_sdks_own_env_var(spy_genai, monkeypatch):
 
     build_google_client()
     assert spy_genai.calls == [
-        {"vertexai": True, "project": "proj-123", "location": "global"}
+        {
+            "vertexai": True,
+            "project": "proj-123",
+            "location": "global",
+            "http_options": _HTTP_OPTIONS,
+        }
     ], spy_genai.calls
 
 
@@ -329,7 +336,9 @@ def test_a_falsey_switch_leaves_the_api_key_path_alone(spy_genai, monkeypatch, v
     from modelpin.providers.google import build_google_client
 
     build_google_client()
-    assert spy_genai.calls == [{"api_key": "AIzaTESTKEY", "vertexai": False}], (
+    assert spy_genai.calls == [
+        {"api_key": "AIzaTESTKEY", "vertexai": False, "http_options": _HTTP_OPTIONS}
+    ], (
         value,
         spy_genai.calls,
     )

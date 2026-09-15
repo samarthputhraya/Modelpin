@@ -25,7 +25,7 @@ import json
 from typing import Any, Optional, Protocol
 
 from modelpin.providers.base import ProviderError
-from modelpin.providers.google import build_google_client
+from modelpin.providers.google import AFC_DISABLED, build_google_client
 from modelpin.providers.google import _explain_api_error as _explain_google_error
 from modelpin.providers.openai import (
     OPENAI_COMPATIBLE_PROVIDERS,
@@ -192,7 +192,11 @@ class GoogleJudge:
                         "parts": [{"text": _judge_prompt(reference, candidate, task)}],
                     }
                 ],
-                config={"system_instruction": _SYSTEM, "temperature": 0},
+                config={
+                    "system_instruction": _SYSTEM,
+                    "temperature": 0,
+                    "automatic_function_calling": AFC_DISABLED,
+                },
             )
         except ProviderError:
             raise
