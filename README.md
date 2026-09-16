@@ -397,6 +397,12 @@ borderline change rather than raise a false alarm. Know the trade-offs:
   unmeasured.
 - **It measures change, not quality.** It never says one model is better.
 
+**What happened when it was run at scale, live:** 972 same-model checks across six Gemini
+models raised **0** false alarms, and across six real Gemini upgrades it flagged 28 regressions,
+every one of which an independent model rated a material behavior change —
+[docs/live-validation.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/live-validation.md),
+with the bugs that campaign found in Modelpin itself.
+
 The project publishes its own false-positive and detection measurements — how they were run,
 the confidence bounds, the same-model false alarms it has observed (four so far: one on tool
 calls, two from the semantic judge, one on a text assertion), and what the numbers do *not* show — in **[docs/fp-measurement.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)**.

@@ -844,6 +844,11 @@ console.groq.com/docs/openai). ADR-0037.
 
 ## Gemini as judge and as the model under test (2026-09-15)
 
+> The product-level companion to this section — 972 same-model `modelpin check` runs and six
+> real Gemini upgrades, with the bugs they found — is in
+> [live-validation.md](live-validation.md). This section measures the engine; that one measures
+> the command.
+
 Until this run every false-positive number on this page had been scored by an OpenAI judge, and
 no fresh replay had used Google's models. Two measurements change that. Both are through the
 same harness, exclusions and bounds as everything above; neither is folded into the headline.

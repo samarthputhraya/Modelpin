@@ -23,7 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-Found by a live validation campaign on Gemini (Vertex AI):
+Found by a live validation campaign on Gemini (Vertex AI) — 972 same-model checks and six real
+model upgrades, written up in
+[docs/live-validation.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/live-validation.md):
+
+- **A decline was flagged on its phrasing.** One Gemini version said "I do not have the ability
+  to browse live URLs" and the next "I cannot access external URLs"; only the second matched a
+  refusal marker, so `check` failed the build on `refusal rate 0% -> 100%` over identical
+  behavior, twice. The markers now cover both, priced first on 3,524 stored baseline/candidate
+  pairs with 0 gate results changed.
 
 - **A prompt Gemini's safety filter blocks is a refusal, not an error.** `gemini-3.8-flash`
   returned no candidates (`block_reason: SAFETY`) for an unsafe prompt in a public suite, and the
