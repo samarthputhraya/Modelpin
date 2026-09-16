@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.4.2] - 2026-09-16
+
+Affects you only if you set `match: subset` or `match: superset`. The default `strict` and
+`unordered` modes are not on this code path and are unchanged.
+
+### Fixed
+
+- **A directional match mode could miss a real regression when the baseline was noisy.** Under
+  `subset`/`superset`, both sides were scored against a single representative baseline run, and
+  the baseline's disagreements with *itself* were subtracted from the candidate's. So a baseline
+  that varied run to run could hide a genuine change. Measured, with the candidate calling a tool
+  `subset` forbids on 10 of 10 runs: a quiet baseline reported `regression` and exit 1, a noisy
+  one reported `unchanged` and exit 0 — same candidate, same forbidden call.
+
+  Each side is now compared against what the baseline does **reproducibly**: everything it was
+  ever seen to do (`subset`), or what it did on every single run (`superset`) — and each baseline
+  run is scored against the *other* runs, so neither side is graded against a reference it helped
+  build. Priced against the previous engine over every committed corpus: on the held-out sets,
+  **no new false alarms**, one removed, and detection unchanged. No calibrated threshold moved.
+- **`Tool match` / `Arg match` no longer print `1.00` when nothing was measured.** Under
+  `superset`, a baseline that shares no call across its runs requires nothing of the candidate,
+  so no run *could* have failed — but the report published `1.00`, which reads as "identical".
+  It now prints `—`, the same as any other unmeasured signal.
+
 ## [0.4.1] - 2026-09-16
 
 ### Added
