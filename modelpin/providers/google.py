@@ -40,7 +40,11 @@ def _import_genai() -> Any:
         from google import genai
     except ImportError as exc:  # optional dependency
         raise ProviderError(
-            "The Google GenAI SDK is not installed. Install it with: pip install google-genai"
+            # The same command the README and the other two adapters name. `pip install
+            # google-genai` also works, but sending one user to a bare SDK and the next to
+            # the extra is how a person ends up with half the providers installed.
+            "The Google GenAI SDK is not installed. Install it with: "
+            "pip install 'modelpin[providers]'"
         ) from exc
     return genai
 
@@ -367,7 +371,9 @@ def _model_turn_content(parts: list[Any], text: str) -> dict[str, Any]:
     out: list[dict[str, Any]] = []
     for part in parts:
         fc = getattr(part, "function_call", None)
-        if getattr(fc, "name", None):
+        # `fc is not None` is implied by the name check -- `getattr(None, "name", None)` is
+        # None -- but stating it is what makes `fc.name` below provably safe to read.
+        if fc is not None and getattr(fc, "name", None):
             call: dict[str, Any] = {"name": fc.name, "args": getattr(fc, "args", {}) or {}}
             fc_id = getattr(fc, "id", None)
             if fc_id:
