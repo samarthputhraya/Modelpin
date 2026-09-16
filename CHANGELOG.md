@@ -12,6 +12,10 @@ Nothing yet.
 
 ### Added
 
+- **`python -m modelpin` runs the CLI.** The same commands, with nothing required on `PATH` —
+  for a venv you have not activated, a container that calls the interpreter directly, or a
+  Windows policy that blocks the generated `modelpin.exe`. It previously answered
+  `No module named modelpin.__main__`, which reads like a broken install.
 - **A machine-readable run record.** Every `modelpin check` writes
   `.modelpin/runs/check-<from>-to-<to>-<time>.json` beside its archived report: the exit code,
   every verdict with its signals and explanation, and every candidate run it recorded (prompts
@@ -26,6 +30,24 @@ Nothing yet.
   assertions. Key-shaped strings are redacted before the file is sent.
 
 ### Fixed
+
+Found by walking the documented first-run path from a freshly built wheel in a clean
+environment:
+
+- **`modelpin draft` dropped the system prompt from almost every real file.** A prompt is
+  rarely one flat literal — Python implicit concatenation, a triple-quoted block, a JS template
+  literal or a `+`-joined string all put quote characters and `\n` escapes between the words the
+  model hands back. The "is this actually in the file?" check compared raw text, so it reported
+  *"the model's system prompt did not appear in the file word for word"* and left out the single
+  most important part of a scenario. Quoting no longer counts; every word must still be present,
+  in order, in the file, so a prompt the model invented is still refused.
+- **`modelpin init` recommended a command that could not run.** After `pip install modelpin`
+  (without the `[providers]` extra) it printed "Credentials for google are already set" and
+  "modelpin baseline" as the next step — and `baseline` then died with "The Google GenAI SDK is
+  not installed", exit 4. `init` now names the missing SDK first, before the step that needs it.
+- **The Google adapter pointed at a different install command** (`pip install google-genai`)
+  than the OpenAI and Anthropic adapters and the README. All three now say
+  `pip install 'modelpin[providers]'`.
 
 Found by a live validation campaign on Gemini (Vertex AI) — 972 same-model checks and six real
 model upgrades, written up in

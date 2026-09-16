@@ -80,6 +80,10 @@ is enough for the offline demo.
 > **Windows PowerShell:** type `modelpin`, not `mp`. PowerShell has a built-in `mp` alias
 > (`Move-ItemProperty`) that wins over the program. `mp` works in cmd, bash and zsh.
 
+Every command below also works as `python -m modelpin ...`, which needs nothing on your `PATH`
+— useful in a venv you have not activated, in a container, or when a security policy blocks the
+generated `modelpin.exe`.
+
 ## Try it in 30 seconds, offline
 
 No API key, no cost. `modelpin init --demo` writes a small sandbox with four scenarios and
@@ -353,6 +357,15 @@ with `--help` for details.
 **PowerShell answers `mp` with `Cannot find path ...`, `missing mandatory parameters`, or a
 `Supply values for the following parameters` prompt.** That is PowerShell's built-in `mp` alias.
 Press Ctrl+C and type `modelpin`.
+
+**`modelpin: command not found`, or Windows blocks `modelpin.exe`.** The console script lives in
+your environment's `Scripts/` (or `bin/`) directory, which may not be on `PATH` — and on Windows,
+Application Control can refuse a freshly written `.exe`. Run `python -m modelpin ...` instead; it
+is the same CLI and needs no `PATH` entry.
+
+**`The Google GenAI SDK is not installed` (or the OpenAI/Anthropic one), exit 4.** You installed
+plain `modelpin`. Run `pip install "modelpin[providers]"`. `modelpin init` also says so up front
+when the SDK for your configured provider is missing.
 
 **`rate limit or quota exceeded`.** Modelpin already retried with backoff. Wait for the quota
 window, lower `--runs`, or check billing. On Gemini's AI Studio, *"prepayment credits are
