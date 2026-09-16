@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.4.1] - 2026-09-16
+
 ### Added
 
 - **A machine-readable run record.** Every `modelpin check` writes
