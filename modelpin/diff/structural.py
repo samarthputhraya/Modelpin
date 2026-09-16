@@ -164,27 +164,39 @@ def relation_reference(traces: list[Trace], mode: MatchMode) -> tuple[str, ...]:
     permutation test had already found it significant (p = 0.046); the effect size was
     deflated under ``MIN_TOOL_TVD`` by the subtraction and the gate stayed silent.
 
-    **Priced over every committed baseline/candidate pair** -- 3,336 same-model trials and
-    the detection arm beside them, per mode. The old rule is reconstructed by substituting
-    the reference helpers INSIDE the real `diff_scenario`, so every other channel is
-    identical by construction, and verdicts are compared to verdicts over
-    ``{regression, changed_minor}`` -- ADR-0041 D3: a `changed_minor` on a null is a false
-    positive and does not close the row.
+    **Priced over every committed baseline/candidate pair**, split by set role (ADR-0025),
+    counting ``{regression, changed_minor}`` because ADR-0041 D3 says a `changed_minor` on a
+    null is a false positive. Method, and it is load-bearing: the prior engine is the prior
+    commit's ``modelpin/`` extracted with ``git archive`` and imported as itself. Three
+    earlier attempts substituted a subset of helpers instead and each was wrong -- the last
+    left `leave_one_out_references` unpatched and priced a hybrid engine that never existed.
+    **Never reconstruct a prior engine by substituting helpers.**
 
-      * same-model (false-positive) arm: **0 new alarms**, **97 REMOVED** (5 `subset`,
-        92 `superset`). The removals are pairs where the baseline itself skipped an
-        optional call, so the old rule was crying wolf.
-      * detection arm: **10 alarms lost**, 0 gained on this corpus. `[M]` 9 of the 10 are
-        still caught under `strict`/`unordered`; exactly **one**
-        (`tc_climbinggym_freeze_refund`, `superset`) is lost under every mode, and it is
-        in the role-`fit` tool-calibration set, which may choose a rule and never score it.
-      * `strict` / `unordered`: **0 changes of any kind.** This code is not on their path.
+    ======================  ======  =========  ======  ======
+    arm / role / mode       trials  OLD flags  NEW
+    ======================  ======  =========  ======  ======
+    same-model score subset   3196          0       0
+    same-model score superset 3196          1       0
+    detection  score subset    150         35      35
+    detection  score superset  150         48      48
+    detection  fit   subset     38         13      15
+    detection  fit   superset   38         21      23
+    ======================  ======  =========  ======  ======
+
+    So on the **score** corpora -- the only ones a rate may be claimed from -- the
+    false-positive count is **0 new, one removed**, and detection is **identical in both
+    modes**. The rule is CHOSEN on the role-`fit` tool-calibration set, where it is net +4
+    (6 gained, 2 lost); that set may choose a rule and may never be cited as a rate.
+
+    `[M]` The one removed score-set alarm is `optional_notify_after_status_update` under
+    `superset` -- MP-220, whose `superset` half ADR-0041 recorded as still open. The
+    `strict` half remains open and pinned by `xfail(strict=True)`.
+
+    `strict` / `unordered` take the equivalence branch and show **0 changes of any kind**.
 
     An earlier version of this fix omitted `leave_one_out_references` and was BLOCKED in
-    review for it: `[M]` it took `arg_freetext_note` from 0 of 90 same-model trials flagged
-    to 9 of 90, because the reference was fitted on the baseline and scored on the
-    candidate. Those numbers, and a "+28 detections" figure from a pricing script that
-    compared a channel flag to a verdict and never counted `changed_minor`, are WITHDRAWN.
+    review: `[M]` it took `arg_freetext_note` from 0 of 90 same-model trials flagged to 9 of
+    90, because the reference was fitted on the baseline and scored on the candidate.
 
     No calibrated constant moves: ``ALPHA``, ``MIN_TOOL_TVD`` and ``MIN_TOOL_ARG_TVD`` are
     untouched. What changes is what each side is compared AGAINST.

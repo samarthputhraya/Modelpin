@@ -165,7 +165,7 @@ def test_a_behaviour_seen_once_is_not_treated_as_the_baseline_repertoire() -> No
 def test_a_free_text_argument_that_is_novel_every_run_is_not_a_false_positive() -> None:
     """THE regression test for the blocked version of this fix.
 
-    `[M] 2026-09-16` fp-guardian, on the committed same-model corpus: without leave-one-out,
+    `[M] 2026-09-16` measured on the committed same-model corpus: without leave-one-out,
     `arg_freetext_note` went from 0 of 90 trials flagged to **9 of 90** at confidence 0.996.
     A free-text payload is different on every run on BOTH sides, so scoring the candidate
     against a reference the baseline built makes a violation rate of 1.0 the ordinary
