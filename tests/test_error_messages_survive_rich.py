@@ -41,7 +41,9 @@ import modelpin.cli as cli
 
 #: The exact string `providers/openai.py` raises. If this drifts, the guard is measuring a
 #: message the product no longer sends -- so it is asserted against the source, not copied.
-_INSTALL_HINT = "pip install 'modelpin[providers]'"
+# Double-quoted since 0.4.1: `'` is not a quoting character in `cmd.exe`, so the
+# single-quoted form could not be pasted there. All three adapters print this exact text.
+_INSTALL_HINT = 'pip install "modelpin[providers]"'
 
 
 def _unwrapped(text: str) -> str:

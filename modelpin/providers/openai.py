@@ -325,7 +325,7 @@ def build_openai_client(
         from openai import OpenAI
     except ImportError as exc:  # optional dependency
         raise ProviderError(
-            "The OpenAI SDK is not installed. Install it with: pip install 'modelpin[providers]'"
+            'The OpenAI SDK is not installed. Install it with: pip install "modelpin[providers]"'
         ) from exc
     kwargs: dict[str, Any] = {"api_key": api_key, "max_retries": max_retries}
     if base_url:

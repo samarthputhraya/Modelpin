@@ -44,7 +44,7 @@ def _import_genai() -> Any:
             # google-genai` also works, but sending one user to a bare SDK and the next to
             # the extra is how a person ends up with half the providers installed.
             "The Google GenAI SDK is not installed. Install it with: "
-            "pip install 'modelpin[providers]'"
+            'pip install "modelpin[providers]"'
         ) from exc
     return genai
 

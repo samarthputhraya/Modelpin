@@ -147,7 +147,7 @@ def _import_anthropic() -> Any:
         import anthropic
     except ImportError as exc:  # optional dependency
         raise ProviderError(
-            "The Anthropic SDK is not installed. Install it with: pip install 'modelpin[providers]'"
+            'The Anthropic SDK is not installed. Install it with: pip install "modelpin[providers]"'
         ) from exc
     return anthropic
 
