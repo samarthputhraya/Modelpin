@@ -525,3 +525,24 @@ def test_automatic_function_calling_is_disabled_on_every_request():
     client = FakeClient(_response([_text_part("ok")]))
     GoogleAdapter(client=client).run(_scenario(), "gemini-2.5-flash")
     assert client.last_kwargs["config"]["automatic_function_calling"] == {"disable": True}
+
+
+def test_a_prompt_the_safety_filter_blocks_is_recorded_as_a_refusal_not_an_error():
+    """`[M] 2026-09-15` gemini-3.8-flash returned no candidates with
+    `prompt_feedback.block_reason=SAFETY` for an unsafe voicerag-suite prompt; the adapter raised
+    and the whole baseline exited 4."""
+    blocked = SimpleNamespace(
+        candidates=[],
+        usage_metadata=SimpleNamespace(prompt_token_count=40, candidates_token_count=0),
+        prompt_feedback=SimpleNamespace(block_reason="SAFETY"),
+    )
+    trace = GoogleAdapter(client=FakeClient(blocked)).run(_scenario(), "gemini-3.8-flash")
+    assert trace.refused is True
+    assert trace.final_output == ""
+    assert trace.incomplete_reason is not None
+
+
+def test_no_candidates_without_a_block_reason_is_still_an_error():
+    empty = SimpleNamespace(candidates=[], usage_metadata=None, prompt_feedback=None)
+    with pytest.raises(ProviderError, match="no candidates"):
+        GoogleAdapter(client=FakeClient(empty)).run(_scenario(), "gemini-3.8-flash")

@@ -71,7 +71,7 @@ Python 3.12 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.4.0
+modelpin version                        # -> modelpin 0.4.1
 ```
 
 The `providers` extra installs the OpenAI, Anthropic and Google SDKs. Plain `pip install modelpin`
@@ -79,6 +79,11 @@ is enough for the offline demo.
 
 > **Windows PowerShell:** type `modelpin`, not `mp`. PowerShell has a built-in `mp` alias
 > (`Move-ItemProperty`) that wins over the program. `mp` works in cmd, bash and zsh.
+
+Every `modelpin` command below also works as `python -m modelpin ...`, which needs no Modelpin
+entry on your `PATH` — useful in a venv you have not activated, in a container, or when a
+security policy blocks the generated `modelpin.exe`. Commands still print their follow-up
+suggestions as `modelpin ...`; prefix those the same way.
 
 ## Try it in 30 seconds, offline
 
@@ -142,6 +147,13 @@ JSON file each — the system prompt, the user message, and any tools. For examp
 Templates for classifiers, JSON extraction, refusal policies, tool-using agents and free-text
 answers: **[Writing scenarios](https://github.com/samarthputhraya/modelpin/blob/main/docs/writing-scenarios.md)**.
 `modelpin init --agent-example` adds a runnable tool-calling agent scenario.
+
+**Faster: draft them from your code.** `modelpin draft app/support.py` sends that one file to your
+configured model (one call, your key, key-shaped strings redacted first) and writes draft
+scenarios to `scenarios/.drafts/`, which `baseline` and `check` ignore. The system prompt and
+tools are copied only if they appear in the file; the user messages, canned tool results and
+suggested assertions are invented and marked as such. Review each draft, then move it into
+`scenarios/`.
 
 **3. Record your current model.**
 
@@ -212,6 +224,9 @@ The full explanation, in plain language, with the exact rule at the end:
 | `2` | usage error: an unknown option or a missing `--to` |
 
 Every flagged scenario shows one example run from each model, so you can see what changed.
+Each check also writes `.modelpin/runs/check-<from>-to-<to>-<time>.json`: the exit code, every
+verdict with its signals, and every candidate run — for scripts, and for reading the full runs
+behind a verdict.
 
 "Regression" means *your app's behavior changed from the baseline* — Modelpin does not judge
 which model is better. A new model that starts calling a tool your prompt asked for is a change
@@ -322,6 +337,7 @@ current model, once.
 |---|---|
 | `modelpin init [dir]` | Write `modelpin.yaml` and a starter scenario, configured from the models your code calls. `--demo` writes the offline sandbox; `--agent-example` adds a tool-calling agent scenario. Never overwrites. |
 | `modelpin scan [path]` | List the model ids a repository (or a single file) uses, and where. |
+| `modelpin draft <file>` | Draft scenarios from one file of your app into `scenarios/.drafts/` for review (one model call). `--count`, `--model`, `--provider`. |
 | `modelpin baseline` | Run every scenario N times on your current model and save the results. |
 | `modelpin check --to <model>` | Replay on a candidate, compare with the baseline, print verdicts, write the report, exit `0`/`1`/`3`/`4`. |
 | `modelpin report --to <new> --from <old> --suite-dir <dir>` | Replay a scenario suite on two models and write a reproducible, publishable Markdown report plus a JSON sidecar under `reports/`. Always exits 0. |
@@ -342,6 +358,16 @@ with `--help` for details.
 **PowerShell answers `mp` with `Cannot find path ...`, `missing mandatory parameters`, or a
 `Supply values for the following parameters` prompt.** That is PowerShell's built-in `mp` alias.
 Press Ctrl+C and type `modelpin`.
+
+**`modelpin: command not found`, or Windows blocks `modelpin.exe`.** The console script lives in
+your environment's `Scripts/` (or `bin/`) directory, which may not be on `PATH` — and on Windows,
+Application Control can refuse a freshly written `.exe`. Run `python -m modelpin ...` instead; it
+is the same CLI and needs no `PATH` entry.
+
+**`The Google GenAI SDK is not installed` (or the OpenAI/Anthropic one), exit 4.** You most
+likely installed plain `modelpin`. Run `pip install "modelpin[providers]"`. `modelpin init` also
+warns about a missing SDK before it suggests `modelpin baseline`, whether it is writing
+`modelpin.yaml` or adopting one that already exists.
 
 **`rate limit or quota exceeded`.** Modelpin already retried with backoff. Wait for the quota
 window, lower `--runs`, or check billing. On Gemini's AI Studio, *"prepayment credits are
@@ -380,9 +406,17 @@ borderline change rather than raise a false alarm. Know the trade-offs:
   of error.
 - **It only measures your scenarios.** Behavior no scenario exercises is invisible. Coverage gaps
   are disclosed in every report.
-- **The judge is a model too.** Its sensitivity depends on the model you pick, and the project's
-  calibration so far used an OpenAI judge.
+- **The judge is a model too.** Its sensitivity depends on the model you pick. The project's
+  semantic threshold was calibrated with an OpenAI judge; re-scoring the published measurements
+  with a Gemini judge changed no alarm decision on 732 paired trials, but other judges are
+  unmeasured.
 - **It measures change, not quality.** It never says one model is better.
+
+**What happened when it was run at scale, live:** 972 same-model checks across six Gemini
+models raised **0** false alarms, and across six real Gemini upgrades it flagged 28 regressions,
+every one of which an independent model rated a material behavior change —
+[docs/live-validation.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/live-validation.md),
+with the bugs that campaign found in Modelpin itself.
 
 The project publishes its own false-positive and detection measurements — how they were run,
 the confidence bounds, the same-model false alarms it has observed (four so far: one on tool

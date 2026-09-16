@@ -46,6 +46,15 @@ def _modal(traces: list[Trace], exclude: set | None = None) -> Trace | None:
     return next(t for t in traces if _behavior(t) == top)
 
 
+#: How an early stop reads beside an example. Keyed by `IncompleteReason` value.
+_ENDED = {
+    "tool_turns": "stopped at the tool-call limit",
+    "max_tokens": "cut off at the token limit",
+    "content_filter": "stopped by the provider's content filter",
+    "malformed_tool_call": "sent a malformed tool call",
+}
+
+
 def _shorten(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
 
@@ -67,6 +76,8 @@ class Example:
     tools: tuple[str, ...]
     output: str
     refused: bool
+    #: Why the run ended early, when it did (e.g. the tool-loop cap), else "".
+    ended: str = ""
 
     @classmethod
     def of(cls, trace: Trace) -> "Example":
@@ -74,6 +85,11 @@ class Example:
             tuple(_call(call.name, call.arguments) for call in trace.tool_calls),
             _shorten(" ".join((trace.final_output or "").split()), EXAMPLE_CHARS),
             trace.refused,
+            (
+                _ENDED.get(trace.incomplete_reason.value, trace.incomplete_reason.value)
+                if trace.incomplete_reason
+                else ""
+            ),
         )
 
     def describe(self) -> str:
@@ -83,6 +99,8 @@ class Example:
         if self.refused:
             parts.append("refused")
         parts.append(f'"{self.output}"' if self.output else "(no text)")
+        if self.ended:
+            parts.append(self.ended)
         return "; ".join(parts)
 
 

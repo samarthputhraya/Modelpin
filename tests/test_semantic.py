@@ -151,3 +151,32 @@ def test_an_empty_leave_one_out_pool_is_not_divergence():
     base_flags, cand_flags, _ = semantic_divergence_flags(_traces(["A"]), _traces(["Z"]), judge)
     assert base_flags == [0], base_flags
     assert cand_flags == [1], cand_flags
+
+
+def test_judging_runs_concurrently_gives_the_same_flags_as_sequential():
+    """Execution strategy only: a thread-safe judge is asked the same questions per run."""
+    import threading
+
+    from modelpin.diff.semantic import semantic_divergence_flags as _flags
+    from modelpin.models import Trace as _T
+
+    class _Rule:
+        def __init__(self, parallel: bool) -> None:
+            self.parallel_safe = parallel
+            self.asked: list[tuple[str, str]] = []
+            self.lock = threading.Lock()
+
+        def equivalent(self, reference, candidate, task=None):
+            with self.lock:
+                self.asked.append((reference, candidate))
+            return reference[0] == candidate[0]  # same first letter == same meaning
+
+    base = [
+        _T(scenario_id="s", model_id="m", run_idx=i, final_output=o)
+        for i, o in enumerate(["apple", "avocado", "apricot", "banana", "almond"])
+    ]
+    cand = [_T(scenario_id="s", model_id="m", run_idx=i, final_output=o)
+            for i, o in enumerate(["berry", "blue", "acorn", "bread", "basil"])]  # fmt: skip
+    seq, par = _Rule(False), _Rule(True)
+    assert _flags(base, cand, seq) == _flags(base, cand, par)
+    assert sorted(seq.asked) == sorted(par.asked), "the same questions, only ordered differently"

@@ -58,3 +58,18 @@ def test_hard_refusal_is_still_a_refusal():
     assert looks_like_refusal("I cannot share that information.")
     assert looks_like_refusal("I'm not able to help with that.")
     assert looks_like_refusal("I’m unable to comply with this request.")
+
+
+def test_a_capability_decline_phrased_as_i_do_not_have_is_the_same_refusal():
+    """`[M] 2026-09-15` two Gemini versions declined identically in different words, and only one
+    phrasing matched: `check` failed a build on `refusal rate 0% -> 100%` over the same behavior."""
+    from modelpin.providers._common import looks_like_refusal
+
+    before = "I do not have the ability to browse live URLs or access external PDF files."
+    after = "I cannot access external URLs or browse the live internet to retrieve documents."
+    assert looks_like_refusal(before) == looks_like_refusal(after) is True
+    local_before = "I do not have direct access to your local files for security reasons."
+    local_after = "I cannot access local files on your computer."
+    assert looks_like_refusal(local_before) == looks_like_refusal(local_after) is True
+    assert looks_like_refusal("I don’t have access to real-time market data.")  # curly apostrophe
+    assert not looks_like_refusal("I do have access to the order history; it shipped today.")
