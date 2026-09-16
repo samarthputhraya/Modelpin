@@ -34,6 +34,9 @@ from modelpin.diff.structural import (
     has_tool_arguments,
     modal_arg_sequence,
     modal_sequence,
+    leave_one_out_references,
+    relation_arg_reference,
+    relation_reference,
     name_trajectory_is_stable,
     refusal_rate,
     refused_flags,
@@ -292,16 +295,31 @@ def diff_scenario(
     # dropped call under subset, an added call under superset) as a regression — a false
     # positive on the cardinal metric. For those, score each run by whether it VIOLATES the
     # baseline relation and gate a *rise* in the violation rate (one-sided, like refusal).
+    tool_measured = True
     if mode in EQUIVALENCE_MODES:
         base_keys = [canonical_sequence(tool_call_sequence(t), mode) for t in baseline_traces]
         cand_keys = [canonical_sequence(tool_call_sequence(t), mode) for t in candidate_traces]
         tool_tvd = total_variation_distance(base_keys, cand_keys)
         tool_p = permutation_pvalue_distribution(base_keys, cand_keys)
     else:
-        ref_seq = modal_sequence(baseline_traces, mode)
+        # MP-114: the baseline's REPERTOIRE, not one representative run. See
+        # `relation_reference`. The CANDIDATE is scored against the whole baseline; each
+        # baseline run is scored against the other n-1 (`loo` below), so neither side is
+        # graded against a reference it helped build.
+        ref_seq = relation_reference(baseline_traces, mode)
+        # An EMPTY `superset` reference means the baseline shared no call across all its
+        # runs, so the mode requires nothing and no candidate run can violate it. That is a
+        # vacuous 1.0, not a clean one. (An empty `subset` reference is the opposite: the
+        # baseline called no tool at all, so ANY candidate call is a violation -- real, and
+        # measured.)
+        tool_measured = not (mode == "superset" and not ref_seq)
+        # Leave-one-out on the baseline side, so BOTH sides are scored out-of-sample.
+        # See `leave_one_out_references`: without it the baseline cannot violate a
+        # reference it helped build, and the candidate fires on novelty alone.
+        loo = leave_one_out_references(baseline_traces, mode)
         base_viol = [
-            0 if trajectory_match(ref_seq, tool_call_sequence(t), mode) else 1
-            for t in baseline_traces
+            0 if trajectory_match(loo[i], tool_call_sequence(t), mode) else 1
+            for i, t in enumerate(baseline_traces)
         ]
         cand_viol = [
             0 if trajectory_match(ref_seq, tool_call_sequence(t), mode) else 1
@@ -355,6 +373,7 @@ def diff_scenario(
         and has_tool_arguments(candidate_traces)
         and name_trajectory_is_stable(baseline_traces, candidate_traces, mode)
     )
+    args_measured = args_compared
     if args_compared:
         if mode in EQUIVALENCE_MODES:
             base_akeys = [canonical_sequence(tool_arg_sequence(t), mode) for t in baseline_traces]
@@ -365,10 +384,13 @@ def diff_scenario(
             # Mirror the name signal's own dispatch. Bucketing a directional mode by a key
             # would flag the very change the mode PERMITS: under `subset` a dropped whole
             # call must stay legal even though dropping it changes the argument key too.
-            ref_aseq = modal_arg_sequence(baseline_traces, mode)
+            # MP-114, same fix as the name signal above.
+            ref_aseq = relation_arg_reference(baseline_traces, mode)
+            args_measured = not (mode == "superset" and not ref_aseq)
+            aloo = leave_one_out_references(baseline_traces, mode, arguments=True)
             base_aviol = [
-                0 if trajectory_match(ref_aseq, tool_arg_sequence(t), mode) else 1
-                for t in baseline_traces
+                0 if trajectory_match(aloo[i], tool_arg_sequence(t), mode) else 1
+                for i, t in enumerate(baseline_traces)
             ]
             cand_aviol = [
                 0 if trajectory_match(ref_aseq, tool_arg_sequence(t), mode) else 1
@@ -453,8 +475,15 @@ def diff_scenario(
         # directly and never this field. Nothing in `diff/` consumes it; it is rendered
         # (`report/__init__.py`), persisted in the report sidecar, and carried wholesale into
         # `scripts/drift_map.py` output via `model_dump()`.
-        tool_call_match=round(1.0 - tool_tvd, 3),  # 1.0 == identical tool-NAME trajectory
-        tool_arg_match=round(1.0 - arg_tvd, 3) if args_compared else None,
+        #
+        # MP-114's other half. `1.0` under a directional mode means "no candidate run broke
+        # the relation", and where the relation constrains NOTHING that is vacuous, not a
+        # measurement. `superset` over a baseline that never repeated a call requires
+        # nothing of the candidate, so no run could have violated it -- and the table used
+        # to print `1.00`, which a reviewer reads as "identical". `None` is the field's
+        # documented word for "not measured", and the renderer already prints it as `—`.
+        tool_call_match=round(1.0 - tool_tvd, 3) if tool_measured else None,
+        tool_arg_match=(round(1.0 - arg_tvd, 3) if args_measured else None),
         format_valid=not fmt_drift,
         refusal_delta=round(refusal_delta, 3),
         semantic_score=semantic_score,
