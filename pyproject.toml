@@ -1,6 +1,6 @@
 [project]
 name = "modelpin"
-version = "0.4.1"
+version = "0.4.2"
 description = "Dependabot for AI models — catch model-migration regressions before they hit production."
 readme = "README.md"
 requires-python = ">=3.12"

@@ -1,0 +1,28 @@
+# Modelpin's Gemini dogfood config — the second vendor, and the KEYLESS credential path.
+#
+# Same shape and the same reasoning as `.github/modelpin.yaml`; read that file first, its
+# comments explain why this one is not at the repo root (a stranger who cloned the repo
+# inherited the root config and replayed OUR suite on THEIR paid key).
+#
+# What this one adds: `.github/modelpin.yaml` exercises the Action on OpenAI with an API key
+# in a repository secret. Everything about a user whose credential is Application Default
+# Credentials instead — which is how Vertex AI works, and how the GitHub Action authenticates
+# without storing a key — went unexercised in CI until this existed.
+#
+# A self-consistency smoke, not a migration check: the committed baseline's traces are real
+# `gemini-3.1-flash-lite` recordings, so re-checking that model against them should read
+# `unchanged`. It bounds the false-positive rate at nothing on the channels every scenario
+# pins to temperature 0; point `to:` at a newer Gemini in the workflow to make it a real one.
+models:
+  # NOT a real model id. The baseline file is tracked so this self-check can run, which means
+  # it ships in every clone, and `mp check` pairs a baseline to a scenario by id alone — under
+  # a real model id it collided with strangers' own scenarios and fabricated a REGRESSION at
+  # confidence 0.99, exit 1. MP-69 / ADR-0021. The traces inside are genuine Gemini output.
+  - modelpin-gemini-dogfood # -> .modelpin/baseline-modelpin-gemini-dogfood.json
+scenarios_dir: examples/suite
+providers:
+  - google # Vertex AI via ADC in CI; GEMINI_API_KEY also works locally
+runs: 5
+# Never one of the models under comparison: a model judging its own output is not an
+# independent reading of it. `check` warns when it is, and this must not be that warning.
+judge_model: gemini-3.5-flash

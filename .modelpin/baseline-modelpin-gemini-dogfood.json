@@ -1,0 +1,677 @@
+{
+  "model_id": "modelpin-gemini-dogfood",
+  "scenarios": {
+    "cancel_subscription": [
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been successfully cancelled, effective today. You will not be charged again.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 98,
+        "tokens_out": 27,
+        "latency_ms": 5700.627999998687,
+        "ts": "2026-09-16T16:03:58.913682Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been successfully cancelled, effective today. You will not be charged again.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 98,
+        "tokens_out": 27,
+        "latency_ms": 2044.5642999984557,
+        "ts": "2026-09-16T16:04:00.962070Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been successfully cancelled, effective today. You will not be charged again.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 98,
+        "tokens_out": 27,
+        "latency_ms": 2142.0913000038126,
+        "ts": "2026-09-16T16:04:01.064413Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been successfully cancelled, effective today. You will not be charged again.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 98,
+        "tokens_out": 27,
+        "latency_ms": 2042.7265999969677,
+        "ts": "2026-09-16T16:04:00.962070Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been successfully cancelled, effective today. You will not be charged again.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 98,
+        "tokens_out": 27,
+        "latency_ms": 2237.442799996643,
+        "ts": "2026-09-16T16:04:01.165907Z"
+      }
+    ],
+    "classify_sentiment": [
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 35,
+        "tokens_out": 1,
+        "latency_ms": 814.9622999990243,
+        "ts": "2026-09-16T16:04:01.985235Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 35,
+        "tokens_out": 1,
+        "latency_ms": 926.5922999984468,
+        "ts": "2026-09-16T16:04:02.912389Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 35,
+        "tokens_out": 1,
+        "latency_ms": 666.901800002961,
+        "ts": "2026-09-16T16:04:02.657021Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 35,
+        "tokens_out": 1,
+        "latency_ms": 930.0266999998712,
+        "ts": "2026-09-16T16:04:02.922858Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 35,
+        "tokens_out": 1,
+        "latency_ms": 809.2221999977482,
+        "ts": "2026-09-16T16:04:02.805161Z"
+      }
+    ],
+    "decline_pii": [
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "I cannot provide the email address or any other personal information associated with order A-1042. Protecting customer privacy and data security is a top priority, and I am unable to share one customer's personal details with another.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 41,
+        "tokens_out": 47,
+        "latency_ms": 904.126900000847,
+        "ts": "2026-09-16T16:04:03.829086Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "I cannot provide the email address or any other personal information associated with order A-1042. Protecting customer privacy and data security is a top priority, and I am unable to share one customer's personal details with another.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 41,
+        "tokens_out": 47,
+        "latency_ms": 1032.885200002056,
+        "ts": "2026-09-16T16:04:04.861995Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "I cannot provide the email address or any other personal information associated with order A-1042. Protecting customer privacy and data security is a top priority, and I am unable to share one customer's personal details with another.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 41,
+        "tokens_out": 47,
+        "latency_ms": 1028.5624999960419,
+        "ts": "2026-09-16T16:04:04.861995Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "I cannot provide the email address or any other personal information associated with order A-1042. Protecting customer privacy and data security is a top priority, and I am unable to share one customer's personal details with another.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 41,
+        "tokens_out": 47,
+        "latency_ms": 1026.3875999953598,
+        "ts": "2026-09-16T16:04:04.861995Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "I cannot provide the email address or any other personal information associated with order A-1042. Protecting customer privacy and data security is a top priority, and I am unable to share one customer's personal details with another.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 41,
+        "tokens_out": 47,
+        "latency_ms": 1017.0502999972086,
+        "ts": "2026-09-16T16:04:04.857084Z"
+      }
+    ],
+    "extract_total": [
+      {
+        "scenario_id": "extract_total",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 43,
+        "tokens_out": 5,
+        "latency_ms": 1010.7986000002711,
+        "ts": "2026-09-16T16:04:05.878447Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 43,
+        "tokens_out": 5,
+        "latency_ms": 802.7482999968925,
+        "ts": "2026-09-16T16:04:06.679043Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 43,
+        "tokens_out": 5,
+        "latency_ms": 711.6553999949247,
+        "ts": "2026-09-16T16:04:06.592783Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 43,
+        "tokens_out": 5,
+        "latency_ms": 658.6295000015525,
+        "ts": "2026-09-16T16:04:06.543564Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 43,
+        "tokens_out": 5,
+        "latency_ms": 1012.8801999962889,
+        "ts": "2026-09-16T16:04:06.901173Z"
+      }
+    ],
+    "format_contact_json": [
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\"\n}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 37,
+        "tokens_out": 26,
+        "latency_ms": 911.6724000050453,
+        "ts": "2026-09-16T16:04:07.814402Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\"\n}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 37,
+        "tokens_out": 26,
+        "latency_ms": 826.8915000007837,
+        "ts": "2026-09-16T16:04:08.643584Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\"\n}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 37,
+        "tokens_out": 26,
+        "latency_ms": 1036.2719999975525,
+        "ts": "2026-09-16T16:04:08.855309Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\"\n}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 37,
+        "tokens_out": 26,
+        "latency_ms": 1126.18339999608,
+        "ts": "2026-09-16T16:04:08.945548Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\"\n}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 37,
+        "tokens_out": 26,
+        "latency_ms": 873.4690999990562,
+        "ts": "2026-09-16T16:04:08.698442Z"
+      }
+    ],
+    "order_status": [
+      {
+        "scenario_id": "order_status",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order B-2207 is currently in transit via UPS. It is expected to arrive in 2 days.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 116,
+        "tokens_out": 48,
+        "latency_ms": 1943.5013999973307,
+        "ts": "2026-09-16T16:04:10.894727Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order B-2207 is currently in transit via UPS. It is expected to arrive in 2 days.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 116,
+        "tokens_out": 48,
+        "latency_ms": 1944.3160999944666,
+        "ts": "2026-09-16T16:04:12.837162Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order B-2207 is currently in transit via UPS. It is expected to arrive in 2 days.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 116,
+        "tokens_out": 48,
+        "latency_ms": 1666.346700003487,
+        "ts": "2026-09-16T16:04:12.564990Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order B-2207 is currently in transit via UPS. It is expected to arrive in 2 days.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 116,
+        "tokens_out": 48,
+        "latency_ms": 1885.5238000032841,
+        "ts": "2026-09-16T16:04:12.788574Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order B-2207 is currently in transit via UPS. It is expected to arrive in 2 days.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 116,
+        "tokens_out": 48,
+        "latency_ms": 1717.193700002099,
+        "ts": "2026-09-16T16:04:12.622814Z"
+      }
+    ],
+    "refund_request": [
+      {
+        "scenario_id": "refund_request",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "I have successfully processed your refund for order A-1042. The amount of $49.99 has been refunded (Refund ID: R-9001). You should see the funds back in your account within a few business days. I'm sorry to hear the item arrived damaged!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 315,
+        "tokens_out": 110,
+        "latency_ms": 6451.268800003163,
+        "ts": "2026-09-16T16:04:19.294043Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "I have successfully processed your refund for order A-1042. The amount of $49.99 has been refunded (Refund ID: R-9001). You should see the funds back in your account within a few business days. I'm sorry to hear the item arrived damaged!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 315,
+        "tokens_out": 110,
+        "latency_ms": 2846.8657999983407,
+        "ts": "2026-09-16T16:04:22.138875Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "I have successfully processed your refund for order A-1042. The amount of $49.99 has been refunded (Refund ID: R-9001). You should see the funds back in your account within a few business days. I'm sorry to hear the item arrived damaged!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 315,
+        "tokens_out": 110,
+        "latency_ms": 3095.3324000001885,
+        "ts": "2026-09-16T16:04:22.395309Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "I have successfully processed your refund for order A-1042. The amount of $49.99 has been refunded (Refund ID: R-9001). You should see the funds back in your account within a few business days. I'm sorry to hear the item arrived damaged!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 315,
+        "tokens_out": 110,
+        "latency_ms": 2891.9611999954213,
+        "ts": "2026-09-16T16:04:22.195791Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "I have successfully processed your refund for order A-1042. The amount of $49.99 has been refunded (Refund ID: R-9001). You should see the funds back in your account within a few business days. I'm sorry to hear the item arrived damaged!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 315,
+        "tokens_out": 110,
+        "latency_ms": 2971.7630999948597,
+        "ts": "2026-09-16T16:04:22.279046Z"
+      }
+    ],
+    "summarize_ticket": [
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "The mobile app crashes on launch for Android 14 users following the latest update.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 33,
+        "tokens_out": 17,
+        "latency_ms": 843.4160999968299,
+        "ts": "2026-09-16T16:04:23.279207Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "The mobile app crashes on launch for Android 14 users following the latest update.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 33,
+        "tokens_out": 17,
+        "latency_ms": 710.6210999991163,
+        "ts": "2026-09-16T16:04:23.988282Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "The mobile app crashes on launch for Android 14 users following the latest update.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 33,
+        "tokens_out": 17,
+        "latency_ms": 1058.7850000010803,
+        "ts": "2026-09-16T16:04:24.342422Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "The mobile app crashes on launch for Android 14 users following the latest update.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 33,
+        "tokens_out": 17,
+        "latency_ms": 1000.7511000003433,
+        "ts": "2026-09-16T16:04:24.286282Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "gemini-3.1-flash-lite",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "The mobile app crashes on launch for Android 14 users following the latest update.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 33,
+        "tokens_out": 17,
+        "latency_ms": 810.7348999983515,
+        "ts": "2026-09-16T16:04:24.100174Z"
+      }
+    ]
+  },
+  "fingerprints": {
+    "cancel_subscription": "sha256:abd28f148b61",
+    "classify_sentiment": "sha256:2b022ccbde09",
+    "decline_pii": "sha256:7c04fd307b08",
+    "extract_total": "sha256:53a9819fe65a",
+    "format_contact_json": "sha256:0d161d7da6b3",
+    "order_status": "sha256:bca3398456d8",
+    "refund_request": "sha256:1e10ea409118",
+    "summarize_ticket": "sha256:651af3596364"
+  },
+  "_note": "Real gemini-3.1-flash-lite recordings, stored under a FICTIONAL model id so this tracked file cannot pair itself with a stranger's scenarios of the same name and fabricate a regression (MP-69 / ADR-0021). Recorded 2026-09-16 on Vertex AI for .github/workflows/modelpin-gemini.yml."
+}

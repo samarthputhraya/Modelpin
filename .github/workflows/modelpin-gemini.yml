@@ -1,0 +1,114 @@
+# Dogfooding the GitHub Action against GEMINI, on Vertex AI, with no key anywhere.
+#
+# Why this file exists separately from `modelpin.yml`: that one exercises the Action on
+# OpenAI with a repository secret. This one exercises the SAME action.yml against a second
+# vendor and, more importantly, over the KEYLESS path — the Action has to work for a user
+# whose credential is Application Default Credentials rather than an API key, and until this
+# ran that combination was only ever exercised on a laptop.
+#
+# `[M] 2026-09-16` The action's own shell steps were validated against live Gemini outside
+# CI first (all three exit-code branches: 0 clean, 1 regression, 4 could-not-run). What this
+# workflow adds, and what a laptop cannot, is the hosted runner, `actions/setup-python`, and
+# the `github-script` PR-comment step.
+#
+# MANUAL ONLY. Modelpin is not itself an LLM app, so there is nothing to check on every PR,
+# and every run spends the Google credit.
+#
+# ── ONE-TIME SETUP, none of which puts a credential in this repo ──────────────────────────
+# Workload Identity Federation: GitHub mints a short-lived OIDC token, Google exchanges it
+# for a short-lived access token. No service-account key is created, downloaded or stored.
+#
+#   PROJECT=project-b3549f11-8db5-4ca2-9e4
+#   PROJECT_NUMBER=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+#
+#   gcloud services enable iamcredentials.googleapis.com sts.googleapis.com \
+#     iam.googleapis.com aiplatform.googleapis.com --project "$PROJECT"
+#
+#   gcloud iam workload-identity-pools create github --location=global \
+#     --display-name="GitHub Actions" --project "$PROJECT"
+#
+#   # The attribute-condition is load-bearing: without it ANY repository on GitHub can
+#   # exchange a token for this project's credentials.
+#   gcloud iam workload-identity-pools providers create-oidc modelpin \
+#     --location=global --workload-identity-pool=github \
+#     --issuer-uri="https://token.actions.githubusercontent.com" \
+#     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+#     --attribute-condition="assertion.repository=='samarthputhraya/Modelpin'" \
+#     --project "$PROJECT"
+#
+#   gcloud iam service-accounts create modelpin-ci \
+#     --display-name="Modelpin CI (Vertex)" --project "$PROJECT"
+#
+#   gcloud projects add-iam-policy-binding "$PROJECT" \
+#     --member="serviceAccount:modelpin-ci@$PROJECT.iam.gserviceaccount.com" \
+#     --role="roles/aiplatform.user"
+#
+#   gcloud iam service-accounts add-iam-policy-binding \
+#     "modelpin-ci@$PROJECT.iam.gserviceaccount.com" \
+#     --role="roles/iam.workloadIdentityUser" \
+#     --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/samarthputhraya/Modelpin" \
+#     --project "$PROJECT"
+#
+# Then set two repository VARIABLES (Settings → Secrets and variables → Actions → Variables).
+# Variables, not secrets: neither value is confidential, and a provider path that reads as a
+# masked blob in the log is a support call waiting to happen.
+#   GCP_WORKLOAD_IDENTITY_PROVIDER =
+#     projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/providers/modelpin
+#   GCP_SERVICE_ACCOUNT = modelpin-ci@project-b3549f11-8db5-4ca2-9e4.iam.gserviceaccount.com
+
+name: Modelpin (Gemini)
+
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: "Candidate model to check the committed baseline against"
+        required: false
+        default: "gemini-3.1-flash-lite"
+      fail-on-regression:
+        description: "Fail the job when a regression is found"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+  id-token: write # mint the OIDC token Google exchanges. Nothing else needs it.
+
+jobs:
+  model-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Authenticate to Google Cloud (keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Modelpin behavioral check
+        # The action in THIS repo and the package from THIS tree, so the run validates
+        # action.yml + engine as they stand here rather than a published tag.
+        uses: ./
+        with:
+          # `from:` is a FICTIONAL id, and that is load-bearing — see the comment in
+          # .github/modelpin-gemini.yaml. Its traces are real gemini-3.1-flash-lite
+          # recordings, so checking that model against them should read `unchanged`.
+          from: modelpin-gemini-dogfood
+          to: ${{ inputs.to }}
+          provider: google
+          config: .github/modelpin-gemini.yaml
+          runs: "5"
+          comment: "false" # workflow_dispatch has no pull request to comment on
+          fail-on-regression: ${{ inputs.fail-on-regression }}
+          modelpin-spec: ".[providers]" # this repo's code, not a published tag
+        env:
+          # The SDK's own documented contract. `auth` above already exported
+          # GOOGLE_APPLICATION_CREDENTIALS, so ADC resolves with no key on disk.
+          GOOGLE_GENAI_USE_VERTEXAI: "true"
+          GOOGLE_CLOUD_PROJECT: project-b3549f11-8db5-4ca2-9e4
+          GOOGLE_CLOUD_LOCATION: global
+
+      - name: Show the report
+        if: always()
+        run: cat .modelpin/last-report.md || echo "no report produced"
