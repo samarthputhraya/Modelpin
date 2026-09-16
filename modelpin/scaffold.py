@@ -16,6 +16,7 @@ a one-line edit away. Nothing here reads a credential's VALUE -- only whether th
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 from collections import Counter
@@ -110,6 +111,43 @@ def has_credentials(provider: str, env: Mapping[str, str]) -> bool:
 
 def _credentialed_providers(env: Mapping[str, str]) -> list[str]:
     return [name for name, _ in PROVIDER_CREDENTIALS if has_credentials(name, env)]
+
+
+#: The import each provider adapter needs. The OpenAI-compatible hosts all speak through the
+#: OpenAI SDK, so they share its module.
+_PROVIDER_SDK: dict[str, str] = {
+    "openai": "openai",
+    "anthropic": "anthropic",
+    "google": "google.genai",
+    "groq": "openai",
+    "openrouter": "openai",
+    "together": "openai",
+    "cerebras": "openai",
+}
+
+
+def sdk_installed(provider: str) -> bool:
+    """Can the adapter for `provider` actually import its SDK?
+
+    `[M] 2026-09-16`, first-run walk-through on a clean machine: `pip install modelpin`
+    (no `[providers]` extra -- the shorter command, and the one people type) followed by
+    `modelpin init` printed "Credentials for google are already set in your environment"
+    and "modelpin baseline" as the next step. The SDK was not there, so the first command
+    `init` recommended died with exit 4. `init` knew enough to say so and did not.
+
+    `find_spec`, not a real import: loading a provider SDK costs ~0.5s and `init` is the
+    command that must feel instant. An import error inside the package itself is a broken
+    install, and the adapter reports that at the point of use.
+    """
+    module = _PROVIDER_SDK.get(provider)
+    if module is None:
+        return True
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        # A parent package that is itself missing or a namespace stub with no loader:
+        # either way the adapter's own import will fail, so report it the same way.
+        return False
 
 
 def _vertex_claude_id(model: str, env: Mapping[str, str]) -> str:

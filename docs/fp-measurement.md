@@ -842,6 +842,52 @@ is one judge; and a rejudged artifact is the same trials scored twice, **never a
 bound. Groq substitutes `1e-8` for the requested `temperature: 0` (`[S] 2026-09-07`
 console.groq.com/docs/openai). ADR-0037.
 
+## Gemini as judge and as the model under test (2026-09-15)
+
+> The product-level companion to this section — 972 same-model `modelpin check` runs and six
+> real Gemini upgrades, with the bugs they found — is in
+> [live-validation.md](live-validation.md). This section measures the engine; that one measures
+> the command.
+
+Until this run every false-positive number on this page had been scored by an OpenAI judge, and
+no fresh replay had used Google's models. Two measurements change that. Both are through the
+same harness, exclusions and bounds as everything above; neither is folded into the headline.
+Every figure below is re-derived from its artifacts by `tests/test_gemini_measurements.py`.
+
+**1. The run of record, re-scored by a Gemini judge.** `[M]` The stored replays of four of the
+five run-of-record surfaces (`s0`, `s1`, `s2a`, `s2b`; the 12-trial Groq arm was not re-scored)
+re-diffed with `gemini-3.5-flash` on Vertex AI as the judge, compared trial by trial with the
+published ADR-0040 re-score of the same traces. Artifacts:
+[`reports/judge-agreement/2026-09-15/`](../reports/judge-agreement/2026-09-15/).
+
+- **Alarm agreement (flag / no flag): 732 / 732 paired trials.** No trial that one judge flagged
+  went unflagged under the other.
+- **Verdict agreement: 729 / 732.** The three differences are all in the detection arm of the
+  argument surface (`arg_enum_phrasing`, `arg_list_order`, `arg_optional_fields`): the OpenAI
+  judge added a semantic flag that made them `regression`; the Gemini judge did not, leaving
+  `changed_minor`. All three are still detections.
+- **False alarms under the Gemini judge: 0 in 39 scored trials** (one-sided 95% upper bound
+  **7.4%**), 0 in 698 trials that reached a verdict (upper bound **0.43%**). The same traces, so
+  this is the published measurement read by a second judge — never a second sample.
+
+**2. Fresh replays on Gemini, judged by Gemini.** `[M]` `examples/fp-suite`, runs 5, 10 repeats,
+same model vs itself, on `gemini-3.5-flash-lite` and on `gemini-2.5-flash`, judge
+`gemini-3.5-flash`. Artifacts:
+[`reports/fp-runs-gemini/2026-09-15/`](../reports/fp-runs-gemini/2026-09-15/).
+
+| | trials reached | scored | false alarms | upper bound, scored | upper bound, reached |
+|---|---|---|---|---|---|
+| pooled, both models | 240 | 10 | **0** | 25.9% | 1.2% |
+
+- **Detection: 24 / 24** injected perturbations flagged (the 12 `fp-suite` perturbations on each
+  model), one-sided 95% lower bound **88.3%**. Over distinct perturbations that is 12 of 12.
+- `[M]` **Read the denominator first.** 230 of the 240 trials could not have fired: both Gemini
+  models answered these prompts so consistently that every channel returned `p = 1.00`. The
+  10 scored trials are 8 on CI-failing channels (6 semantic, 2 refusal) and 2 on the advisory
+  assertion channel, over 4 distinct scenarios; the **tool channel had zero exposure**.
+- Both measurements score the single-sample engine. `mp check` additionally re-runs a flagged
+  scenario before failing a build (ADR-0044), which can only remove alarms.
+
 ## Honest framing (trust guardrail)
 
 These are **measurements under the stated settings**, not absolute claims about model

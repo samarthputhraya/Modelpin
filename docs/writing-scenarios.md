@@ -43,6 +43,26 @@ Every `*.json` file under the directory is a scenario, including in subfolders, 
 `manifest.json`, `roles.json` and `labels.json`, and anything inside a hidden folder or a folder
 named `results`.
 
+## Drafting from your code
+
+`modelpin draft <file>` reads ONE source file you name (the module that builds your prompts)
+and asks the model in `modelpin.yaml` to draft scenarios from it:
+
+```bash
+modelpin draft app/support.py --count 4
+```
+
+- It costs one model call on your key, and prints the file size before sending. Key-shaped
+  strings in the file are replaced with `[redacted]` first.
+- Drafts land in `scenarios/.drafts/`. `baseline` and `check` never read that folder, so nothing
+  is recorded until you move a file out.
+- The system prompt and tool definitions are kept only if they appear in your file. Everything
+  else — the user messages, canned `tool_results`, and `_draft.suggested_must_contain` — is
+  invented by the model and listed under `_draft.invented`. Suggested assertions are never
+  written into `assertions`: add the ones you actually expect.
+- Replace invented user messages with real requests from your app where you can; an invented
+  request measures an app you do not have.
+
 ## Templates
 
 ### 1. Classifier / router

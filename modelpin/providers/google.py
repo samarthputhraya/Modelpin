@@ -40,7 +40,11 @@ def _import_genai() -> Any:
         from google import genai
     except ImportError as exc:  # optional dependency
         raise ProviderError(
-            "The Google GenAI SDK is not installed. Install it with: pip install google-genai"
+            # The same command the README and the other two adapters name. `pip install
+            # google-genai` also works, but sending one user to a bare SDK and the next to
+            # the extra is how a person ends up with half the providers installed.
+            "The Google GenAI SDK is not installed. Install it with: "
+            'pip install "modelpin[providers]"'
         ) from exc
     return genai
 
@@ -186,7 +190,14 @@ def _explain_api_error(
     if code == 404:
         return f"{base}: model not found — check the id [{name} 404]."
     if code == 429:
-        return f"{base}: rate limit or quota exceeded [{name} 429]."
+        # Retries were already spent by the SDK (`RETRY_OPTIONS`), so say so: `[M] 2026-09-15` a
+        # heavily loaded Vertex project exhausted all of them, and the bare "rate limit" line
+        # read as if nothing had been tried.
+        return (
+            f"{base}: rate limit or quota exceeded, and it did not clear after "
+            f"{RETRY_OPTIONS['attempts'] - 1} automatic retries with backoff -- wait and re-run, "
+            f"lower --runs, or raise the model's quota [{name} 429]."
+        )
     detail = elide(scrub_secrets(str(getattr(exc, "message", None) or exc)))
     suffix = f" {code}" if code else ""
     return f"{base} [{name}{suffix}: {detail}]."
@@ -360,7 +371,9 @@ def _model_turn_content(parts: list[Any], text: str) -> dict[str, Any]:
     out: list[dict[str, Any]] = []
     for part in parts:
         fc = getattr(part, "function_call", None)
-        if getattr(fc, "name", None):
+        # `fc is not None` is implied by the name check -- `getattr(None, "name", None)` is
+        # None -- but stating it is what makes `fc.name` below provably safe to read.
+        if fc is not None and getattr(fc, "name", None):
             call: dict[str, Any] = {"name": fc.name, "args": getattr(fc, "args", {}) or {}}
             fc_id = getattr(fc, "id", None)
             if fc_id:
@@ -387,8 +400,18 @@ def _function_response_content(
     return {"role": "user", "parts": parts}
 
 
+def _prompt_blocked(response: Any) -> bool:
+    """True when Gemini returned no candidate because it blocked the prompt itself."""
+    if getattr(response, "candidates", None):
+        return False
+    feedback = getattr(response, "prompt_feedback", None)
+    return bool(feedback is not None and getattr(feedback, "block_reason", None))
+
+
 class GoogleAdapter(ProviderAdapter):
     name = "google"
+    #: The SDK client is thread-safe, so `replay` may send a scenario's runs together.
+    parallel_safe = True
 
     def __init__(self, client: Any | None = None) -> None:
         self._client = client
@@ -410,7 +433,7 @@ class GoogleAdapter(ProviderAdapter):
             raise
         except Exception as exc:  # SDK/network error → friendly, key-safe ProviderError
             raise ProviderError(_explain_api_error(exc, model_id)) from exc
-        if not (getattr(response, "candidates", None) or []):
+        if not (getattr(response, "candidates", None) or []) and not _prompt_blocked(response):
             raise ProviderError(
                 f"Gemini returned no candidates for scenario {scenario_id!r} on {model_id!r}."
             )
@@ -438,6 +461,15 @@ class GoogleAdapter(ProviderAdapter):
 
         for _turn in range(MAX_TOOL_TURNS):
             response = self._generate(client, model_id, contents, config, scenario.id)
+            if _prompt_blocked(response):
+                # Gemini's safety filter declined the PROMPT: no candidate at all. That is a
+                # refusal -- the behavior the refusal channel exists to see -- not a failed
+                # call. `[M] 2026-09-15` gemini-3.8-flash blocked a voicerag-suite prompt on
+                # every run, and treating it as an error killed the whole `baseline`.
+                refused = True
+                incomplete = incomplete or IncompleteReason.content_filter
+                final_text = ""
+                break
             candidate = response.candidates[0]
             parts = _candidate_parts(candidate)
             final_text = _part_text(parts)

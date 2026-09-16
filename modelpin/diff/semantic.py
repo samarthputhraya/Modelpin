@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Protocol
 
 from modelpin.models import Trace
@@ -75,6 +76,31 @@ def _equivalent_to_any(
     return any(judge.equivalent(p, output, task) for p in pool)
 
 
+#: Runs judged at the same time by a judge that declares ``parallel_safe``.
+JUDGE_WORKERS = 5
+
+
+def _judge_each(jobs: list[tuple[str, list[str]]], judge: Judge, task: Optional[str]) -> list[bool]:
+    """``_equivalent_to_any`` for each (output, pool), in order.
+
+    Execution strategy only: every run asks exactly the questions, in exactly the order, it
+    would ask alone -- each run's own short-circuit is untouched -- so the flags are the ones
+    the sequential loop produces. Separate runs are simply asked at the same time when the
+    judge's client allows it. `[M] 2026-09-15` judging dominated a live check's wall clock:
+    one scenario could queue 45 sequential judge calls. A judge without ``parallel_safe`` (a
+    test double that records call order) keeps the sequential loop.
+    """
+    if not getattr(judge, "parallel_safe", False) or len(jobs) <= 1:
+        return [_equivalent_to_any(out, pool, judge, task) for out, pool in jobs]
+    # The first job alone, for the same reason `replay` sends its first run alone.
+    first = _equivalent_to_any(jobs[0][0], jobs[0][1], judge, task)
+    with ThreadPoolExecutor(max_workers=min(JUDGE_WORKERS, len(jobs) - 1)) as executor:
+        futures = [
+            executor.submit(_equivalent_to_any, out, pool, judge, task) for out, pool in jobs[1:]
+        ]
+        return [first, *(f.result() for f in futures)]
+
+
 def semantic_divergence_flags(
     baseline_traces: list[Trace],
     candidate_traces: list[Trace],
@@ -111,13 +137,10 @@ def semantic_divergence_flags(
     """
     base_outputs = [t.final_output or "" for t in baseline_traces]
 
-    base_flags = [
-        0 if _equivalent_to_any(out, base_outputs[:i] + base_outputs[i + 1 :], judge, task) else 1
-        for i, out in enumerate(base_outputs)
-    ]
-    cand_flags = [
-        0 if _equivalent_to_any(t.final_output or "", base_outputs, judge, task) else 1
-        for t in candidate_traces
-    ]
+    jobs: list[tuple[str, list[str]]] = [
+        (out, base_outputs[:i] + base_outputs[i + 1 :]) for i, out in enumerate(base_outputs)
+    ] + [(t.final_output or "", base_outputs) for t in candidate_traces]
+    flags = [0 if equivalent else 1 for equivalent in _judge_each(jobs, judge, task)]
+    base_flags, cand_flags = flags[: len(base_outputs)], flags[len(base_outputs) :]
     cand_score = 1.0 - (sum(cand_flags) / len(cand_flags)) if cand_flags else 1.0
     return base_flags, cand_flags, round(cand_score, 3)

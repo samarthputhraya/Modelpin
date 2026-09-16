@@ -109,3 +109,16 @@ def test_a_changed_tool_argument_is_visible_in_the_example():
     assert pair is not None
     assert "issue_refund(amount=49.99)" in pair[0].describe()
     assert "issue_refund(amount=4999.0)" in pair[1].describe()
+
+
+def test_an_early_stop_is_named_beside_the_example():
+    from modelpin.models import IncompleteReason
+
+    looping = Trace(
+        scenario_id="s",
+        model_id="m",
+        final_output="",
+        tool_calls=[ToolCall(name="get_order", arguments={})] * 6,
+        incomplete_reason=IncompleteReason.tool_turns,
+    )
+    assert Example.of(looping).describe().endswith("stopped at the tool-call limit")

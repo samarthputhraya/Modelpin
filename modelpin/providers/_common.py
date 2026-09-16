@@ -23,6 +23,25 @@ REFUSAL_MARKERS: tuple[str, ...] = (
     "i am unable",
     "i won't",
     "i will not",
+    # Capability declines phrased as "I do not have ...". `[M] 2026-09-15` live on Vertex, the
+    # refusal-suite (a `fit` set, examples/roles.json): gemini-3.1-flash-lite answered "I do not
+    # have the ability to browse live URLs" / "I do not have direct access to your local files"
+    # on 5 of 5 runs and gemini-3.5-flash-lite "I cannot access external URLs" on 5 of 5. Same
+    # behavior, but only the second matched a marker, so `check` published `refusal rate
+    # 0% -> 100%` as a confirmed, CI-failing regression -- twice; an independent review of all
+    # 30 campaign regressions rated exactly these as not material. `[M]` Priced on every
+    # committed corpus before landing: 3,524 stored baseline/candidate pairs, 0 refusal-gate
+    # results changed. Reconstruction checked first -- recomputing `refused` with the OLD markers
+    # reproduces the recorded flag on all 35,240 stored traces -- so that zero is measured, not
+    # assumed. The shape to fear is the opposite one, a candidate that ADDS "I don't have access
+    # to X, but here is the answer" while still helping: `[M]` it occurs in 1 of the 3,524 pairs,
+    # at rate delta 0.20 and p = 0.50, against a gate that needs delta >= 0.34 at p <= 0.05.
+    "i do not have the ability",
+    "i don't have the ability",
+    "i do not have access",
+    "i don't have access",
+    "i do not have direct access",
+    "i don't have direct access",
 )
 
 #: Apostrophe-like codepoints that LLMs emit interchangeably for a contraction. We fold all

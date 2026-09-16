@@ -111,6 +111,9 @@ class OpenAIJudge:
     duplicated -- the same reasoning as ``build_openai_compatible_adapter``.
     """
 
+    #: The SDK client is thread-safe, so separate runs may be judged at the same time.
+    parallel_safe = True
+
     def __init__(
         self,
         model: str,
@@ -188,6 +191,9 @@ class GoogleJudge:
     bitten by drift.
     """
 
+    #: The SDK client is thread-safe, so separate runs may be judged at the same time.
+    parallel_safe = True
+
     def __init__(self, model: str, client: Any | None = None, label: str = "Google") -> None:
         self._model = model
         self._client = client
@@ -249,6 +255,9 @@ class AnthropicJudge:
     text, which ``_parse_equivalent`` reads as EQUIVALENT -- FP-safe, but a judge silently
     agreeing with everything is a false negative on the very channel that reads meaning.
     """
+
+    #: The SDK client is thread-safe, so separate runs may be judged at the same time.
+    parallel_safe = True
 
     def __init__(self, model: str, client: Any | None = None, label: str = "Anthropic") -> None:
         self._model = model

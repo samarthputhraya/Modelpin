@@ -148,15 +148,65 @@ def test_a_multi_line_pem_is_redacted_whole_not_just_its_header() -> None:
     assert scrubbed.startswith("config dump:") and scrubbed.endswith("end")
 
 
+def _scrub_seconds(headers: int, repeats: int = 3) -> float:
+    """Best-of-`repeats` wall time to scrub `headers` unterminated PEM BEGIN lines.
+
+    Best-of, not mean: a scheduler preemption can only ever make a sample slower, so the
+    minimum is the closest estimate of the work itself that this clock can give.
+    """
+    text = "-----BEGIN RSA PRIVATE KEY-----\n" * headers
+    best = float("inf")
+    for _ in range(repeats):
+        t0 = time.perf_counter()
+        scrub_secrets(text)
+        best = min(best, time.perf_counter() - t0)
+    return best
+
+
 def test_many_unterminated_pem_headers_do_not_go_quadratic() -> None:
     """`[M] 2026-09-09` FP review: 1,000 unterminated BEGIN headers took 0.354 s with an
-    unbounded lazy body, against 0.002 s before -- quadrupling per doubling. The body is now
-    capped. The budget is generous so a slow CI runner cannot flake it into being muted."""
-    text = "-----BEGIN RSA PRIVATE KEY-----\n" * 4000
+    unbounded lazy body -- quadrupling per doubling. The body is now capped.
+
+    `[M] 2026-09-16` This asserted `elapsed < 1.0` for 4,000 headers, which measured the
+    MACHINE rather than the algorithm and failed the full suite on an idle box: 0.58 s when
+    the run starts, 1.46 s once the CPU has been working for ~3 s and drops out of turbo, so
+    the real headroom was 1.7x at best and negative in the state a full suite actually runs
+    in. Worse, the failure said "the PEM body scan is unbounded again" while the scan was
+    measured linear at ~1.9x per doubling -- it sent the reader after a regression that was
+    not there.
+
+    A growth RATIO has no such problem: it divides out clock speed, turbo state and CI runner
+    class, and it is the property the cap exists to hold. 4x the input costs ~4x linear and
+    ~16x quadratic, so the budget below separates the two by a factor of two in each
+    direction -- far more slack than any wall-clock bound could carry.
+    """
+    small = _scrub_seconds(1_000)
+    large = _scrub_seconds(4_000)
+
+    # A guard against dividing by a clock tick: if the small case is too fast to time, the
+    # ratio is noise. 1 ms is ~1000x the perf_counter resolution on every supported platform.
+    assert small > 1e-3, f"1,000 headers scrubbed in {small:.6f} s -- too fast to time a ratio"
+
+    ratio = large / small
+    assert ratio < 8.0, (
+        f"scrubbing 4x the PEM headers cost {ratio:.1f}x the time "
+        f"({small:.3f} s -> {large:.3f} s). Linear is ~4x and quadratic is ~16x, so the PEM "
+        "body scan has lost its cap -- and it runs on every provider error message."
+    )
+
+
+def test_scrubbing_a_realistic_error_message_is_not_slow_enough_to_notice() -> None:
+    """The ratio test above cannot catch a cap that is linear but enormous per header.
+
+    This is the size that actually reaches `scrub_secrets`: one provider error message, not
+    a 128 KB wall of PEM headers. The budget is loose on purpose -- it is here to catch a
+    thousand-fold blow-up, not to measure this machine.
+    """
+    message = ("connection to api.example.com failed: " + "-----BEGIN RSA PRIVATE KEY-----\n") * 20
     t0 = time.perf_counter()
-    scrub_secrets(text)
+    scrub_secrets(message)
     elapsed = time.perf_counter() - t0
-    assert elapsed < 1.0, (
-        f"scrubbing 4,000 unterminated PEM headers took {elapsed:.2f} s -- the PEM body scan "
-        "is unbounded again, and it runs on every provider error message."
+    assert elapsed < 0.5, (
+        f"scrubbing one provider-sized error message took {elapsed:.3f} s; it runs on every "
+        "provider error, so anything near this is user-visible."
     )

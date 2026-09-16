@@ -8,6 +8,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.4.1] - 2026-09-16
+
+### Added
+
+- **`python -m modelpin` runs the CLI.** The same commands, with nothing required on `PATH` —
+  for a venv you have not activated, a container that calls the interpreter directly, or a
+  Windows policy that blocks the generated `modelpin.exe`. It previously answered
+  `No module named modelpin.__main__`, which reads like a broken install.
+- **A machine-readable run record.** Every `modelpin check` writes
+  `.modelpin/runs/check-<from>-to-<to>-<time>.json` beside its archived report: the exit code,
+  every verdict with its signals and explanation, and every candidate run it recorded (prompts
+  excluded). Scripts no longer need to parse Markdown, and a reviewer can read every run behind a
+  verdict.
+- **Progress while a live run works:** one line per scenario, so a long `baseline` or `check`
+  no longer looks hung.
+- **`modelpin draft <file>`** drafts scenarios from one file of your app, using your configured
+  model (one call). Drafts go to `scenarios/.drafts/`, which `baseline` and `check` ignore. The
+  system prompt and tools are kept only if they appear in the file; user messages, canned tool
+  results and suggested assertions are marked as invented, and suggestions never become live
+  assertions. Key-shaped strings are redacted before the file is sent.
+
+### Fixed
+
+Found by walking the documented first-run path — a freshly built wheel in a clean environment,
+and one live `modelpin draft` on a real application file:
+
+- **`modelpin draft` dropped the system prompt when the file spread it over several string
+  fragments.** Python implicit concatenation and `+`-joined strings put quote characters and
+  `\n` escapes between the words the model hands back, so the "is this actually in the file?"
+  check — which compared raw text — reported *"the model's system prompt did not appear in the
+  file word for word"* and left out the single most important part of a scenario. Triple-quoted
+  blocks, JS template literals and YAML block scalars already matched, and still do. Quoting no
+  longer counts; every word must still be present, in order, in the file, so a prompt the model
+  invented is still refused.
+- **`modelpin init` recommended a command that could not run.** After `pip install modelpin`
+  (without the `[providers]` extra) it printed "Credentials for google are already set" and
+  "modelpin baseline" as the next step — and `baseline` then died with "The Google GenAI SDK is
+  not installed", exit 4. Every `init` that names `modelpin baseline` now names a missing SDK
+  first, including a re-run in a repo whose `modelpin.yaml` already existed — the case where
+  someone clones a configured repo onto a machine without the SDK.
+- **The Google adapter pointed at a different install command** (`pip install google-genai`)
+  than the OpenAI and Anthropic adapters and the README. All three now say
+  `pip install "modelpin[providers]"`, double-quoted so the printed line can be pasted into
+  `cmd.exe` as well as PowerShell, bash and zsh.
+
+Found by a live validation campaign on Gemini (Vertex AI) — 972 same-model checks and six real
+model upgrades, written up in
+[docs/live-validation.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/live-validation.md):
+
+- **A decline was flagged on its phrasing.** One Gemini version said "I do not have the ability
+  to browse live URLs" and the next "I cannot access external URLs"; only the second matched a
+  refusal marker, so `check` failed the build on `refusal rate 0% -> 100%` over identical
+  behavior, twice. The markers now cover both, priced first on 3,524 stored baseline/candidate
+  pairs with 0 gate results changed.
+
+- **A prompt Gemini's safety filter blocks is a refusal, not an error.** `gemini-3.8-flash`
+  returned no candidates (`block_reason: SAFETY`) for an unsafe prompt in a public suite, and the
+  whole `baseline` exited 4.
+- **`baseline` keeps every scenario it could record.** One scenario the provider rejects is named
+  and skipped; the rest are saved and the command exits 3. Recording nothing at all still exits 4.
+- **Archived reports no longer vanish on Windows in deep folders.** The archive name carries both
+  model ids; past the Windows path limit it now falls back to a short name instead of failing.
+- **Examples beside a verdict say when a run stopped early** (the tool-call limit, the token
+  limit, the content filter).
+
+### Changed
+
+- **Live runs are about 4x faster.** A scenario's runs are sent to the provider together (up to
+  5 at a time), and separate runs are judged together. `[M]` 12 scenarios on `gemini-2.5-flash`
+  vs itself, judge `gemini-3.5-flash`, one run each: baseline 170 s → 43 s, check 208 s → 62 s. The runs are
+  independent samples by design and each run asks the judge exactly the same questions, so no
+  verdict changes.
+
 ## [0.4.0] - 2026-09-15
 
 This release is about the first hour a new user spends with Modelpin: a config that works on

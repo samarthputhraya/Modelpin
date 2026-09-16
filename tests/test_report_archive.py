@@ -142,3 +142,18 @@ def test_a_failed_archive_write_never_costs_the_stable_report(tmp_path, monkeypa
     assert r.exit_code == 1, r.output  # the regression verdict still stands
     assert (Path(store) / "last-report.md").exists()
     assert "warning" in r.output.lower()
+
+
+def test_an_archive_path_over_the_windows_limit_gets_a_short_name(tmp_path, monkeypatch):
+    """`[M] 2026-09-15` a deep project checking a long model id lost its archived report and run
+    record on Windows (path over 260 characters). The name falls back to stamp + digest."""
+    from modelpin import cli
+
+    monkeypatch.setattr(cli, "_MAX_ARCHIVE_PATH", 10)
+    path = cli._archive_path(
+        tmp_path, "gemini-2.5-flash-lite", "gemini-2.5-flash-lite", "20260915T000000Z"
+    )
+    assert path.name.startswith("check-20260915T000000Z-") and path.suffix == ".md"
+    assert "gemini" not in path.name
+    other = cli._archive_path(tmp_path, "a", "b", "20260915T000000Z")
+    assert other.name != path.name, "different model pairs must not share a name"
