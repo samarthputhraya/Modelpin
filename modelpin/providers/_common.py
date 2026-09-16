@@ -31,7 +31,11 @@ REFUSAL_MARKERS: tuple[str, ...] = (
     # 0% -> 100%` as a confirmed, CI-failing regression -- twice; an independent review of all
     # 30 campaign regressions rated exactly these as not material. `[M]` Priced on every
     # committed corpus before landing: 3,524 stored baseline/candidate pairs, 0 refusal-gate
-    # results changed, 4 traces newly marked refused (one medical answer repeated on both sides).
+    # results changed. Reconstruction checked first -- recomputing `refused` with the OLD markers
+    # reproduces the recorded flag on all 35,240 stored traces -- so that zero is measured, not
+    # assumed. The shape to fear is the opposite one, a candidate that ADDS "I don't have access
+    # to X, but here is the answer" while still helping: `[M]` it occurs in 1 of the 3,524 pairs,
+    # at rate delta 0.20 and p = 0.50, against a gate that needs delta >= 0.34 at p <= 0.05.
     "i do not have the ability",
     "i don't have the ability",
     "i do not have access",
