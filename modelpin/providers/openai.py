@@ -228,7 +228,10 @@ def _parse_tool_calls(message: Any) -> list[ToolCall]:
     for call in raw_calls:
         fn = getattr(call, "function", None)
         name = getattr(fn, "name", None)
-        if not name:
+        if fn is None or not name:
+            # `fn is None` is already covered by `not name` -- `getattr(None, "name", None)`
+            # is None -- but saying it lets the reader and the type checker see that
+            # `fn.arguments` below cannot be reached on a call with no `function`.
             continue  # partial/malformed call — skip rather than crash the whole run
         try:
             raw_args = fn.arguments

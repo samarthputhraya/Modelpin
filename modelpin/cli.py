@@ -83,7 +83,13 @@ from modelpin.report.suite import (
 )
 from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
 from modelpin.scenarios import ScenarioError, load_scenarios, unrecognised_assertion_keys
-from modelpin.scaffold import CREDENTIAL_HINT, has_credentials, infer_setup, render_config
+from modelpin.scaffold import (
+    CREDENTIAL_HINT,
+    has_credentials,
+    infer_setup,
+    render_config,
+    sdk_installed,
+)
 from modelpin.scenarios.starter import AGENT_STARTER_FILENAME, write_agent_starter
 from modelpin.storage import (
     STORE_DIRNAME,
@@ -1150,6 +1156,16 @@ def init(
             "(copy the starter file; one JSON file per case)."
         ]
         if setup is not None:
+            # Two separate ways the next command can fail before it spends anything, and the
+            # SDK one comes first: a key is no use without the library that sends it. `[M]`
+            # `pip install modelpin` + `modelpin init` used to promise "credentials are
+            # already set" and then die on `baseline` with "The Google GenAI SDK is not
+            # installed" -- a wall on the very step `init` had just recommended.
+            if not sdk_installed(setup.provider):
+                steps.append(
+                    f"[bold]pip install 'modelpin\\[providers]'[/]  # the {setup.provider} SDK "
+                    "is not installed yet, so the next step cannot run"
+                )
             steps.append(
                 f"Credentials for {setup.provider} are already set in your environment."
                 if has_credentials(setup.provider, os.environ)
@@ -2092,7 +2108,9 @@ def report(
         reference_model=from_,
         provider=prov,
         runs=n,
-        judge_model=cfg.judge_model if judge is not None else "disabled",
+        # `_build_judge` returns None whenever `judge_model` is unset, so a live judge always
+        # has an id; `or "disabled"` states that instead of asserting it.
+        judge_model=cfg.judge_model or "disabled" if judge is not None else "disabled",
         match_mode=mode,
         # MP-227. `match_mode` above is the run's GLOBAL flag; these are the scenarios that
         # did not use it. Read off `compared`, not off every loaded scenario, so the Report
