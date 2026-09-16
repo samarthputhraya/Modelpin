@@ -1271,8 +1271,9 @@ def draft(
     for p in result.written:
         console.print(f"  - {_rich_escape(str(p))}")
     console.print(
-        f"\nReview each one: replace the invented user message with a real request, add "
-        f"`tool_results` and `assertions` you expect, then move it from "
+        f"\nReview each one: replace the invented user message with a real request, check "
+        f"any `tool_results` against what your tools really return, add the `assertions` "
+        f"you expect, then move it from "
         f"{_rich_escape(str(target / DRAFTS_DIRNAME))} into {_rich_escape(str(target))}. "
         "Only then does `modelpin baseline` use it."
     )
