@@ -74,6 +74,35 @@ def _collapse(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+#: Escape sequences that stand where a real whitespace character stands in the VALUE.
+_SOURCE_ESCAPE = re.compile(r"\\[nrt]")
+#: Every character a language can put BETWEEN two halves of one prompt string.
+_SOURCE_GLUE = re.compile(r"[\"'`\\]|\+(?=\s)")
+
+
+def _loose(text: str) -> str:
+    """Collapse `text` so a source literal and the VALUE it evaluates to compare equal.
+
+    `[M] 2026-09-16`, live `modelpin draft support.py`: a system prompt written the
+    ordinary Python way -- implicit concatenation, one `"...\\n"` fragment per line -- was
+    reported as "did not appear in the file word for word" and dropped, because the raw
+    source carries `\\n"` and `"` between fragments that the model's reply does not. The
+    same is true of a JS template literal, a `+`-joined string, and a triple-quoted block.
+    Dropping the system prompt costs the user the single most important part of a scenario,
+    so the exact-match test was rejecting the common case, not the dishonest one.
+
+    Quotes, backslashes and joining `+` are removed from BOTH sides and escapes become
+    spaces, so the check still refuses anything the model invented: every word must be
+    present, in order, in the file. It only stops caring how the file quoted them.
+    """
+    return _collapse(_SOURCE_GLUE.sub("", _SOURCE_ESCAPE.sub(" ", text)))
+
+
+def _in_source(value: str, raw: str) -> bool:
+    """Is `value` actually written in `raw`, ignoring how the language quoted it?"""
+    return _collapse(value) in _collapse(raw) or _loose(value) in _loose(raw)
+
+
 def _last_json_object(text: str) -> dict[str, Any] | None:
     decoder = json.JSONDecoder()
     found: dict[str, Any] | None = None
@@ -132,7 +161,7 @@ def draft_scenarios(
         )
 
     system = str(reply.get("system_prompt") or "")
-    if system and _collapse(system) not in _collapse(raw):
+    if system and not _in_source(system, raw):
         result.dropped_system_prompt = True
         system = ""
 
