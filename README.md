@@ -80,9 +80,10 @@ is enough for the offline demo.
 > **Windows PowerShell:** type `modelpin`, not `mp`. PowerShell has a built-in `mp` alias
 > (`Move-ItemProperty`) that wins over the program. `mp` works in cmd, bash and zsh.
 
-Every command below also works as `python -m modelpin ...`, which needs nothing on your `PATH`
-— useful in a venv you have not activated, in a container, or when a security policy blocks the
-generated `modelpin.exe`.
+Every `modelpin` command below also works as `python -m modelpin ...`, which needs no Modelpin
+entry on your `PATH` — useful in a venv you have not activated, in a container, or when a
+security policy blocks the generated `modelpin.exe`. Commands still print their follow-up
+suggestions as `modelpin ...`; prefix those the same way.
 
 ## Try it in 30 seconds, offline
 
@@ -363,9 +364,10 @@ your environment's `Scripts/` (or `bin/`) directory, which may not be on `PATH` 
 Application Control can refuse a freshly written `.exe`. Run `python -m modelpin ...` instead; it
 is the same CLI and needs no `PATH` entry.
 
-**`The Google GenAI SDK is not installed` (or the OpenAI/Anthropic one), exit 4.** You installed
-plain `modelpin`. Run `pip install "modelpin[providers]"`. `modelpin init` also says so up front
-when the SDK for your configured provider is missing.
+**`The Google GenAI SDK is not installed` (or the OpenAI/Anthropic one), exit 4.** You most
+likely installed plain `modelpin`. Run `pip install "modelpin[providers]"`. `modelpin init` also
+warns about a missing SDK before it suggests `modelpin baseline`, whether it is writing
+`modelpin.yaml` or adopting one that already exists.
 
 **`rate limit or quota exceeded`.** Modelpin already retried with backoff. Wait for the quota
 window, lower `--runs`, or check billing. On Gemini's AI Studio, *"prepayment credits are

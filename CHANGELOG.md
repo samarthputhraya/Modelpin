@@ -31,23 +31,27 @@ Nothing yet.
 
 ### Fixed
 
-Found by walking the documented first-run path from a freshly built wheel in a clean
-environment:
+Found by walking the documented first-run path — a freshly built wheel in a clean environment,
+and one live `modelpin draft` on a real application file:
 
-- **`modelpin draft` dropped the system prompt from almost every real file.** A prompt is
-  rarely one flat literal — Python implicit concatenation, a triple-quoted block, a JS template
-  literal or a `+`-joined string all put quote characters and `\n` escapes between the words the
-  model hands back. The "is this actually in the file?" check compared raw text, so it reported
-  *"the model's system prompt did not appear in the file word for word"* and left out the single
-  most important part of a scenario. Quoting no longer counts; every word must still be present,
-  in order, in the file, so a prompt the model invented is still refused.
+- **`modelpin draft` dropped the system prompt when the file spread it over several string
+  fragments.** Python implicit concatenation and `+`-joined strings put quote characters and
+  `\n` escapes between the words the model hands back, so the "is this actually in the file?"
+  check — which compared raw text — reported *"the model's system prompt did not appear in the
+  file word for word"* and left out the single most important part of a scenario. Triple-quoted
+  blocks, JS template literals and YAML block scalars already matched, and still do. Quoting no
+  longer counts; every word must still be present, in order, in the file, so a prompt the model
+  invented is still refused.
 - **`modelpin init` recommended a command that could not run.** After `pip install modelpin`
   (without the `[providers]` extra) it printed "Credentials for google are already set" and
   "modelpin baseline" as the next step — and `baseline` then died with "The Google GenAI SDK is
-  not installed", exit 4. `init` now names the missing SDK first, before the step that needs it.
+  not installed", exit 4. Every `init` that names `modelpin baseline` now names a missing SDK
+  first, including a re-run in a repo whose `modelpin.yaml` already existed — the case where
+  someone clones a configured repo onto a machine without the SDK.
 - **The Google adapter pointed at a different install command** (`pip install google-genai`)
   than the OpenAI and Anthropic adapters and the README. All three now say
-  `pip install 'modelpin[providers]'`.
+  `pip install "modelpin[providers]"`, double-quoted so the printed line can be pasted into
+  `cmd.exe` as well as PowerShell, bash and zsh.
 
 Found by a live validation campaign on Gemini (Vertex AI) — 972 same-model checks and six real
 model upgrades, written up in

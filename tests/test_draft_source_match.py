@@ -87,13 +87,32 @@ def test_a_prompt_that_is_in_the_file_is_recognised_however_it_was_quoted(source
     assert _in_source(VALUE, source) is True
 
 
-def test_the_reported_regression_reproduces_against_the_old_rule() -> None:
-    """Pins the bug itself: the exact-match rule this replaced said no to the live file."""
+def test_exactly_which_formats_the_old_rule_broke_on() -> None:
+    """Pins the bug, and pins the CHANGELOG's claim about its scope.
+
+    `[M] 2026-09-16` claims audit: the changelog first said all four of implicit
+    concatenation, triple-quoted blocks, JS template literals and `+`-joined strings put
+    quoting between the words. Measured against the old rule, only two did -- the other
+    three carry the prompt verbatim and always matched. A test that only proved the NEW
+    rule accepts all five could not have caught that, so this one measures the old rule.
+    """
     import re
 
     collapse = lambda t: re.sub(r"\s+", " ", t).strip()  # noqa: E731
-    assert collapse(VALUE) not in collapse(PY_IMPLICIT), "the old rule would have passed"
-    assert _in_source(VALUE, PY_IMPLICIT) is True
+    old_rule = {
+        "python-implicit": collapse(VALUE) in collapse(PY_IMPLICIT),
+        "python-triple": collapse(VALUE) in collapse(PY_TRIPLE),
+        "js-template": collapse(VALUE) in collapse(JS_TEMPLATE),
+        "js-plus": collapse(VALUE) in collapse(JS_PLUS),
+        "yaml-block": collapse(VALUE) in collapse(YAML_BLOCK),
+    }
+    assert old_rule == {
+        "python-implicit": False,
+        "python-triple": True,
+        "js-template": True,
+        "js-plus": False,
+        "yaml-block": True,
+    }, "the CHANGELOG's account of which formats were broken no longer matches the code"
 
 
 # --- the guarantee that must not be loosened away -------------------------------------
