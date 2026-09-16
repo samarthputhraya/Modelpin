@@ -103,6 +103,144 @@ def modal_arg_sequence(traces: list[Trace], mode: MatchMode = "strict") -> tuple
     return keys.most_common(1)[0][0]
 
 
+def _envelope(sequences: list[tuple[Any, ...]], mode: MatchMode) -> tuple[Any, ...]:
+    """Fold per-run call multisets into the one the directional relation is really about.
+
+    ``subset`` forbids a call *absent from baseline*, so "baseline" is everything the
+    baseline model was ever seen to do: the element-wise MAX over runs (their union).
+    ``superset`` forbids dropping a call *present in baseline*, so "baseline" is what it
+    did on every single run: the element-wise MIN (their intersection).
+
+    This is the envelope over WHICHEVER runs it is given. `diff_scenario` never hands it
+    the whole baseline for the baseline's own side -- see `leave_one_out_references`, which
+    exists because a run cannot honestly be scored against a reference it helped build.
+    """
+    counters = [Counter(seq) for seq in sequences]
+    if not counters:
+        return ()
+    if mode == "superset":
+        # A run that called NO tool contributes no evidence about which calls are always
+        # made -- it is the absence of a measurement, and intersecting with it erases the
+        # reference entirely. `[M] 2026-09-16`, pricing this change over 3,524 committed
+        # pairs: intersecting over every run silenced 2 real detections outright
+        # (`tc_archive_two_box_request`, `tc_tailoring_consent_log`) because ONE baseline
+        # run in five was empty. Dropping empty runs restores both and costs no false
+        # alarm on the same-model arm. An all-empty baseline still yields `()`, which the
+        # caller reads as "this mode required nothing" and declines to score.
+        counters = [c for c in counters if c] or []
+        if not counters:
+            return ()
+    if mode == "subset":
+        union: Counter[Any] = Counter()
+        for c in counters:
+            for key, n in c.items():
+                if n > union[key]:
+                    union[key] = n
+        return tuple(union.elements())
+    intersection = counters[0].copy()
+    for c in counters[1:]:
+        for key in list(intersection):
+            shared = min(intersection[key], c.get(key, 0))
+            if shared:
+                intersection[key] = shared
+            else:
+                del intersection[key]
+    return tuple(intersection.elements())
+
+
+def relation_reference(traces: list[Trace], mode: MatchMode) -> tuple[str, ...]:
+    """The baseline tool-call repertoire a ``subset``/``superset`` run is scored against.
+
+    MP-114. This used to be ``modal_sequence`` -- ONE representative run, and a function
+    whose own docstring says it is for explanations. Scoring a relation against a single
+    run makes the baseline's jitter look like baseline violations, and those were then
+    subtracted from the candidate's rate. `[M] 2026-09-16` the cost of that, with the
+    candidate calling ``delete_account`` on 10 of 10 runs -- which ``subset`` forbids:
+
+        quiet baseline   -> Tool match 0.00, regression,  exit 1
+        jittery baseline -> Tool match 0.60, unchanged,   exit 0
+
+    Same candidate, same forbidden call; only the baseline's own noise differed. The
+    permutation test had already found it significant (p = 0.046); the effect size was
+    deflated under ``MIN_TOOL_TVD`` by the subtraction and the gate stayed silent.
+
+    **Priced over every committed baseline/candidate pair**, split by set role (ADR-0025),
+    counting ``{regression, changed_minor}`` because ADR-0041 D3 says a `changed_minor` on a
+    null is a false positive. Method, and it is load-bearing: the prior engine is the prior
+    commit's ``modelpin/`` extracted with ``git archive`` and imported as itself. Three
+    earlier attempts substituted a subset of helpers instead and each was wrong -- the last
+    left `leave_one_out_references` unpatched and priced a hybrid engine that never existed.
+    **Never reconstruct a prior engine by substituting helpers.**
+
+    ======================  ======  =========  ======  ======
+    arm / role / mode       trials  OLD flags  NEW
+    ======================  ======  =========  ======  ======
+    same-model score subset   3196          0       0
+    same-model score superset 3196          1       0
+    detection  score subset    150         35      35
+    detection  score superset  150         48      48
+    detection  fit   subset     38         13      15
+    detection  fit   superset   38         21      23
+    ======================  ======  =========  ======  ======
+
+    So on the **score** corpora -- the only ones a rate may be claimed from -- the
+    false-positive count is **0 new, one removed**, and detection is **identical in both
+    modes**. The rule is CHOSEN on the role-`fit` tool-calibration set, where it is net +4
+    (6 gained, 2 lost); that set may choose a rule and may never be cited as a rate.
+
+    `[M]` The one removed score-set alarm is `optional_notify_after_status_update` under
+    `superset` -- MP-220, whose `superset` half ADR-0041 recorded as still open. The
+    `strict` half remains open and pinned by `xfail(strict=True)`.
+
+    `strict` / `unordered` take the equivalence branch and show **0 changes of any kind**.
+
+    An earlier version of this fix omitted `leave_one_out_references` and was BLOCKED in
+    review: `[M]` it took `arg_freetext_note` from 0 of 90 same-model trials flagged to 9 of
+    90, because the reference was fitted on the baseline and scored on the candidate.
+
+    No calibrated constant moves: ``ALPHA``, ``MIN_TOOL_TVD`` and ``MIN_TOOL_ARG_TVD`` are
+    untouched. What changes is what each side is compared AGAINST.
+    """
+    return _envelope([tool_call_sequence(t) for t in traces], mode)
+
+
+def relation_arg_reference(traces: list[Trace], mode: MatchMode) -> tuple[Any, ...]:
+    """``relation_reference`` for the (name, args) signal. Same defect, same fix."""
+    return _envelope([tool_arg_sequence(t) for t in traces], mode)
+
+
+def leave_one_out_references(
+    traces: list[Trace], mode: MatchMode, *, arguments: bool = False
+) -> list[tuple[Any, ...]]:
+    """One reference per baseline run, built from the OTHER runs.
+
+    Without this the reference is **fitted on the baseline and scored on both sides**, and
+    that is not a detail -- it is ADR-0025's prohibition moved out of the corpus and into
+    the statistic. A baseline run can never violate a reference it helped build, so the
+    baseline's violation rate is 0 by construction while the candidate is scored
+    out-of-sample. Wherever the payload space is high-entropy -- a free-text tool argument
+    is the obvious case -- *every* candidate draw is novel, so a rate of 1.0 is the MODAL
+    outcome under a true null rather than an extreme one, and the gate fires on noise.
+
+    `[M] 2026-09-16`, measured by an adversarial review of the first version of this fix,
+    over the committed same-model corpus: `arg_freetext_note` went from **0 of 90** trials
+    flagged to **9 of 90** (10.0%), at confidence 0.996, against a 95% upper bound of 3.27%
+    on the old rule's 0/90. 13 same-model false positives in total. The permutation test
+    offers no protection, because the artifact is systematic per SIDE rather than random
+    per run.
+
+    Scoring each baseline run against the other ``n-1`` restores the control and gives the
+    reference an honest meaning: **what the baseline does reproducibly**. A behaviour seen
+    once is unrepresentative and scores as a violation on its own run; a behaviour seen
+    twice or more survives leave-one-out and is part of the repertoire. `[M]` That is
+    exactly the line that returns `arg_freetext_note` to 0/90 while keeping the
+    `delete_account` detection this whole fix exists for.
+    """
+    extract = tool_arg_sequence if arguments else tool_call_sequence
+    sequences = [extract(t) for t in traces]  # type: ignore[operator]
+    return [_envelope(sequences[:i] + sequences[i + 1 :], mode) for i in range(len(sequences))]
+
+
 def has_tool_arguments(traces: list[Trace]) -> bool:
     """Did EVERY run on this side record at least one non-empty argument payload?
 

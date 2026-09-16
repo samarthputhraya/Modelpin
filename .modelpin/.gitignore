@@ -1,0 +1,4 @@
+# Written by Modelpin: commit baselines, ignore per-run output.
+*
+!.gitignore
+!baseline-*.json
