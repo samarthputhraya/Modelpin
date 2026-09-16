@@ -73,6 +73,9 @@ def test_an_unknown_provider_is_never_reported_as_missing() -> None:
 # --- what `init` prints ---------------------------------------------------------------
 
 
+INSTALL_LINE = 'pipinstall"modelpin[providers]"'
+
+
 def _init_in(tmp_path, monkeypatch: pytest.MonkeyPatch, *, installed: bool) -> str:
     (tmp_path / "app.py").write_text(
         'client.chat.completions.create(model="gpt-4o-mini")\n', encoding="utf-8"
@@ -90,9 +93,89 @@ def test_init_says_the_sdk_is_missing_before_it_says_run_baseline(
 ) -> None:
     out = _init_in(tmp_path, monkeypatch, installed=False)
     flat = _plain(out)
-    assert "pipinstall'modelpin[providers]'" in flat
+    assert INSTALL_LINE in flat
     # Order matters: the fix is worthless if the user reads `baseline` first.
-    assert flat.index("pipinstall'modelpin[providers]'") < flat.index("modelpinbaseline")
+    assert flat.index(INSTALL_LINE) < flat.index("modelpinbaseline")
+
+
+def test_the_install_line_is_double_quoted_so_it_pastes_into_cmd_exe(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`'` is not a quoting character in `cmd.exe`: `pip install 'modelpin[providers]'` fails
+    there. The README uses double quotes; what we print must match it."""
+    flat = _plain(_init_in(tmp_path, monkeypatch, installed=False))
+    assert "pipinstall'modelpin[providers]'" not in flat
+
+
+# --- the branches a claims audit found silent -----------------------------------------
+#
+# `[M] 2026-09-16` The warning originally lived behind `setup is not None`, which is true only
+# when `init` WRITES modelpin.yaml. Every other path still printed `modelpin baseline`, and the
+# likeliest way to meet a missing SDK -- cloning a configured repo onto a new machine -- landed
+# squarely in one of them.
+
+
+def _init_with_existing_config(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, *, with_scenarios: bool
+) -> str:
+    (tmp_path / "modelpin.yaml").write_text(
+        "models:\n  - gpt-4o-mini\nproviders:\n  - openai\nscenarios_dir: scenarios\n",
+        encoding="utf-8",
+    )
+    scenarios = tmp_path / "scenarios"
+    scenarios.mkdir()
+    if with_scenarios:
+        (scenarios / "s.json").write_text(
+            '{"id": "s", "input": {"messages": [{"role": "user", "content": "hi"}]}}',
+            encoding="utf-8",
+        )
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
+    monkeypatch.setattr("modelpin.cli.sdk_installed", lambda provider: False)
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    return result.output
+
+
+def test_a_config_that_already_existed_still_gets_the_warning(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`init` scaffolds the starter scenario but did not write the config, so `setup` is None
+    -- and it still tells the user to run `modelpin baseline`."""
+    flat = _plain(_init_with_existing_config(tmp_path, monkeypatch, with_scenarios=False))
+    assert INSTALL_LINE in flat
+    assert flat.index(INSTALL_LINE) < flat.index("modelpinbaseline")
+
+
+def test_the_already_initialised_branch_still_gets_the_warning(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing is created, so `init` prints "Already initialised" -- and names `modelpin
+    baseline` in the same breath. It owes the same warning."""
+    flat = _plain(_init_with_existing_config(tmp_path, monkeypatch, with_scenarios=True))
+    assert INSTALL_LINE in flat
+    assert "openaiSDKisnotinstalled" in flat
+
+
+def test_the_provider_named_is_the_configured_one_not_a_guess(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The warning is read off the adopted config, so it must name that config's provider."""
+    (tmp_path / "modelpin.yaml").write_text(
+        "models:\n  - gemini-3.1-flash-lite\nproviders:\n  - google\nscenarios_dir: scenarios\n",
+        encoding="utf-8",
+    )
+    scenarios = tmp_path / "scenarios"
+    scenarios.mkdir()
+    (scenarios / "s.json").write_text(
+        '{"id": "s", "input": {"messages": [{"role": "user", "content": "hi"}]}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("modelpin.cli.sdk_installed", lambda provider: provider != "google")
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    assert "googleSDKisnotinstalled" in _plain(result.output)
 
 
 def test_init_stays_quiet_about_the_sdk_when_it_is_installed(

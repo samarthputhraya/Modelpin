@@ -1141,6 +1141,21 @@ def init(
     # no-exit loop MP-01 and the reserved-file glob above were both about.
     agent_written = write_agent_starter(scenarios_dir) if agent_example else []
     created.extend(str(p) for p in agent_written)
+
+    # The provider whose SDK the next command will need -- from the config `init` just wrote,
+    # or from the one it adopted. `[M] 2026-09-16` claims audit: gating this on `setup` alone
+    # meant only the very FIRST `init` in a repo could warn, and the user who hits the missing
+    # SDK is usually the one cloning a repo that already HAS a modelpin.yaml onto a machine
+    # that does not have the SDK -- exactly the branch that stayed silent.
+    warn_provider: Optional[str] = setup.provider if setup is not None else None
+    if warn_provider is None and cfg_path.exists():
+        try:
+            configured = load_config(cfg_path).providers
+            warn_provider = configured[0] if configured else None
+        except ConfigError:
+            warn_provider = None  # already reported above; never let advice break `init`
+    sdk_missing = warn_provider is not None and not sdk_installed(warn_provider)
+
     if created:
         console.print("[green]Scaffolded:[/]")
         for c in created:
@@ -1155,17 +1170,18 @@ def init(
             "Put a few real cases from your app in scenarios/ "
             "(copy the starter file; one JSON file per case)."
         ]
+        # Two separate ways the next command can fail before it spends anything, and the SDK
+        # one comes first: a key is no use without the library that sends it. `[M]`
+        # `pip install modelpin` + `modelpin init` used to promise "credentials are already
+        # set" and then die on `baseline` with "The Google GenAI SDK is not installed" -- a
+        # wall on the very step `init` had just recommended. Not gated on `setup`: a repo
+        # whose config already existed still needs the warning before `baseline`.
+        if sdk_missing:
+            steps.append(
+                f'[bold]pip install "modelpin\\[providers]"[/]  # the {warn_provider} SDK '
+                "is not installed yet, so the next step cannot run"
+            )
         if setup is not None:
-            # Two separate ways the next command can fail before it spends anything, and the
-            # SDK one comes first: a key is no use without the library that sends it. `[M]`
-            # `pip install modelpin` + `modelpin init` used to promise "credentials are
-            # already set" and then die on `baseline` with "The Google GenAI SDK is not
-            # installed" -- a wall on the very step `init` had just recommended.
-            if not sdk_installed(setup.provider):
-                steps.append(
-                    f"[bold]pip install 'modelpin\\[providers]'[/]  # the {setup.provider} SDK "
-                    "is not installed yet, so the next step cannot run"
-                )
             steps.append(
                 f"Credentials for {setup.provider} are already set in your environment."
                 if has_credentials(setup.provider, os.environ)
@@ -1197,6 +1213,17 @@ def init(
             f"[dim]{len(existing)} scenario(s) in {_sub}/ - `modelpin baseline` replays "
             f"all of them on your own key. Not yours? Check {_rich_escape(str(cfg_path))}.[/]"
         )
+        # This branch names `modelpin baseline` too, so it owes the same warning. It is also
+        # the likelier one to need it: adopting someone else's checked-in modelpin.yaml is
+        # how a person ends up configured for a provider whose SDK they never installed.
+        if sdk_missing:
+            console.print(
+                # `\\[` or rich eats `[providers]` as a markup tag and prints
+                # `pip install "modelpin"` -- an install line that silently drops the extra.
+                f"[yellow]note:[/] the {warn_provider} SDK is not installed, so "
+                "`modelpin baseline` cannot run. Install it with: pip install "
+                '"modelpin\\[providers]"'
+            )
 
     # Printed on BOTH branches, because both are dead ends for the tool-trajectory feature
     # otherwise. `[M] 2026-09-09` first-run audit: the only worked agent examples the README
