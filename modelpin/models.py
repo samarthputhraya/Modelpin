@@ -69,8 +69,8 @@ class Model(BaseModel):
     announcement (the notice window opens); ``retired_at`` is the shutdown (access is
     removed). ``aliases`` are the other names the vendor lists for the same snapshot, so
     ``gpt-4`` finds the ``gpt-4-0613`` row. ``modality`` says what the model produces, so no
-    chat check is ever suggested for an image model. Every field here is one ``mp watch`` or
-    ``mp check`` reads; no comparative field (price, context window, benchmark) belongs on
+    chat check is ever suggested for an image model. Every field here is one ``modelpin watch``
+    or ``modelpin check`` reads; no comparative field (price, context window, benchmark) belongs on
     this type, because the registry catalogues lifecycle, never quality (ADR-0009).
     """
 
