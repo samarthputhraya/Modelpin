@@ -7,7 +7,8 @@ read from and the day it was read (MP-276); ``Model`` refuses one that does not,
 date cannot enter from the seed or from a ``--registry`` file.
 
 Nothing here touches the network. ``mp watch`` reads the embedded seed, or a newer JSON passed
-with ``--registry``; fetching is the GitHub Action's job (MP-277), on the user's own schedule.
+with ``--registry``. Fetching is not implemented anywhere in the package; a scheduled workflow
+that downloads a newer JSON and passes it in is the intended place for it, never this module.
 """
 
 from __future__ import annotations
@@ -45,14 +46,21 @@ def load_registry(path: Optional[Path] = None) -> list[Model]:
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
     except OSError as exc:
-        raise RegistryError(f"could not read the registry at {path}: {exc}") from exc
+        raise RegistryError(f"could not read the registry at {path} (--registry): {exc}") from exc
     except json.JSONDecodeError as exc:
         raise RegistryError(f"the registry at {path} is not valid JSON: {exc}") from exc
     if not isinstance(raw, dict) or not isinstance(raw.get("models"), list):
         raise RegistryError(f"the registry at {path} has no `models` list")
     try:
         return [Model(**m) for m in raw["models"]]
-    except (ValidationError, TypeError) as exc:
+    except ValidationError as exc:
+        # The validator's own sentence is the message; pydantic's `[type=value_error, ...]`
+        # trailer and its docs link are not in the user's vocabulary.
+        reasons = "; ".join(
+            str(err.get("msg", "")).removeprefix("Value error, ") for err in exc.errors()
+        )
+        raise RegistryError(f"the registry at {path} failed validation: {reasons}") from exc
+    except TypeError as exc:
         raise RegistryError(f"the registry at {path} failed validation: {exc}") from exc
 
 
@@ -72,23 +80,33 @@ def _today() -> date:
     return datetime.now(timezone.utc).date()
 
 
+#: How close a vendor-published shutdown date has to be before an otherwise-active row counts
+#: as inside its notice window. Google publishes an "earliest possible" shutdown date for some
+#: models at release, a year out; alarming on that from day one would make every such model
+#: read as retiring forever. Ninety days is longer than any notice period the three vendors
+#: publish as a floor (Anthropic 60 days; OpenAI 2 weeks for previews), so a real notice is
+#: always inside it.
+NOTICE_DAYS = 90
+
+
 def effective_status(model: Model, today: Optional[date] = None) -> ModelStatus:
     """The vendor's status, read against the calendar.
 
-    A shutdown date that has passed is ``retired`` whatever the row still says; an announced
-    date is a notice window, so a row carrying one is ``deprecated`` even if its status field
-    was never updated. A row with no date and status ``active`` is active.
+    A shutdown date that has passed is ``retired`` whatever the row still says. A row the
+    vendor marked deprecated, or whose announced deprecation date has arrived, or whose
+    shutdown date is within ``NOTICE_DAYS``, is inside its notice window: ``deprecated``. A
+    row with a shutdown date further out is listed with that date but stays ``active``.
     """
     today = today if today is not None else _today()
     if model.status is ModelStatus.retired or (
         model.retired_at is not None and today >= model.retired_at
     ):
         return ModelStatus.retired
-    if (
-        model.status is ModelStatus.deprecated
-        or model.deprecated_at is not None
-        or model.retired_at is not None
-    ):
+    if model.status is ModelStatus.deprecated:
+        return ModelStatus.deprecated
+    if model.deprecated_at is not None and today >= model.deprecated_at:
+        return ModelStatus.deprecated
+    if model.retired_at is not None and (model.retired_at - today).days <= NOTICE_DAYS:
         return ModelStatus.deprecated
     return ModelStatus.active
 
