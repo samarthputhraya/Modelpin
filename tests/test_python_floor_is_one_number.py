@@ -61,9 +61,7 @@ def _readme_floor_minor() -> int:
 def _floor_comment_minors(workflow: str) -> list[int]:
     """Every `python-version: "3.N"` that carries the 'floor from requires-python' comment."""
     text = (REPO / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
-    hits = re.findall(
-        r'python-version:\s*"3\.(\d+)"\s*#\s*floor from requires-python', text
-    )
+    hits = re.findall(r'python-version:\s*"3\.(\d+)"\s*#\s*floor from requires-python', text)
     assert hits, f"{workflow} no longer marks its wheel-smoke interpreter as the floor"
     return [int(v) for v in hits]
 
