@@ -26,10 +26,11 @@ from pydantic import ValidationError
 from rich.box import ASCII as ASCII_BOX
 from rich.console import Console
 from rich.markup import escape as _rich_escape
-from rich.table import Table
+from rich.table import Column, Table
 from rich.text import Text
 
 from modelpin import __version__
+import modelpin.watcher as watcher_mod
 from modelpin.config import (
     DEFAULT_CONFIG_FILE,
     DEFAULT_PROVIDER,
@@ -91,6 +92,16 @@ from modelpin.scaffold import (
     sdk_installed,
 )
 from modelpin.scenarios.starter import AGENT_STARTER_FILENAME, write_agent_starter
+from modelpin.watcher import (
+    REGISTRY_SCHEMA,
+    Declared,
+    RegistryError,
+    WatchRow,
+    assess,
+    load_registry,
+    newest_fetch,
+    watch_exit_code,
+)
 from modelpin.storage import (
     STORE_DIRNAME,
     ensure_store,
@@ -1042,6 +1053,261 @@ def _print_scan_skips(skipped: list[str]) -> None:
         f"[yellow]note:[/] {len(skipped)} file(s) over {mb} MB were not scanned: "
         f"{shown}{rest}. A model id inside them would not be listed above."
     )
+
+
+def _watch_check_command(row: WatchRow) -> Optional[str]:
+    """The exact `modelpin check` line for an affected row, or the judge remedy."""
+    if not row.replacement_id:
+        return None
+    if row.role == "judge":
+        return f"set judge_model: {row.replacement_id} in modelpin.yaml"
+    cmd = f"modelpin check --from {row.id} --to {row.replacement_id}"
+    if row.model is not None and row.replacement_provider not in (None, row.model.provider):
+        cmd += f" --provider {row.replacement_provider}"
+    return cmd
+
+
+def _watch_branch(row: WatchRow) -> Optional[str]:
+    """The branch the Action's watch mode (MP-277) opens its pull request from."""
+    if not row.replacement_id:
+        return None
+    return f"modelpin/migrate-{slug(row.id)}-to-{slug(row.replacement_id)}"
+
+
+def _watch_source_line(row: WatchRow) -> str:
+    m = row.model
+    if m is None or not m.source_url:
+        return "no source recorded"
+    fetched = f" fetched {m.fetched_at.isoformat()}" if m.fetched_at else ""
+    return f"[S] {m.source_url}{fetched}"
+
+
+@app.command()
+def watch(
+    config_path: str = typer.Option(DEFAULT_CONFIG_FILE, "--config"),
+    store_dir: str = typer.Option(STORE_DIRNAME, "--store-dir"),
+    registry_path: Optional[str] = typer.Option(
+        None,
+        "--registry",
+        help="A models.json newer than the one shipped with this version. A path; the CLI "
+        "never fetches.",
+    ),
+    scan_source: bool = typer.Option(
+        False,
+        "--scan",
+        help="Also read model ids from this repository's source (walks the tree; off by "
+        "default).",
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Machine-readable JSON on stdout; notes go to stderr."
+    ),
+) -> None:
+    """Which of the models this repo depends on are retiring, when, and what to check next.
+
+    Reads the sourced registry shipped with this version (or --registry); never the network.
+    Every date printed carries the vendor page it was read from and the day it was read.
+
+    Exit codes: 0 every declared model is known and active; 1 a declared model is inside its
+    notice window or already retired; 3 a declared model is unknown to the registry (unknown
+    is not a clearance); 4 nothing is declared, or the registry could not be read.
+    """
+    try:
+        registry = load_registry(Path(registry_path) if registry_path else None)
+    except RegistryError as exc:
+        _fail(str(exc))
+    notes: list[str] = []
+    cfg = _load_config_or_fail(config_path)
+    declared: list[Declared] = [Declared(m, "config", "app") for m in cfg.models]
+    if cfg.judge_model:
+        declared.append(Declared(cfg.judge_model, "config", "judge"))
+    if scan_source:
+        skipped: list[str] = []
+        try:
+            hits = scan_repo(".", skipped=skipped)
+        except ScanRefusedError as exc:
+            _fail(str(exc))
+        # Only a wired-up call or an active config value is a dependency; a mention in a
+        # comment or a doc is not (MP-236), and this command decides an exit code on it.
+        for h in hits:
+            if h.get("context", "code") == "code":
+                declared.append(Declared(h["model"], "scan", "app"))
+        if skipped:
+            notes.append(
+                f"{len(skipped)} file(s) over the size cap were not scanned; a model id inside "
+                "them is not listed"
+            )
+    baselines: dict[str, str] = {}
+    for p in sorted(Path(store_dir).glob("baseline-*.json")):
+        try:
+            mid = json.loads(p.read_text(encoding="utf-8")).get("model_id")
+        except (OSError, ValueError, AttributeError):
+            notes.append(f"could not read {p}; skipped")
+            continue
+        if isinstance(mid, str) and mid:
+            baselines[mid] = str(p)
+            declared.append(Declared(mid, "baseline", "app", decides_exit=False))
+    if not any(d.decides_exit for d in declared):
+        _fail(
+            "no models declared: set `models:` in modelpin.yaml, or pass --scan to read them "
+            "from the source"
+        )
+
+    # Read through the module so a test can pin the calendar (`watcher._today`).
+    today = watcher_mod._today()
+    rows = assess(declared, registry, today=today, baselines=baselines)
+    code = watch_exit_code(rows)
+    newest = newest_fetch(registry)
+
+    if as_json:
+        doc = {
+            "modelpin_version": __version__,
+            "today": today.isoformat(),
+            "exit_code": code,
+            "registry": {
+                "path": registry_path,
+                "schema": REGISTRY_SCHEMA,
+                "entries": len(registry),
+                "newest_fetched_at": newest.isoformat() if newest else None,
+            },
+            "models": [
+                {
+                    "id": r.id,
+                    "sources": list(r.sources),
+                    "role": r.role,
+                    "decides_exit": r.decides_exit,
+                    "known": r.known,
+                    "status": r.model.status.value if r.model else None,
+                    "effective_status": r.effective.value if r.effective else None,
+                    "deprecated_at": (
+                        r.model.deprecated_at.isoformat()
+                        if r.model and r.model.deprecated_at
+                        else None
+                    ),
+                    "retired_at": (
+                        r.model.retired_at.isoformat() if r.model and r.model.retired_at else None
+                    ),
+                    "days_remaining": r.days_remaining,
+                    "affected": r.affected,
+                    "replacement_id": r.replacement_id,
+                    "replacement_provider": r.replacement_provider,
+                    "source_url": r.model.source_url if r.model else None,
+                    "fetched_at": (
+                        r.model.fetched_at.isoformat() if r.model and r.model.fetched_at else None
+                    ),
+                    "notes": r.model.notes if r.model else None,
+                    "has_baseline": r.has_baseline,
+                    "baseline_path": r.baseline_path,
+                    "check_command": _watch_check_command(r),
+                    "branch": _watch_branch(r),
+                }
+                for r in rows
+            ],
+            "notes": notes,
+        }
+        # The document is the only thing on stdout; a consumer parses it whole.
+        sys.stdout.write(json.dumps(doc, indent=2) + "\n")
+        for note in notes:
+            typer.echo(f"note: {note}", err=True)
+        if code:
+            raise typer.Exit(code)
+        return
+
+    # Commands and source lines are copied by the reader; a wrapped one is broken (MP-73).
+    out = Console(file=console.file, soft_wrap=True, highlight=False)
+    # `overflow="fold"`: a narrow terminal folds a long id onto a second line rather than
+    # truncating it with an ellipsis. A table whose one job is to name models must never cut
+    # a name; the full id also appears, unwrapped, in the lines below the table.
+    table = Table(
+        Column("model", overflow="fold"),
+        Column("seen in", overflow="fold"),
+        Column("status", overflow="fold"),
+        Column("retires", overflow="fold"),
+        Column("days left", overflow="fold"),
+        Column("successor", overflow="fold"),
+        title="Models this repo depends on",
+        box=ASCII_BOX,
+    )
+    for r in rows:
+        seen = ", ".join(r.sources) + ("" if r.role == "app" else " (judge)")
+        status = r.effective.value if r.effective else "unknown"
+        retires = r.model.retired_at.isoformat() if r.model and r.model.retired_at else "-"
+        days = str(r.days_remaining) if r.days_remaining is not None else "-"
+        # `Text`, never raw strings: ids and paths are not ours to trust as markup (MP-236).
+        table.add_row(
+            Text(r.id),
+            Text(seen),
+            Text(status),
+            Text(retires),
+            Text(days),
+            Text(r.replacement_id or "-"),
+        )
+    out.print(table)
+
+    for r in rows:
+        if not r.affected or r.model is None:
+            continue
+        m = r.model
+        if r.effective is not None and r.effective.value == "retired":
+            when = (
+                f"retired {m.retired_at.isoformat()} ({-r.days_remaining} days ago)"
+                if m.retired_at and r.days_remaining is not None
+                else "retired"
+            )
+        elif m.retired_at:
+            when = f"retires {m.retired_at.isoformat()} ({r.days_remaining} days)"
+        else:
+            when = "deprecated; no shutdown date announced"
+        arrow = f" -> {r.replacement_id}" if r.replacement_id else ""
+        out.print(Text(f"  {r.id}{arrow}: {when}"))
+        out.print(Text(f"     {_watch_source_line(r)}"))
+        if m.notes:
+            out.print(Text(f"     note: {m.notes}"))
+        cmd = _watch_check_command(r)
+        if cmd is None:
+            out.print(
+                Text(
+                    "     no successor named by the vendor: choose one and run "
+                    f"modelpin check --from {r.id} --to <model>"
+                )
+            )
+        else:
+            recorded = (
+                f"      (baseline recorded: {r.baseline_path})"
+                if r.has_baseline
+                else f"      (no baseline yet: run modelpin baseline --model {r.id} first)"
+            )
+            out.print(Text(f"     {cmd}{recorded if r.role == 'app' else ''}"))
+    unknown = [r for r in rows if not r.known and r.decides_exit]
+    if unknown:
+        ids = ", ".join(r.id for r in unknown)
+        out.print(
+            Text(
+                f"  unknown to the registry: {ids}. Unknown is not a clearance; contribute an "
+                "entry at data/models.json with the vendor page it comes from."
+            )
+        )
+    advisory = [r for r in rows if not r.known and not r.decides_exit]
+    if advisory:
+        ids = ", ".join(r.id for r in advisory)
+        out.print(
+            Text(f"  baseline-only, not in the registry (store keys can be fictional): {ids}")
+        )
+    for note in notes:
+        out.print(Text(f"  note: {note}"))
+    origin = (
+        f"{registry_path}"
+        if registry_path
+        else f"embedded seed shipped with modelpin {__version__}"
+    )
+    fresh = f"; newest entry fetched {newest.isoformat()}" if newest else ""
+    out.print(
+        Text(
+            f"registry: {origin}, {len(registry)} entries{fresh}. Pass --registry <path> to use a "
+            "newer data/models.json."
+        )
+    )
+    if code:
+        raise typer.Exit(code)
 
 
 @app.command()

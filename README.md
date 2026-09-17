@@ -42,8 +42,11 @@ OK 6 scenario(s) unchanged
   Modelpin or any third party other than the model providers you configure (and, in CI, your own
   pull request).
 
-Modelpin does not watch provider release or retirement feeds and does not open pull requests on
-its own: you choose the candidate model, and a scheduled workflow can re-check it on your clock.
+`modelpin watch` tells you which of the models your config names are retiring, when, and the
+exact check to run next, from a registry shipped with each release in which every date carries
+the vendor page it was read from. Modelpin does not poll provider feeds at runtime and does not
+open pull requests on its own: you choose the candidate model, and a scheduled workflow can
+re-check it on your clock.
 
 CLI: `modelpin` (alias `mp`). License: Apache-2.0.
 
@@ -337,6 +340,7 @@ current model, once.
 |---|---|
 | `modelpin init [dir]` | Write `modelpin.yaml` and a starter scenario, configured from the models your code calls. `--demo` writes the offline sandbox; `--agent-example` adds a tool-calling agent scenario. Never overwrites. |
 | `modelpin scan [path]` | List the model ids a repository (or a single file) uses, and where. |
+| `modelpin watch` | Which of the models in `modelpin.yaml` (and, with `--scan`, in your source) are retiring, when, the successor the vendor names, and the exact `check` command; every date carries its source page and fetch date. Exit `0` all clear, `1` a model is inside its notice window or already retired, `3` a model is unknown to the registry (not a clearance), `4` nothing declared. `--json` for scripts; `--registry <path>` to use a newer `data/models.json` than the one shipped. Never touches the network. |
 | `modelpin draft <file>` | Draft scenarios from one file of your app into `scenarios/.drafts/` for review (one model call). `--count`, `--model`, `--provider`. |
 | `modelpin baseline` | Run every scenario N times on your current model and save the results. |
 | `modelpin check --to <model>` | Replay on a candidate, compare with the baseline, print verdicts, write the report, exit `0`/`1`/`3`/`4`. |

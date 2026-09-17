@@ -6,7 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **`modelpin watch`: which of your models are retiring, when, and what to check next.** It
+  crosses the models in `modelpin.yaml` (and, with `--scan`, in your source) with a registry
+  shipped inside the package, prints days remaining, the successor the vendor names, and the
+  exact `modelpin check --from ... --to ...` line, and exits `1` inside a notice window, `3` for
+  a model the registry does not know (unknown is not a clearance), `0` when all clear. `--json`
+  for scripts; `--registry <path>` to use a newer `data/models.json`. It never touches the
+  network.
+- **The model registry now carries real dates, and every date carries its source.** Fifty
+  entries across OpenAI, Anthropic and Google, each naming the vendor page it was read from and
+  the day it was read; `Model` refuses a dated or non-active entry without both, so an unsourced
+  date cannot enter from the shipped seed or from a `--registry` file. Vendor aliases are
+  recorded, so `gpt-4` finds the `gpt-4-0613` row. The two placeholder ids the old seed
+  self-declared "UNVERIFIED" appear on no vendor page and were removed rather than sourced.
+  `scripts/registry_check.py` validates the JSON and regenerates the Python mirror.
 
 ## [0.4.1] - 2026-09-16
 
