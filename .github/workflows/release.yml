@@ -277,7 +277,7 @@ jobs:
           cat "$RUNNER_TEMP/checks.tsv"
           python - "$RUNNER_TEMP/checks.tsv" <<'PY'
           import sys
-          # The four contexts branch protection requires on main. Hardcoded: reading branch
+          # The five contexts branch protection requires on main. Hardcoded: reading branch
           # protection needs admin scope, which GITHUB_TOKEN cannot be granted.
           required = ["test (3.11)", "test (3.12)", "test (3.13)",
                       "wheel-smoke (ubuntu-latest)", "wheel-smoke (windows-latest)"]
