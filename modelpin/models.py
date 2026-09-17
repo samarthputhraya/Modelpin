@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Optional
 
@@ -58,15 +58,51 @@ class IncompleteReason(str, Enum):
 
 
 class Model(BaseModel):
-    """A provider model and its lifecycle status."""
+    """A provider model and its lifecycle status, as the vendor publishes it.
+
+    Every lifecycle claim carries its source. ``source_url`` is the vendor page the entry was
+    read from and ``fetched_at`` the day it was read; the validator refuses a dated or
+    non-active entry without both, so an unsourced date cannot enter the registry from the
+    embedded seed or from a ``--registry`` file (MP-276). Dates are the vendor's own, never
+    inferred. ``deprecated_at`` is the announcement (the notice window opens); ``retired_at``
+    is the shutdown (access is removed). ``aliases`` are the other names the vendor lists for
+    the same snapshot, so ``gpt-4`` finds the ``gpt-4-0613`` row.
+    """
 
     id: str
     provider: str
     family: Optional[str] = None
     status: ModelStatus = ModelStatus.active
-    released_at: Optional[datetime] = None
-    deprecated_at: Optional[datetime] = None
+    released_at: Optional[date] = None
+    deprecated_at: Optional[date] = None
+    retired_at: Optional[date] = None
     replacement_id: Optional[str] = None
+    aliases: list[str] = Field(default_factory=list)
+    source_url: Optional[str] = None
+    fetched_at: Optional[date] = None
+    notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _lifecycle_claims_are_sourced(self) -> "Model":
+        dated = any(d is not None for d in (self.released_at, self.deprecated_at, self.retired_at))
+        sourced = bool(
+            self.source_url and self.source_url.startswith("https://") and self.fetched_at
+        )
+        if (dated or self.status is not ModelStatus.active) and not sourced:
+            raise ValueError(
+                f"registry entry {self.id!r}: a lifecycle date or a non-active status needs "
+                "`source_url` (https) and `fetched_at` -- an unsourced date is refused"
+            )
+        if (
+            self.deprecated_at is not None
+            and self.retired_at is not None
+            and self.retired_at < self.deprecated_at
+        ):
+            raise ValueError(
+                f"registry entry {self.id!r}: retired_at {self.retired_at} precedes "
+                f"deprecated_at {self.deprecated_at}"
+            )
+        return self
 
 
 class ToolCall(BaseModel):
