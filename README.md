@@ -67,7 +67,7 @@ CLI: `modelpin` (alias `mp`). License: Apache-2.0.
 
 ## Install
 
-Python 3.12 or newer.
+Python 3.11 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
