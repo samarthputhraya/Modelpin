@@ -251,7 +251,11 @@ def test_watch_exits_1_on_a_dated_row_that_still_says_active(repo: Path) -> None
     _config(repo, ["dated-but-active"])
     r = _watch(repo)
     assert r.exit_code == 1, r.output
-    assert "no successor named by the vendor" in r.output
+    # A null successor is a fact about THIS registry entry, never a statement about the vendor
+    # (claims audit round 2: six rows said "no successor named by the vendor" while the cited
+    # page named one).
+    assert "this registry entry carries no successor" in r.output
+    assert "named by the vendor" not in r.output
 
 
 def test_watch_exits_3_when_the_registry_does_not_know_a_declared_model(repo: Path) -> None:

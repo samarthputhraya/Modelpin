@@ -176,7 +176,9 @@ def test_registry_notes_never_rank_a_model() -> None:
     import re
 
     banned = re.compile(
-        r"\b(better|worse|best|beats|wins|loses|superior|inferior|upgrade|downgrade)\b", re.I
+        r"\b(better|worse|best|beats|wins|loses|superior|inferior|upgrade|downgrade"
+        r"|most capable|state-of-the-art|flagship|frontier)\b",
+        re.I,
     )
     raw = json.loads(Path(JSON_PATH).read_text(encoding="utf-8"))
     for entry in raw["models"]:
