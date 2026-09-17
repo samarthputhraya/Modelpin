@@ -113,6 +113,21 @@ def test_a_fetched_at_in_the_future_is_refused() -> None:
     assert any("in the future" in p for p in problems)
 
 
+def test_a_fetched_at_one_calendar_day_ahead_is_not_the_future() -> None:
+    """A page fetched on the 18th in Kolkata is dated the 18th while a UTC runner is still on
+    the 17th. `[M]` CI run 35264775342 rejected every entry fetched that evening for exactly
+    this reason; a day of skew between the fetcher's calendar and the checker's is tolerated,
+    two days is not."""
+    entry = {
+        "id": "m",
+        "provider": "p",
+        "source_url": SRC["source_url"],
+        "fetched_at": "2026-09-18",
+    }
+    assert validate(_raw(entry), today=date(2026, 9, 17)) == []
+    assert any("in the future" in p for p in validate(_raw(entry), today=date(2026, 9, 16)))
+
+
 def test_an_unknown_key_is_a_problem_not_a_silent_drop() -> None:
     problems = validate(_raw({"id": "m", "provider": "p", "retired_on": "2026-10-23", **SRC}))
     assert any("unknown key" in p and "retired_on" in p for p in problems)

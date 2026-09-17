@@ -72,7 +72,10 @@ def validate(raw: object, *, today: date | None = None) -> list[str]:
             if owner is not None and owner != model.id:
                 problems.append(f"{where}: {name!r} is already the id or an alias of {owner!r}")
             names.setdefault(name, model.id)
-        if model.fetched_at is not None and model.fetched_at > today:
+        # One calendar day of skew is not the future: a page fetched on the 18th in Kolkata
+        # is dated the 18th while a UTC runner is still on the 17th. `[M] 2026-09-17T19:26Z`
+        # CI rejected the 30 entries fetched that evening in India for exactly this reason.
+        if model.fetched_at is not None and (model.fetched_at - today).days > 1:
             problems.append(f"{where}: fetched_at {model.fetched_at} is in the future")
         if model.source_url is not None and not model.source_url.startswith("https://"):
             problems.append(f"{where}: source_url must be https, found {model.source_url!r}")
