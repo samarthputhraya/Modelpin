@@ -24,7 +24,7 @@ def test_deprecations_filters_to_deprecated_and_retired(tmp_path):
         json.dumps(
             {
                 "models": [
-                    {"id": "a", "provider": "x", "status": "active"},
+                    {"id": "a", "provider": "x", "status": "active", **_SRC},
                     {"id": "b", "provider": "x", "status": "deprecated", **_SRC},
                     {"id": "c", "provider": "x", "status": "retired", **_SRC},
                 ]

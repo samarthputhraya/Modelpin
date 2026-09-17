@@ -166,10 +166,11 @@ def test_a_non_openai_judge_error_names_the_RIGHT_vendor():
 
 def test_a_gpt5_judge_does_not_send_a_temperature_it_will_400_on():
     """`[S] 2026-08-31` the gpt-5 family is REASONING and rejects a non-default temperature
-    (*"Only the default (1) value is supported"*). `[M]` `data/models.json` ships `gpt-5.5`
-    as active, so the registry pointed users at a judge model that would 400 on every call --
-    and `preflight()` makes no network request, so it would have failed only AFTER every
-    replay was paid for."""
+    (*"Only the default (1) value is supported"*). `[M] 2026-09-18` `data/models.json` carries
+    `gpt-5.5` as an alias of the active snapshot `gpt-5.5-2026-04-23` (it was an unsourced
+    placeholder row until MP-276), so the registry points users at a judge model that would
+    400 on every call -- and `preflight()` makes no network request, so it would have failed
+    only AFTER every replay was paid for."""
     client = FakeOpenAIClient()
     build_judge("gpt-5.5", client=client).equivalent("a", "b")
     assert "temperature" not in client.request, client.request

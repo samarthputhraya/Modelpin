@@ -87,26 +87,33 @@ def validate(raw: object, *, today: date | None = None) -> list[str]:
     return problems
 
 
-def mirror_problems(models: list[dict]) -> list[str]:
-    """Is the Python literal that ships identical to the JSON contributors edit?"""
-    from modelpin.watcher.registry import SEED_MODELS
+def mirror_problems(raw: dict) -> list[str]:
+    """Is the Python that ships identical to the JSON contributors edit: entries AND rule file?"""
+    from modelpin.watcher.registry import REGISTRY_NOTE, SEED_MODELS
 
-    if SEED_MODELS != models:
-        return [
+    problems = []
+    if SEED_MODELS != raw["models"]:
+        problems.append(
             "modelpin/watcher/registry.py::SEED_MODELS differs from data/models.json; run "
             "`python scripts/registry_check.py --sync`"
-        ]
-    return []
+        )
+    if REGISTRY_NOTE != raw.get("_note", ""):
+        problems.append(
+            "modelpin/watcher/registry.py::REGISTRY_NOTE differs from data/models.json's "
+            "`_note`; run `python scripts/registry_check.py --sync`"
+        )
+    return problems
 
 
-def sync(models: list[dict]) -> None:
+def sync(raw: dict) -> None:
     """Rewrite the SEED block in registry.py from the JSON, then black it."""
     text = MIRROR_PATH.read_text(encoding="utf-8")
     start = text.index(BEGIN)
     end = text.index(END)
     header_end = text.index("\n", start) + 1
-    literal = pprint.pformat(models, width=96, sort_dicts=False)
-    block = f"SEED_MODELS: list[dict[str, Any]] = {literal}\n"
+    note = pprint.pformat(raw.get("_note", ""), width=96)
+    literal = pprint.pformat(raw["models"], width=96, sort_dicts=False)
+    block = f"REGISTRY_NOTE: str = {note}\nSEED_MODELS: list[dict[str, Any]] = {literal}\n"
     MIRROR_PATH.write_text(text[:header_end] + block + text[end:], encoding="utf-8", newline="\n")
     subprocess.run([sys.executable, "-m", "black", "-q", str(MIRROR_PATH)], check=True)
 
@@ -126,10 +133,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     models = raw["models"]
     if args.sync:
-        sync(models)
+        sync(raw)
         print(f"registry.py regenerated from {args.json}: {len(models)} entries")
         return 0
-    problems = mirror_problems(models)
+    problems = mirror_problems(raw)
     if problems:
         for p in problems:
             print(f"  - {p}")

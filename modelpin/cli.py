@@ -65,7 +65,7 @@ from modelpin.diff.stats import (
 from modelpin.models import MATCH_MODES, Assertion, DiffResult, DiffVerdict, Scenario, Trace
 from modelpin.providers import ProviderAdapter, ProviderError, get_adapter, provider_help
 from modelpin.providers.fake import FakeProvider
-from modelpin.providers.openai import MAX_TOOL_TURNS
+from modelpin.providers.openai import MAX_TOOL_TURNS, OPENAI_COMPATIBLE_PROVIDERS
 from modelpin.replay import replay
 from modelpin.report import (
     ChannelCensus,
@@ -1055,9 +1055,14 @@ def _print_scan_skips(skipped: list[str]) -> None:
     )
 
 
+def _watch_is_chat(row: WatchRow) -> bool:
+    """Modelpin compares chat behaviour; an image or audio model gets no check suggested."""
+    return row.model is None or row.model.modality == "chat"
+
+
 def _watch_check_command(row: WatchRow) -> Optional[str]:
     """The exact `modelpin check` line for an affected row, or the judge remedy."""
-    if not row.replacement_id:
+    if not row.replacement_id or not _watch_is_chat(row):
         return None
     if row.role == "judge":
         return f"set judge_model: {row.replacement_id} in modelpin.yaml"
@@ -1068,8 +1073,8 @@ def _watch_check_command(row: WatchRow) -> Optional[str]:
 
 
 def _watch_branch(row: WatchRow) -> Optional[str]:
-    """The branch the Action's watch mode (MP-277) opens its pull request from."""
-    if not row.replacement_id:
+    """The branch name a pull-request workflow would use for this migration, if one applies."""
+    if not row.replacement_id or row.role != "app" or not _watch_is_chat(row):
         return None
     return f"modelpin/migrate-{slug(row.id)}-to-{slug(row.replacement_id)}"
 
@@ -1146,11 +1151,24 @@ def watch(
         if isinstance(mid, str) and mid:
             baselines[mid] = str(p)
             declared.append(Declared(mid, "baseline", "app", decides_exit=False))
-    if not any(d.decides_exit for d in declared):
+    # The offline demo replays recorded traces under `providers: [fake]`; no vendor retires a
+    # fictional model, so its rows are listed and never alarmed on (first-run audit, M1).
+    fake_only = bool(cfg.providers) and set(cfg.providers) <= {"fake"}
+    if fake_only:
+        declared = [
+            Declared(d.id, d.source, d.role, decides_exit=False) if d.source == "config" else d
+            for d in declared
+        ]
+        notes.append(
+            "providers: [fake] is the offline demo. No vendor retires a fictional model, so "
+            "there is nothing to watch here and the exit code is 0."
+        )
+    elif not any(d.decides_exit for d in declared):
         _fail(
             "no models declared: set `models:` in modelpin.yaml, or pass --scan to read them "
             "from the source"
         )
+    hosts = sorted(set(cfg.providers) & set(OPENAI_COMPATIBLE_PROVIDERS))
 
     # Read through the module so a test can pin the calendar (`watcher._today`).
     today = watcher_mod._today()
@@ -1195,6 +1213,7 @@ def watch(
                         r.model.fetched_at.isoformat() if r.model and r.model.fetched_at else None
                     ),
                     "notes": r.model.notes if r.model else None,
+                    "modality": r.model.modality if r.model else None,
                     "has_baseline": r.has_baseline,
                     "baseline_path": r.baseline_path,
                     "check_command": _watch_check_command(r),
@@ -1263,7 +1282,14 @@ def watch(
         if m.notes:
             out.print(Text(f"     note: {m.notes}"))
         cmd = _watch_check_command(r)
-        if cmd is None:
+        if not _watch_is_chat(r):
+            out.print(
+                Text(
+                    f"     Modelpin compares chat behaviour; {r.id} is an {m.modality} model, "
+                    "so no check is suggested."
+                )
+            )
+        elif cmd is None:
             out.print(
                 Text(
                     "     no successor named by the vendor: choose one and run "
@@ -1271,22 +1297,40 @@ def watch(
                 )
             )
         else:
-            recorded = (
-                f"      (baseline recorded: {r.baseline_path})"
-                if r.has_baseline
-                else f"      (no baseline yet: run modelpin baseline --model {r.id} first)"
-            )
-            out.print(Text(f"     {cmd}{recorded if r.role == 'app' else ''}"))
+            # The command on its own line: it is copied (first-run audit, H2). The hint below.
+            out.print(Text(f"     {cmd}"))
+            if r.role == "app":
+                hint = (
+                    f"baseline recorded: {r.baseline_path}"
+                    if r.has_baseline
+                    else f"no baseline yet: run modelpin baseline --model {r.id} first"
+                )
+                out.print(Text(f"       ({hint})"))
     unknown = [r for r in rows if not r.known and r.decides_exit]
     if unknown:
         ids = ", ".join(r.id for r in unknown)
+        # Unknown is not an alarm and not a clearance. The remedy must be true for someone who
+        # installed the wheel, which ships no data/models.json to edit (first-run audit, H1).
+        if hosts:
+            remedy = (
+                "The registry covers OpenAI, Anthropic and Google model pages only, not the "
+                f"catalogues of OpenAI-compatible hosts ({', '.join(hosts)}), which rotate "
+                "without published dates, so an id served by one of them cannot be cleared "
+                "here."
+            )
+        else:
+            remedy = (
+                "A newer registry can be passed with --registry <path> (data/models.json in "
+                "the Modelpin repository); an entry needs the vendor page it comes from."
+            )
         out.print(
             Text(
-                f"  unknown to the registry: {ids}. Unknown is not a clearance; contribute an "
-                "entry at data/models.json with the vendor page it comes from."
+                f"  unknown to the registry: {ids}. This does not mean these models are "
+                "retiring, and it does not affect baseline or check; it means this command "
+                f"cannot vouch for them, and unknown is not a clearance. {remedy}"
             )
         )
-    advisory = [r for r in rows if not r.known and not r.decides_exit]
+    advisory = [r for r in rows if not r.known and not r.decides_exit and not fake_only]
     if advisory:
         ids = ", ".join(r.id for r in advisory)
         out.print(

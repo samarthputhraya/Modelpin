@@ -60,13 +60,18 @@ class IncompleteReason(str, Enum):
 class Model(BaseModel):
     """A provider model and its lifecycle status, as the vendor publishes it.
 
-    Every lifecycle claim carries its source. ``source_url`` is the vendor page the entry was
-    read from and ``fetched_at`` the day it was read; the validator refuses a dated or
-    non-active entry without both, so an unsourced date cannot enter the registry from the
-    embedded seed or from a ``--registry`` file (MP-276). Dates are the vendor's own, never
-    inferred. ``deprecated_at`` is the announcement (the notice window opens); ``retired_at``
-    is the shutdown (access is removed). ``aliases`` are the other names the vendor lists for
-    the same snapshot, so ``gpt-4`` finds the ``gpt-4-0613`` row.
+    Every entry carries its source. ``source_url`` is the vendor page the entry was read from
+    and ``fetched_at`` the day it was read; the validator refuses an entry without both, so an
+    unsourced claim cannot enter the registry from the embedded seed or from a ``--registry``
+    file (MP-276). That binds the clearance path as much as the alarm path: an undated
+    ``active`` row is what turns `mp watch`'s exit 3 into a 0, and 0 is the only code that
+    means clear. Dates are the vendor's own, never inferred. ``deprecated_at`` is the
+    announcement (the notice window opens); ``retired_at`` is the shutdown (access is
+    removed). ``aliases`` are the other names the vendor lists for the same snapshot, so
+    ``gpt-4`` finds the ``gpt-4-0613`` row. ``modality`` says what the model produces, so no
+    chat check is ever suggested for an image model. Every field here is one ``mp watch`` or
+    ``mp check`` reads; no comparative field (price, context window, benchmark) belongs on
+    this type, because the registry catalogues lifecycle, never quality (ADR-0009).
     """
 
     id: str
@@ -81,17 +86,17 @@ class Model(BaseModel):
     source_url: Optional[str] = None
     fetched_at: Optional[date] = None
     notes: Optional[str] = None
+    modality: Literal["chat", "image", "audio"] = "chat"
 
     @model_validator(mode="after")
-    def _lifecycle_claims_are_sourced(self) -> "Model":
-        dated = any(d is not None for d in (self.released_at, self.deprecated_at, self.retired_at))
+    def _every_claim_is_sourced(self) -> "Model":
         sourced = bool(
             self.source_url and self.source_url.startswith("https://") and self.fetched_at
         )
-        if (dated or self.status is not ModelStatus.active) and not sourced:
+        if not sourced:
             raise ValueError(
-                f"registry entry {self.id!r}: a lifecycle date or a non-active status needs "
-                "`source_url` (https) and `fetched_at` -- an unsourced date is refused"
+                f"registry entry {self.id!r}: needs `source_url` (https) and `fetched_at` -- "
+                "an unsourced entry is refused, on the clearance path as on the alarm path"
             )
         if (
             self.deprecated_at is not None

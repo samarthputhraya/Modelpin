@@ -20,7 +20,14 @@ from typer.testing import CliRunner
 import modelpin.watcher as watcher
 from modelpin.cli import EXIT_SETUP_FAILED, EXIT_UNMEASURED, app
 from modelpin.models import Model
-from modelpin.watcher import Declared, assess, effective_status, load_registry, watch_exit_code
+from modelpin.watcher import (
+    Declared,
+    assess,
+    days_remaining,
+    effective_status,
+    load_registry,
+    watch_exit_code,
+)
 
 runner = CliRunner()
 TODAY = date(2026, 9, 17)
@@ -53,7 +60,7 @@ REGISTRY = {
             "id": "dated-but-active",
             "provider": "acme",
             "status": "active",
-            "retired_at": "2027-01-01",
+            "retired_at": "2026-11-15",
             **SRC,
         },
         {
@@ -65,7 +72,24 @@ REGISTRY = {
             **SRC,
         },
         {"id": "other-new", "provider": "other", "status": "active", **SRC},
-        {"id": "safe-model", "provider": "acme", "status": "active"},
+        {"id": "safe-model", "provider": "acme", "status": "active", **SRC},
+        {
+            "id": "dated-far",
+            "provider": "acme",
+            "status": "active",
+            "retired_at": "2027-06-01",
+            **SRC,
+        },
+        {
+            "id": "picture-model",
+            "provider": "acme",
+            "status": "deprecated",
+            "retired_at": "2026-10-23",
+            "replacement_id": "picture-2",
+            "modality": "image",
+            **SRC,
+        },
+        {"id": "picture-2", "provider": "acme", "status": "active", "modality": "image", **SRC},
     ],
 }
 
@@ -123,12 +147,20 @@ def test_a_passed_shutdown_date_is_retired_whatever_the_row_says() -> None:
 
 
 def test_an_announced_date_is_a_notice_window_even_on_an_active_row() -> None:
-    m = Model(id="m", provider="p", status="active", retired_at="2027-01-01", **SRC)
+    m = Model(id="m", provider="p", status="active", retired_at="2026-11-15", **SRC)
     assert effective_status(m, TODAY).value == "deprecated"
 
 
+def test_a_shutdown_date_far_beyond_the_notice_window_stays_active() -> None:
+    """Google publishes an earliest-possible shutdown date a year out at release; that is
+    information to list, not an alarm to raise every day for a year."""
+    m = Model(id="m", provider="p", status="active", retired_at="2027-06-01", **SRC)
+    assert effective_status(m, TODAY).value == "active"
+    assert days_remaining(m, TODAY) == (date(2027, 6, 1) - TODAY).days
+
+
 def test_an_undated_active_row_is_active() -> None:
-    assert effective_status(Model(id="m", provider="p"), TODAY).value == "active"
+    assert effective_status(Model(id="m", provider="p", **SRC), TODAY).value == "active"
 
 
 def test_days_remaining_is_derived_from_retired_at_and_today(repo: Path) -> None:
@@ -226,7 +258,7 @@ def test_watch_exits_3_when_the_registry_does_not_know_a_declared_model(repo: Pa
     _config(repo, ["nobody-knows"])
     r = _watch(repo)
     assert r.exit_code == EXIT_UNMEASURED, r.output
-    assert "Unknown is not a clearance" in r.output
+    assert "unknown is not a clearance" in r.output.lower()
 
 
 def test_a_missing_baseline_says_which_command_records_one(repo: Path) -> None:
@@ -282,7 +314,7 @@ def test_an_unsourced_date_in_a_registry_file_is_refused_at_load(repo: Path) -> 
     _config(repo, ["m"])
     r = _watch(repo)
     assert r.exit_code == EXIT_SETUP_FAILED, r.output
-    assert "unsourced date is refused" in r.output
+    assert "is refused" in r.output
 
 
 def test_the_registry_override_wins_over_the_embedded_seed(repo: Path) -> None:
@@ -375,9 +407,104 @@ def test_the_shipped_seed_answers_for_a_fresh_init_config() -> None:
     assert rows[0].known
 
 
-def test_the_readme_documents_watch_and_its_exit_codes() -> None:
+def test_the_readme_row_for_watch_states_each_exit_code_with_its_meaning() -> None:
+    """Pinned on the `modelpin watch` row itself, not on digits that appear elsewhere."""
     text = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
-    assert "`modelpin watch`" in text
-    for code in ("`0`", "`1`", "`3`", "`4`"):
-        assert code in text
-    assert "not a clearance" in text
+    row = next(ln for ln in text.splitlines() if ln.startswith("| `modelpin watch`"))
+    assert "`0`" in row and "all clear" in row
+    assert "`1`" in row and "notice window" in row and "retired" in row
+    assert "`3`" in row and "unknown" in row and "not a clearance" in row
+    assert "`4`" in row and "nothing declared" in row
+    assert "hosts" in row, "the host-catalogue gap must be named where the command is documented"
+    assert "never touches the network" in row.lower() or "no network" in row.lower()
+
+
+def test_an_unknown_model_is_told_it_is_not_retiring_and_given_a_true_remedy(repo: Path) -> None:
+    """A pip install ships no data/models.json to edit, so the remedy must not say to edit it."""
+    _config(repo, ["nobody-knows"])
+    r = _watch(repo)
+    assert r.exit_code == EXIT_UNMEASURED
+    assert "does not mean these models are retiring" in r.output
+    assert "does not affect baseline or check" in r.output
+    assert "--registry <path>" in r.output
+    assert "contribute an entry" not in r.output
+
+
+def test_a_host_served_id_is_told_the_registry_does_not_cover_hosts(repo: Path) -> None:
+    (repo / "modelpin.yaml").write_text(
+        "models:\n  - openai/gpt-oss-20b\nproviders:\n  - groq\n", encoding="utf-8"
+    )
+    r = _watch(repo)
+    assert r.exit_code == EXIT_UNMEASURED, r.output
+    assert "OpenAI-compatible hosts (groq)" in r.output
+    assert "cannot be cleared here" in r.output
+    assert "contribute" not in r.output
+
+
+def test_the_offline_demo_has_nothing_to_watch_and_exits_0(repo: Path) -> None:
+    (repo / "modelpin.yaml").write_text(
+        "models:\n  - demo-model-v1\nproviders:\n  - fake\n", encoding="utf-8"
+    )
+    r = _watch(repo)
+    assert r.exit_code == 0, r.output
+    assert "offline demo" in r.output and "nothing to watch" in r.output
+    assert "unknown to the registry" not in r.output
+    j = _watch(repo, "--json")
+    doc = json.loads(j.stdout)
+    assert doc["exit_code"] == 0 and doc["models"][0]["decides_exit"] is False
+
+
+def test_the_check_command_is_on_its_own_line_and_the_hint_below_it(repo: Path) -> None:
+    _config(repo, ["old-model"])
+    _baseline(repo, "old-model")
+    lines = _watch(repo).output.splitlines()
+    cmd_lines = [
+        ln for ln in lines if ln.strip() == "modelpin check --from old-model --to new-model"
+    ]
+    assert len(cmd_lines) == 1, "the command must be copyable on its own line"
+    i = lines.index(cmd_lines[0])
+    assert lines[i + 1].strip().startswith("(baseline recorded:")
+
+
+def test_an_image_model_gets_no_chat_check_suggested(repo: Path) -> None:
+    _config(repo, ["picture-model"])
+    r = _watch(repo)
+    assert r.exit_code == 1, r.output
+    assert "picture-model is an image model, so no check is suggested" in r.output
+    assert "modelpin check --from picture-model" not in r.output
+    doc = json.loads(_watch(repo, "--json").stdout)
+    row = doc["models"][0]
+    assert row["modality"] == "image" and row["check_command"] is None and row["branch"] is None
+
+
+def test_a_judge_row_carries_no_branch(repo: Path) -> None:
+    _config(repo, ["safe-model"], judge="old-model")
+    doc = json.loads(_watch(repo, "--json").stdout)
+    judge = next(m for m in doc["models"] if m["id"] == "old-model")
+    assert judge["role"] == "judge" and judge["branch"] is None
+
+
+def test_a_far_dated_model_is_listed_with_its_date_but_not_alarmed(repo: Path) -> None:
+    _config(repo, ["dated-far"])
+    r = _watch(repo)
+    assert r.exit_code == 0, r.output
+    assert "2027-06-01" in r.output and "active" in r.output
+
+
+def test_a_registry_validation_error_shows_the_sentence_not_pydantic_internals(repo: Path) -> None:
+    bad = {"schema": 2, "models": [{"id": "m", "provider": "p", "retired_at": "2026-10-23"}]}
+    (repo / "models.json").write_text(json.dumps(bad), encoding="utf-8")
+    _config(repo, ["m"])
+    r = _watch(repo)
+    assert r.exit_code == EXIT_SETUP_FAILED
+    assert "registry entry 'm'" in r.output and "is refused" in r.output
+    assert "errors.pydantic.dev" not in r.output and "input_value" not in r.output
+
+
+def test_a_bad_registry_path_names_the_flag(repo: Path) -> None:
+    _config(repo, ["safe-model"])
+    r = runner.invoke(
+        app,
+        ["watch", "--config", str(repo / "modelpin.yaml"), "--registry", str(repo / "nope.json")],
+    )
+    assert r.exit_code == EXIT_SETUP_FAILED and "(--registry)" in r.output
