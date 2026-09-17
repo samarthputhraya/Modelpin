@@ -279,7 +279,7 @@ jobs:
           import sys
           # The four contexts branch protection requires on main. Hardcoded: reading branch
           # protection needs admin scope, which GITHUB_TOKEN cannot be granted.
-          required = ["test (3.12)", "test (3.13)",
+          required = ["test (3.11)", "test (3.12)", "test (3.13)",
                       "wheel-smoke (ubuntu-latest)", "wheel-smoke (windows-latest)"]
           latest = {}
           for line in open(sys.argv[1], encoding="utf-8"):
@@ -403,7 +403,7 @@ jobs:
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.12"      # floor from requires-python; the wheel is py3-none-any
+          python-version: "3.11"      # floor from requires-python; the wheel is py3-none-any
 
       - name: Build sdist + wheel from a clean tree, with a pinned toolchain
         run: |
