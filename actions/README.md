@@ -86,7 +86,13 @@ names — that is what the second key above is for. Omit `judge_model` to skip j
 
 | Input | Default | Description |
 |---|---|---|
-| `to` | — (required) | New model id to test against the baseline. |
+| `to` | — (required in check mode) | New model id to test against the baseline. Ignored in watch mode. |
+| `mode` | `check` | `check` (default) replays `to` against the baseline and gates the pull request. `watch` reads the model-lifecycle registry, and for every model in `modelpin.yaml` inside its retirement notice window replays the vendor-named successor and opens one pull request carrying the verdict. Opt-in: a workflow that never sets this runs exactly what it ran before. |
+| `registry-url` | (the Action's copy) | watch mode: URL of a `data/models.json` newer than the one shipped with the Action (fetched with `curl`, 20 s timeout). Empty uses the copy in this Action's checkout, so no network is needed. |
+| `watch-scan` | `false` | watch mode: also read model ids from the repository's source (`mp watch --scan`). |
+| `watch-max-prs` | `3` | watch mode: at most this many pull requests opened per run. |
+| `watch-recheck-days` | `7` | watch mode: an open Modelpin pull request updated inside this many days is left alone and nothing is spent. |
+| `fail-on-affected` | `true` | watch mode: fail the job while a declared model is inside its notice window, already retired, or unknown to the registry, so a scheduled run goes red until you migrate. |
 | `from` | config | Baseline model id (else first `models:` in `modelpin.yaml`). |
 | `provider` | config | Candidate provider adapter (else first `providers:` in `modelpin.yaml`). |
 | `config` | `modelpin.yaml` | Path to the config. |
@@ -101,6 +107,7 @@ names — that is what the second key above is for. Omit `judge_model` to skip j
 | `modelpin-spec` | `modelpin[providers]` | `pip install` spec — pin a version or install from git pre-PyPI. |
 | `python-version` | `3.12` | Python to set up. |
 | `working-directory` | `.` | Where to run Modelpin. |
+| `store-dir` | `.modelpin` | Where baselines live, relative to `working-directory`. Both modes read it. |
 
 ## Outputs
 
@@ -108,6 +115,48 @@ names — that is what the second key above is for. Omit `judge_model` to skip j
 |---|---|
 | `verdict-exit-code` | `0` = no regression. `1` = a real regression was detected — the CI gate. `3` = the run could not answer: a compared scenario was unmeasurable, the provider rejected one, or nothing could be compared. `4` = the run never happened: a setup, configuration or environment failure (often a missing API-key secret), so no verdict exists and nothing is claimed about the model. A scenario with no recorded baseline is disclosed in the report and costs the run its clearance, but does not by itself change the exit code. |
 | `report-path` | Path to the rendered Markdown report. |
+| `watch-exit-code` | watch mode: `0` every declared model is known and active; `1` a declared model is inside its notice window or already retired; `3` a declared model is unknown to the registry (not a clearance); `4` nothing declared or the registry could not be read. |
+| `watch-json` | watch mode: path to the `mp watch --json` document. |
+| `pull-requests` | watch mode: comma-separated numbers of the pull requests opened or updated this run. |
+
+## Watch mode: the pull request Modelpin opens
+
+```yaml
+on:
+  schedule:
+    - cron: "17 6 * * *"        # daily; the registry decides whether anything is due
+  workflow_dispatch:
+permissions:
+  contents: write               # push the modelpin/migrate-* branch
+  pull-requests: write          # open or update the pull request
+jobs:
+  model-watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: samarthputhraya/modelpin@v1
+        with:
+          mode: watch
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+- It opens exactly **one pull request per (retiring model, successor)**, on the branch
+  `modelpin/migrate-<model>-to-<successor>`, and updates it on later runs rather than opening
+  another. The pull request's only diff is `.modelpin/migrations/<model>-to-<successor>.md`:
+  the report, the vendor page and fetch date behind the retirement, and the exact command to
+  reproduce. Your own files are never edited.
+- It opens **nothing** for a model with no recorded baseline (a verdict cannot be invented;
+  the job log names the `mp baseline` to run), nothing when the check could not measure
+  (exit 3) or could not run (exit 4), and nothing for a model the registry does not know.
+  Those cases show in the job summary and, with `fail-on-affected`, in a red job.
+- **Pull requests opened with the default `GITHUB_TOKEN` do not trigger your other workflows.**
+  That is GitHub's rule against recursive runs. To run CI on a Modelpin pull request, pass a
+  personal-access token or a GitHub App token as `github-token` and check out with the same
+  token, or push an empty commit to the branch.
+- **It fetches nothing unless you ask.** The registry it reads is the copy inside the Action's
+  checkout, pinned by the ref you chose; every date in it carries the vendor page it came from.
+  `registry-url` is the only network call, and it is yours.
 
 ## Notes
 
