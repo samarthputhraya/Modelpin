@@ -42,8 +42,16 @@ OK 6 scenario(s) unchanged
   Modelpin or any third party other than the model providers you configure (and, in CI, your own
   pull request).
 
-Modelpin does not watch provider release or retirement feeds and does not open pull requests on
-its own: you choose the candidate model, and a scheduled workflow can re-check it on your clock.
+`modelpin watch` crosses the models your config names (and, with `--scan`, the ones in your
+source) with a registry shipped inside each release, and tells you which of the ones **it knows**
+are retiring, when, the successor the vendor names, and the exact check to run next. Every entry
+in that registry carries the vendor page it was read from and the day it was read; a model the
+registry has never heard of is reported as unknown, never as clear. The registry is transcribed
+from OpenAI, Anthropic and Google model pages, not from the catalogues of OpenAI-compatible
+hosts. **Nothing in Modelpin polls provider feeds**: the registry is refreshed when a release
+ships, so it is only as current as the release you installed (`--registry <path>` points at a
+newer file). Modelpin does not open pull requests on its own: you choose the candidate model,
+and a scheduled workflow can re-check it on your clock.
 
 CLI: `modelpin` (alias `mp`). License: Apache-2.0.
 
@@ -337,6 +345,7 @@ current model, once.
 |---|---|
 | `modelpin init [dir]` | Write `modelpin.yaml` and a starter scenario, configured from the models your code calls. `--demo` writes the offline sandbox; `--agent-example` adds a tool-calling agent scenario. Never overwrites. |
 | `modelpin scan [path]` | List the model ids a repository (or a single file) uses, and where. |
+| `modelpin watch` | Which of the models in `modelpin.yaml` (its `models:` and `judge_model`; with `--scan`, the ids in your source; your recorded baselines are listed but never alarmed on) are retiring, when, the successor the vendor names, and the exact `check` command; every date carries its source page and fetch date. Exit `0` all clear, `1` a model is inside its notice window (a vendor deprecation, or a shutdown date within 90 days) or already retired, `3` a model is unknown to the registry (not a clearance; ids served by OpenAI-compatible hosts are unknown by design, since the registry reads the three labs' own pages), `4` nothing declared, or the config or registry could not be read. `--json` for scripts; `--registry <path>` to use a different `data/models.json` in place of the shipped one. Never touches the network. |
 | `modelpin draft <file>` | Draft scenarios from one file of your app into `scenarios/.drafts/` for review (one model call). `--count`, `--model`, `--provider`. |
 | `modelpin baseline` | Run every scenario N times on your current model and save the results. |
 | `modelpin check --to <model>` | Replay on a candidate, compare with the baseline, print verdicts, write the report, exit `0`/`1`/`3`/`4`. |
