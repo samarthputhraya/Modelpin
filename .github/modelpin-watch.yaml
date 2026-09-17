@@ -1,0 +1,23 @@
+# Modelpin watching itself: the config for .github/workflows/modelpin-watch.yml (MP-277 / MP-278).
+#
+# Unlike .github/modelpin.yaml, this names a REAL retiring model id, because the point of the
+# scheduled watch is to open a real migration pull request on the vendor's own schedule:
+# gpt-4.1-nano is retired by OpenAI on 2026-10-23 with gpt-5.6-luna as the named successor
+# (data/models.json carries the page and the fetch date). Its baseline is recorded under the
+# NON-DEFAULT store `.github/watch-store/` (the Action's `store-dir` input), so it can never be
+# read by a stranger's `mp check` against their own `.modelpin/` store, which is the collision
+# ADR-0021 exists to prevent; the tracked-baseline guard in tests/test_baseline_scenario_collision.py
+# reads git ls-files and still applies to the default store.
+#
+# Cost: one `mp check` (8 scenarios x 5 runs on gpt-5.6-luna, $0.2/$1.2 per 1M tokens) per run,
+# and only when no open Modelpin pull request was updated inside the last 7 days.
+#
+# Paths (scenarios_dir) resolve against the WORKING DIRECTORY, not against this file, so the
+# workflow must keep running from the repo root.
+models:
+  - gpt-4.1-nano           # retires 2026-10-23 -> gpt-5.6-luna (registry)
+scenarios_dir: examples/suite
+providers:
+  - openai                 # OPENAI_API_KEY, a repo secret in CI
+runs: 5
+judge_model: gpt-4o-mini   # semantic judge on the same key; independent of both sides

@@ -11,8 +11,33 @@ branding:
 
 inputs:
   to:
-    description: "The new model id to test against your baseline (e.g. gpt-5.5)."
-    required: true
+    description: "check mode: the new model id to test against your baseline (e.g. gpt-5.5). Required in check mode; ignored in watch mode."
+    required: false
+    default: ""
+  mode:
+    description: "check (default): replay `to` against the baseline and gate the pull request. watch: read the model-lifecycle registry, and for every model in modelpin.yaml inside its retirement notice window replay the vendor-named successor and open one pull request carrying the verdict. Opt-in: a workflow that never sets this runs exactly what it ran before."
+    required: false
+    default: "check"
+  registry-url:
+    description: "watch mode: URL of a data/models.json newer than the one shipped with the Action (fetched with curl, 20 s timeout). Empty (default) uses the copy in this Action's checkout, so no network is needed."
+    required: false
+    default: ""
+  watch-scan:
+    description: "watch mode: also read model ids from the repository's source (`mp watch --scan`; walks the tree)."
+    required: false
+    default: "false"
+  watch-max-prs:
+    description: "watch mode: at most this many pull requests opened per run (self-throttle)."
+    required: false
+    default: "3"
+  watch-recheck-days:
+    description: "watch mode: an open Modelpin pull request updated inside this many days is left alone and nothing is spent."
+    required: false
+    default: "7"
+  fail-on-affected:
+    description: "watch mode: fail the job while a declared model is inside its notice window, already retired, or unknown to the registry, so a scheduled run goes red until you migrate."
+    required: false
+    default: "true"
   from:
     description: "Baseline model id (defaults to the first model in modelpin.yaml)."
     required: false
@@ -76,6 +101,10 @@ inputs:
     description: "Directory to run Modelpin in."
     required: false
     default: "."
+  store-dir:
+    description: "Where baselines live (`mp baseline --store-dir`), relative to working-directory. Both modes read it; watch mode replays successors against the baselines in it."
+    required: false
+    default: ".modelpin"
 
 outputs:
   verdict-exit-code:
@@ -84,6 +113,15 @@ outputs:
   report-path:
     description: "Path to the rendered Markdown report."
     value: ${{ steps.check.outputs.report }}
+  watch-exit-code:
+    description: "watch mode: 0 every declared model is known and active; 1 a declared model is inside its notice window or retired; 3 a declared model is unknown to the registry (not a clearance); 4 nothing declared or the registry could not be read."
+    value: ${{ steps.watch.outputs.code }}
+  watch-json:
+    description: "watch mode: path to the `mp watch --json` document."
+    value: ${{ steps.watch.outputs.json }}
+  pull-requests:
+    description: "watch mode: comma-separated numbers of the pull requests opened or updated this run."
+    value: ${{ steps.watch_pr.outputs.prs }}
 
 runs:
   using: "composite"
@@ -108,8 +146,111 @@ runs:
         python -m pip install --upgrade pip
         python -m pip install "$MP_SPEC"
 
+    - name: Require `to` in check mode
+      if: ${{ inputs.mode == 'check' && inputs.to == '' }}
+      shell: bash
+      run: |
+        echo "::error::Modelpin: 'to' is required in check mode (the model to test). Set 'with: to: <model>', or use 'mode: watch'."
+        exit 1
+
+    # ----------------------------------------------------------------- watch mode (MP-277)
+    # Opt-in by `mode: watch`. Reads the model-lifecycle registry, and for every model the
+    # config names that is inside its retirement notice window, replays the vendor-named
+    # successor against the committed baseline and opens ONE pull request with the verdict.
+    # Nothing here runs unless the consumer's workflow said so; every check-mode step below
+    # is gated on `mode == 'check'`, so a workflow that never sets `mode` runs byte-for-byte
+    # what it ran before this input existed.
+    - name: Resolve the model-lifecycle registry
+      id: registry
+      if: ${{ inputs.mode == 'watch' }}
+      shell: bash
+      env:
+        MP_REGISTRY_URL: ${{ inputs.registry-url }}
+        MP_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        # The registry ships inside the Action's checkout, pinned by the ref the consumer
+        # chose, so the default needs no network. A newer JSON can be fetched from a URL the
+        # consumer names; a bad file is refused by the registry's own validation.
+        reg="$RUNNER_TEMP/models.json"
+        if [ -n "$MP_REGISTRY_URL" ]; then
+          curl -fsSL --max-time 20 --retry 2 -o "$reg" "$MP_REGISTRY_URL"
+        else
+          cp "$MP_ACTION_PATH/data/models.json" "$reg"
+        fi
+        echo "path=$reg" >> "$GITHUB_OUTPUT"
+
+    - name: Run mp watch
+      id: watch
+      if: ${{ inputs.mode == 'watch' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        MP_CONFIG: ${{ inputs.config }}
+        MP_SCAN: ${{ inputs.watch-scan }}
+        MP_REGISTRY: ${{ steps.registry.outputs.path }}
+        MP_STORE_DIR: ${{ inputs.store-dir }}
+      run: |
+        set +e
+        args=(--config "$MP_CONFIG" --registry "$MP_REGISTRY" --store-dir "$MP_STORE_DIR")
+        [ "$MP_SCAN" = "true" ] && args+=(--scan)
+        mp watch "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+        json="$RUNNER_TEMP/watch.json"
+        mp watch "${args[@]}" --json > "$json"
+        code=$?
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+        echo "json=$json" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Check successors and open pull requests
+      id: watch_pr
+      # Only when a declared model is inside its notice window or retired (exit 1). An unknown
+      # model (exit 3) is not a regression and opens nothing: that is the steady state for an
+      # id served by an OpenAI-compatible host, and a pull request on it would be unsolicited.
+      if: ${{ inputs.mode == 'watch' && steps.watch.outputs.code == '1' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        MP_ACTION_PATH: ${{ github.action_path }}
+        MP_WATCH_JSON: ${{ steps.watch.outputs.json }}
+        MP_CONFIG: ${{ inputs.config }}
+        MP_PROVIDER: ${{ inputs.provider }}
+        MP_RUNS: ${{ inputs.runs }}
+        MP_MATCH: ${{ inputs.match }}
+        MP_MAX_PRS: ${{ inputs.watch-max-prs }}
+        MP_RECHECK_DAYS: ${{ inputs.watch-recheck-days }}
+        MP_STORE_DIR: ${{ inputs.store-dir }}
+      run: |
+        args=(--watch-json "$MP_WATCH_JSON" --config "$MP_CONFIG" --max-prs "$MP_MAX_PRS" --recheck-days "$MP_RECHECK_DAYS" --store-dir "$MP_STORE_DIR")
+        [ -n "$MP_PROVIDER" ] && args+=(--provider "$MP_PROVIDER")
+        [ -n "$MP_RUNS" ] && args+=(--runs "$MP_RUNS")
+        [ -n "$MP_MATCH" ] && args+=(--match "$MP_MATCH")
+        python "$MP_ACTION_PATH/actions/watch_pr.py" "${args[@]}"
+
+    - name: Fail while a declared model is retiring or unknown
+      id: watch_fail
+      if: ${{ inputs.mode == 'watch' && inputs.fail-on-affected == 'true' && steps.watch.outputs.code != '0' }}
+      shell: bash
+      env:
+        MP_WATCH_CODE: ${{ steps.watch.outputs.code }}
+        MP_PRS: ${{ steps.watch_pr.outputs.prs }}
+      run: |
+        # Red until migrated is the point of a scheduled watch. Every branch states what
+        # was measured and nothing more (ADR-0035): an unknown model is not a verdict.
+        if [ "$MP_WATCH_CODE" = "1" ]; then
+          echo "::error::Modelpin: a model this repository depends on is inside its retirement notice window or already retired. See the step summary; pull request(s): ${MP_PRS:-none opened}."
+        elif [ "$MP_WATCH_CODE" = "3" ]; then
+          echo "::error::Modelpin: the registry has no entry for a model this repository depends on. Unknown is not a clearance; see the step summary."
+        elif [ "$MP_WATCH_CODE" = "4" ]; then
+          echo "::error::Modelpin could not RUN mp watch: nothing declared in modelpin.yaml, or the registry could not be read. See this step's log."
+        else
+          echo "::error::Modelpin: mp watch exited with an unexpected code $MP_WATCH_CODE. This is not a verdict. See this step's log."
+        fi
+        exit 1
+
+    # ----------------------------------------------------------------- check mode (default)
     - name: Record baseline (optional)
-      if: ${{ inputs.baseline == 'true' }}
+      if: ${{ inputs.mode == 'check' && inputs.baseline == 'true' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -120,8 +261,9 @@ runs:
         MP_CONFIG: ${{ inputs.config }}
         MP_SCENARIOS_DIR: ${{ inputs.scenarios-dir }}
         MP_RUNS: ${{ inputs.runs }}
+        MP_STORE_DIR: ${{ inputs.store-dir }}
       run: |
-        args=(--config "$MP_CONFIG")
+        args=(--config "$MP_CONFIG" --store-dir "$MP_STORE_DIR")
         [ -n "$MP_PROVIDER" ] && args+=(--provider "$MP_PROVIDER")
         [ -n "$MP_FROM" ] && args+=(--model "$MP_FROM")
         [ -n "$MP_SCENARIOS_DIR" ] && args+=(--scenarios-dir "$MP_SCENARIOS_DIR")
@@ -130,6 +272,7 @@ runs:
 
     - name: Run mp check
       id: check
+      if: ${{ inputs.mode == 'check' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -143,9 +286,10 @@ runs:
         MP_RUNS: ${{ inputs.runs }}
         MP_WORKDIR: ${{ inputs.working-directory }}
         MP_CONFIRM: ${{ inputs.confirm }}
+        MP_STORE_DIR: ${{ inputs.store-dir }}
       run: |
         set +e
-        args=(--to "$MP_TO" --match "$MP_MATCH" --config "$MP_CONFIG")
+        args=(--to "$MP_TO" --match "$MP_MATCH" --config "$MP_CONFIG" --store-dir "$MP_STORE_DIR")
         [ -n "$MP_PROVIDER" ] && args+=(--provider "$MP_PROVIDER")
         [ "$MP_CONFIRM" = "false" ] && args+=(--no-confirm)
         [ -n "$MP_FROM" ] && args+=(--from "$MP_FROM")
@@ -154,11 +298,11 @@ runs:
         mp check "${args[@]}"
         code=$?
         echo "code=$code" >> "$GITHUB_OUTPUT"
-        echo "report=$MP_WORKDIR/.modelpin/last-report.md" >> "$GITHUB_OUTPUT"
+        echo "report=$MP_WORKDIR/$MP_STORE_DIR/last-report.md" >> "$GITHUB_OUTPUT"
         exit 0
 
     - name: Post PR comment
-      if: ${{ inputs.comment == 'true' && github.event.pull_request.number }}
+      if: ${{ inputs.mode == 'check' && inputs.comment == 'true' && github.event.pull_request.number }}
       # A comment that cannot be posted (a pull request from a fork gets a read-only token)
       # must not turn the job red by itself: the verdict is gated by the step below, and the
       # report is still in the job log and at `report-path`.
@@ -194,7 +338,7 @@ runs:
           }
 
     - name: Fail on regression or an unmeasurable run
-      if: ${{ inputs.fail-on-regression == 'true' && steps.check.outputs.code != '0' }}
+      if: ${{ inputs.mode == 'check' && inputs.fail-on-regression == 'true' && steps.check.outputs.code != '0' }}
       shell: bash
       env:
         MP_TO: ${{ inputs.to }}
