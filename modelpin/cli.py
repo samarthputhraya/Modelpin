@@ -1292,7 +1292,7 @@ def watch(
         elif cmd is None:
             out.print(
                 Text(
-                    "     no successor named by the vendor: choose one and run "
+                    "     this registry entry carries no successor: choose one and run "
                     f"modelpin check --from {r.id} --to <model>"
                 )
             )

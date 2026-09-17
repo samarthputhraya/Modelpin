@@ -447,9 +447,10 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
         "fetched_at": "2026-09-17",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than May 28, 2027'. A "
-        "floor the vendor publishes, not an announced date. Per the model-ids page (fetched "
-        "2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. Listed under "
-        "'Legacy models (still available)'.",
+        "floor the vendor publishes, not an announced date. Per "
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
+        "Listed under the docs sidebar's 'Legacy models' group.",
         "aliases": [],
     },
     {
@@ -460,8 +461,9 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
         "fetched_at": "2026-09-17",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than April 16, 2027'. "
-        "Per the model-ids page (fetched 2026-09-18) a 4.6-generation id is not an alias: "
-        "it is the snapshot. Listed under 'Legacy models (still available)'.",
+        "Per https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
+        "Listed under the docs sidebar's 'Legacy models' group.",
         "aliases": [],
     },
     {
@@ -472,8 +474,10 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
         "fetched_at": "2026-09-17",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than February 5, "
-        "2027'. Per the model-ids page (fetched 2026-09-18) a 4.6-generation id is not an "
-        "alias: it is the snapshot. Listed under 'Legacy models (still available)'.",
+        "2027'. Per "
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
+        "Listed under the docs sidebar's 'Legacy models' group.",
         "aliases": [],
     },
     {
@@ -485,7 +489,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "fetched_at": "2026-09-17",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than November 24, "
         "2026'. Alias per https://platform.claude.com/docs/en/models/opus-4-5/overview "
-        "(fetched 2026-09-18); listed under 'Legacy models (still available)'.",
+        "(fetched 2026-09-18); the docs sidebar lists it under its 'Legacy models' group.",
         "aliases": ["claude-opus-4-5"],
     },
     {
@@ -496,8 +500,10 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
         "fetched_at": "2026-09-17",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than February 17, "
-        "2027'. Per the model-ids page (fetched 2026-09-18) a 4.6-generation id is not an "
-        "alias: it is the snapshot. Listed under 'Legacy models (still available)'.",
+        "2027'. Per "
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
+        "Listed under the docs sidebar's 'Legacy models' group.",
         "aliases": [],
     },
     {
@@ -510,7 +516,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "notes": "Model status table: Active; tentative retirement 'Not sooner than September 29, "
         "2026'. The vendor's policy is at least 60 days' notice before retirement. Alias "
         "per https://platform.claude.com/docs/en/models/sonnet-4-5/overview (fetched "
-        "2026-09-18); the overview lists it under 'Legacy models (still available)'.",
+        "2026-09-18); the docs sidebar lists it under its 'Legacy models' group.",
         "aliases": ["claude-sonnet-4-5"],
     },
     {
@@ -597,10 +603,9 @@ SEED_MODELS: list[dict[str, Any]] = [
         "fetched_at": "2026-09-17",
         "notes": "Vertex AI lifecycle table: October 20, 2026, replacement 'Gemini 3.1 Flash-Lite or "
         "Gemma 4' (id gemini-3.1-flash-lite from "
-        "https://ai.google.dev/gemini-api/docs/models; the Gemma 4 id on Vertex is "
-        "gemma-4-26b-a4b-it-maas). The Vertex release note of 2026-04-02 said October 16, "
-        "2026; the lifecycle table is carried. Gemini API page: 'No shutdown date "
-        "announced'.",
+        "https://ai.google.dev/gemini-api/docs/models; no Gemma 4 id was transcribed). The "
+        "Vertex release note of 2026-04-02 said October 16, 2026; the lifecycle table is "
+        "carried. Gemini API page: 'No shutdown date announced'.",
     },
     {
         "id": "gemini-live-2.5-flash-native-audio",
@@ -789,8 +794,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2",
         "fetched_at": "2026-09-18",
         "notes": "Model page: default snapshot for the gpt-5.2 alias. Not named on the deprecations "
-        "page as of 2026-09-18. Model page wording: 'previous flagship model ... We "
-        "recommend using the latest GPT-6 Astra'.",
+        "page as of 2026-09-18. Model page wording: 'We recommend using the latest GPT-6 "
+        "Astra'.",
     },
     {
         "id": "gpt-5.2-pro-2025-12-11",
@@ -877,9 +882,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "active",
         "source_url": "https://developers.openai.com/api/docs/models/gpt-6-astra",
         "fetched_at": "2026-09-18",
-        "notes": "Model page. Not named on the deprecations page as of 2026-09-18. Model page "
-        "wording: 'Our most capable model, built for the hardest end-to-end work'; the "
-        "dateless id is its own default snapshot.",
+        "notes": "Model page. Not named on the deprecations page as of 2026-09-18; the dateless id "
+        "is its own default snapshot.",
     },
     {
         "id": "o1-mini-2024-09-12",
@@ -963,9 +967,12 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "active",
         "source_url": "https://platform.claude.com/docs/en/models/overview",
         "fetched_at": "2026-09-18",
-        "notes": "Overview page: a dateless id is its own pinned snapshot ('Dateless IDs are their "
-        "own pinned snapshot; the alias row repeats them'). Deprecations page status: "
-        "Active.",
+        "notes": "Deprecations page status: Active. Per "
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18), 'Dateless IDs are pinned snapshots' -- 'the dateless ID is "
+        "the canonical model ID for that release. It maps to a single, fixed model "
+        "snapshot' -- so this id is not an alias. The overview's model table lists it as "
+        "the Claude API ID.",
     },
     {
         "id": "claude-opus-5",
@@ -974,9 +981,12 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "active",
         "source_url": "https://platform.claude.com/docs/en/models/overview",
         "fetched_at": "2026-09-18",
-        "notes": "Overview page: a dateless id is its own pinned snapshot ('Dateless IDs are their "
-        "own pinned snapshot; the alias row repeats them'). Deprecations page status: "
-        "Active.",
+        "notes": "Deprecations page status: Active. Per "
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18), 'Dateless IDs are pinned snapshots' -- 'the dateless ID is "
+        "the canonical model ID for that release. It maps to a single, fixed model "
+        "snapshot' -- so this id is not an alias. The overview's model table lists it as "
+        "the Claude API ID.",
     },
     {
         "id": "claude-sonnet-5",
@@ -985,9 +995,12 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "active",
         "source_url": "https://platform.claude.com/docs/en/models/overview",
         "fetched_at": "2026-09-18",
-        "notes": "Overview page: a dateless id is its own pinned snapshot ('Dateless IDs are their "
-        "own pinned snapshot; the alias row repeats them'). Deprecations page status: "
-        "Active.",
+        "notes": "Deprecations page status: Active. Per "
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18), 'Dateless IDs are pinned snapshots' -- 'the dateless ID is "
+        "the canonical model ID for that release. It maps to a single, fixed model "
+        "snapshot' -- so this id is not an alias. The overview's model table lists it as "
+        "the Claude API ID.",
     },
     {
         "id": "claude-fable-5",
@@ -996,9 +1009,12 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "active",
         "source_url": "https://platform.claude.com/docs/en/models/overview",
         "fetched_at": "2026-09-18",
-        "notes": "Overview page: a dateless id is its own pinned snapshot ('Dateless IDs are their "
-        "own pinned snapshot; the alias row repeats them'). Deprecations page status: "
-        "Active. Listed under 'Legacy models (still available)'.",
+        "notes": "Deprecations page status: Active. Per "
+        "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
+        "(fetched 2026-09-18), 'Dateless IDs are pinned snapshots' -- 'the dateless ID is "
+        "the canonical model ID for that release. It maps to a single, fixed model "
+        "snapshot' -- so this id is not an alias. The overview's model table lists it as "
+        "the Claude API ID. Listed under the docs sidebar's 'Legacy models' group.",
     },
     {
         "id": "gpt-3.5-turbo-instruct",
@@ -1010,8 +1026,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-09-18",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
-        "shutdown September 28, 2026. The replacement cell was not transcribed; choose a "
-        "successor and run the check yourself.",
+        "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
+        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "gpt-3.5-turbo-1106",
@@ -1023,8 +1039,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-09-18",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
-        "shutdown September 28, 2026. The replacement cell was not transcribed; choose a "
-        "successor and run the check yourself.",
+        "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
+        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "babbage-002",
@@ -1036,8 +1052,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-09-18",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
-        "shutdown September 28, 2026. The replacement cell was not transcribed; choose a "
-        "successor and run the check yourself.",
+        "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
+        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "davinci-002",
@@ -1049,8 +1065,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-09-18",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
-        "shutdown September 28, 2026. The replacement cell was not transcribed; choose a "
-        "successor and run the check yourself.",
+        "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
+        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "gemini-2.0-flash",
@@ -1061,7 +1077,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
         "fetched_at": "2026-09-17",
         "notes": "Gemini API deprecations table and the Vertex AI lifecycle table both give June 1, "
-        "2026. No replacement transcribed.",
+        "2026. They name different successors -- Gemini API: gemini-3.6-flash; Vertex "
+        "retired-models table: gemini-3.1-flash-lite -- so no single successor is carried.",
     },
     {
         "id": "gemini-2.0-flash-lite",
@@ -1072,7 +1089,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
         "fetched_at": "2026-09-17",
         "notes": "Gemini API deprecations table and the Vertex AI lifecycle table both give June 1, "
-        "2026. No replacement transcribed.",
+        "2026 and both name gemini-3.1-flash-lite.",
+        "replacement_id": "gemini-3.1-flash-lite",
     },
     {
         "id": "claude-mythos-preview",

@@ -83,9 +83,10 @@ def _today() -> date:
 #: How close a vendor-published shutdown date has to be before an otherwise-active row counts
 #: as inside its notice window. Google publishes an "earliest possible" shutdown date for some
 #: models at release, a year out; alarming on that from day one would make every such model
-#: read as retiring forever. Ninety days is longer than any notice period the three vendors
-#: publish as a floor (Anthropic 60 days; OpenAI 2 weeks for previews), so a real notice is
-#: always inside it.
+#: read as retiring forever. Ninety days is longer than the shortest notice the vendors
+#: publish (OpenAI: 2 weeks for previews; Anthropic: at least 60 days). OpenAI's 3- and
+#: 6-month floors are unaffected: this branch is only reached by a row the vendor still marks
+#: active, and a row it marks deprecated is inside its window whatever its date says.
 NOTICE_DAYS = 90
 
 
