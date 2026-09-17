@@ -13,6 +13,16 @@ Nothing yet.
 Affects you only if you set `match: subset` or `match: superset`. The default `strict` and
 `unordered` modes are not on this code path and are unchanged.
 
+### Added
+
+- **Python 3.11 is supported.** `requires-python` is now `>=3.11`, so Modelpin installs on the
+  interpreter many long-tail projects and CI images are still pinned to. The only 3.12-only call
+  in the package was `os.path.isjunction`, used by `modelpin scan` to refuse to follow an NTFS
+  junction out of the repository; below 3.12 the detector reads the reparse tag the way CPython's
+  own `ntpath.isjunction` reads it, and a test asserts the two agree wherever both exist. CI runs
+  the full suite on 3.11, 3.12 and 3.13. The GitHub Action's `python-version` default is
+  unchanged at `3.12`: a default, not a floor.
+
 ### Fixed
 
 - **A directional match mode could miss a real regression when the baseline was noisy.** Under
