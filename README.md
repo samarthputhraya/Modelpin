@@ -50,8 +50,10 @@ registry has never heard of is reported as unknown, never as clear. The registry
 from OpenAI, Anthropic and Google model pages, not from the catalogues of OpenAI-compatible
 hosts. **Nothing in Modelpin polls provider feeds**: the registry is refreshed when a release
 ships, so it is only as current as the release you installed (`--registry <path>` points at a
-newer file). Modelpin does not open pull requests on its own: you choose the candidate model,
-and a scheduled workflow can re-check it on your clock.
+newer file). On the command line Modelpin never opens a pull request. In CI, the Action's
+`mode: watch` does: on your schedule, for a model inside its retirement notice window, it
+replays the vendor-named successor against your committed baseline and opens one pull request
+with the verdict, only in a repository whose workflow enabled it.
 
 CLI: `modelpin` (alias `mp`). License: Apache-2.0.
 

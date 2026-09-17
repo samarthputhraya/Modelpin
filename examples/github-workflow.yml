@@ -13,10 +13,12 @@
 #                   your own scenarios against the same pair on a cadence, so drift on the
 #                   provider's side surfaces as a run that went red without a commit.
 #
-# The schedule is on YOUR clock, not the provider's release feed. Modelpin does not yet watch
-# provider deprecation pages — `modelpin/watcher/` is a seed registry with no network call —
-# so a weekly replay is the honest version of "find out before production does". Budget for it:
-# a scheduled run spends real API calls on your key every week. See COST below.
+# The schedule below is on YOUR clock. The second job, `mode: watch`, reads the model-lifecycle
+# registry shipped inside the Action -- every date in it carries the vendor page it came from --
+# and when a model you depend on is inside its retirement notice window it replays the
+# vendor-named successor against your committed baseline and opens ONE pull request with the
+# verdict. Nothing polls a provider; the registry is as current as the Action ref you pinned.
+# Budget for the schedule: a scheduled run spends real API calls on your key. See COST below.
 #
 # Cost, before you enable the schedule:
 #   calls ~= scenarios x runs x (1 + avg_tool_turns) on the CANDIDATE only (the baseline is read
@@ -70,3 +72,20 @@ jobs:
           # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+  model-watch:
+    runs-on: ubuntu-latest
+    # Only on the schedule and by hand: a pull request never needs it.
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write           # push the modelpin/migrate-* branch
+      pull-requests: write      # open or update the pull request
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Modelpin watch
+        uses: samarthputhraya/modelpin@v1     # pin to a release tag
+        with:
+          mode: watch
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
