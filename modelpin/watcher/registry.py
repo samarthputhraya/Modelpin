@@ -16,7 +16,7 @@ conflicting vendor dates are resolved, what is deliberately not transcribed). It
 here because a pip-installed user never sees the JSON but does see every entry's ``notes``,
 which those rules govern. Every entry carries the vendor page it was read from and the day it
 was read; ``modelpin.models.Model`` refuses one that does not (MP-276). Every field is one
-``mp watch`` or ``mp check`` reads; no comparative field is ever added (ADR-0009).
+``modelpin watch`` or ``modelpin check`` reads; no comparative field is ever added (ADR-0009).
 """
 
 from __future__ import annotations
@@ -28,26 +28,26 @@ REGISTRY_NOTE: str = (
     "Schema 2. Scope: text/chat ids a Modelpin scenario can replay, transcribed from the vendor "
     "sections named per entry; audio, realtime, transcription, video, embedding and fine-tuned "
     "(ft-*) rows are out of scope, and several vendor sections are not yet transcribed, so an id "
-    "can be absent without being safe: `mp watch` reports an id it does not know as unknown, "
-    "never as clear. Image and audio ids that share a table with chat ids are carried with a "
-    "`modality` so no chat check is ever suggested for them. Every entry names the vendor page it "
-    "was read from (source_url) and the day it was read (fetched_at); modelpin.models.Model "
-    "refuses an entry without both. Dates are the vendor's own, transcribed the day the page was "
-    "fetched, never recalled. Where two Google surfaces publish different dates for one id, the "
-    "entry carries the EARLIER date, the one that removes access first, and quotes the other "
-    "surface in notes; where one surface's current lifecycle table and an older release note "
-    "disagree, the current table is carried and the note quoted. Anthropic dates are the Claude "
-    "API's own: the page states that partner platforms (Amazon Bedrock, Google Cloud/Vertex AI) "
-    "set their own schedules, so they can differ on the Vertex path Modelpin supports. Every "
-    "field on an entry is one `mp watch` or `mp check` reads; no comparative field (price, "
-    "context window, benchmark) is added, because the registry catalogues lifecycle, never "
-    "quality (ADR-0009). The OpenAI page's six ft-* rows (five in the fine-tuned-versions table, "
-    "one in the snapshot table) are not transcribed: they are not callable ids. The "
-    "pre-2026-09-17 placeholders gpt-5.2 and gpt-5.5 were self-declared UNVERIFIED and appeared "
-    "on none of the six vendor pages fetched on 2026-09-17; they were removed, and the dated "
-    "snapshots behind those aliases were added on 2026-09-18 from their model pages. "
-    "modelpin/watcher/registry.py mirrors the models array; regenerate it with `python "
-    "scripts/registry_check.py --sync`."
+    "can be absent without being safe: `modelpin watch` reports an id it does not know as "
+    "unknown, never as clear. Image and audio ids that share a table with chat ids are carried "
+    "with a `modality` so no chat check is ever suggested for them. Every entry names the vendor "
+    "page it was read from (source_url) and the day it was read (fetched_at); "
+    "modelpin.models.Model refuses an entry without both. Dates are the vendor's own, transcribed "
+    "the day the page was fetched, never recalled. Where two Google surfaces publish different "
+    "dates for one id, the entry carries the EARLIER date, the one that removes access first, and "
+    "quotes the other surface in notes; where one surface's current lifecycle table and an older "
+    "release note disagree, the current table is carried and the note quoted. Anthropic dates are "
+    "the Claude API's own: the page states that partner platforms (Amazon Bedrock, Google "
+    "Cloud/Vertex AI) set their own schedules, so they can differ on the Vertex path Modelpin "
+    "supports. Every field on an entry is one `modelpin watch` or `modelpin check` reads; no "
+    "comparative field (price, context window, benchmark) is added, because the registry "
+    "catalogues lifecycle, never quality (ADR-0009). The OpenAI page's six ft-* rows (five in the "
+    "fine-tuned-versions table, one in the snapshot table) are not transcribed: they are not "
+    "callable ids. The pre-2026-09-17 placeholders gpt-5.2 and gpt-5.5 were self-declared "
+    "UNVERIFIED and appeared on none of the six vendor pages fetched on 2026-09-17; they were "
+    "removed, and the dated snapshots behind those aliases were added on 2026-09-18 from their "
+    "model pages. modelpin/watcher/registry.py mirrors the models array; regenerate it with "
+    "`python scripts/registry_check.py --sync`."
 )
 SEED_MODELS: list[dict[str, Any]] = [
     {

@@ -6,7 +6,7 @@ identical and ``tests/test_watcher.py`` pins it. Every dated entry names the ven
 read from and the day it was read (MP-276); ``Model`` refuses one that does not, so an unsourced
 date cannot enter from the seed or from a ``--registry`` file.
 
-Nothing here touches the network. ``mp watch`` reads the embedded seed, or a newer JSON passed
+Nothing here touches the network. ``modelpin watch`` reads the embedded seed, or a newer JSON passed
 with ``--registry``. Fetching is not implemented anywhere in the package; a scheduled workflow
 that downloads a newer JSON and passes it in is the intended place for it, never this module.
 """
