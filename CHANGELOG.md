@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
-## [0.4.2] - 2026-09-16
+## [0.4.2] - 2026-10-01
 
-Affects you only if you set `match: subset` or `match: superset`. The default `strict` and
-`unordered` modes are not on this code path and are unchanged.
+Two changes. Python 3.11 is now supported. And a fix that affects you only if you set
+`match: subset` or `match: superset`: the default `strict` mode and `unordered` are not on
+that code path and are unchanged.
 
 ### Added
 
@@ -32,15 +33,17 @@ Affects you only if you set `match: subset` or `match: superset`. The default `s
   `subset` forbids on 10 of 10 runs: a quiet baseline reported `regression` and exit 1, a noisy
   one reported `unchanged` and exit 0 — same candidate, same forbidden call.
 
-  Each side is now compared against what the baseline does **reproducibly**: everything it was
-  ever seen to do (`subset`), or what it did on every single run (`superset`) — and each baseline
-  run is scored against the *other* runs, so neither side is graded against a reference it helped
-  build. Priced against the previous engine over every committed corpus: on the held-out sets,
-  **no new false alarms**, one removed, and detection unchanged. No calibrated threshold moved.
-- **`Tool match` / `Arg match` no longer print `1.00` when nothing was measured.** Under
-  `superset`, a baseline that shares no call across its runs requires nothing of the candidate,
-  so no run *could* have failed — but the report published `1.00`, which reads as "identical".
-  It now prints `—`, the same as any other unmeasured signal.
+  Each side is now compared against the baseline's whole repertoire instead: everything it was
+  ever seen to do (`subset`), or what it did on every run that called a tool (`superset`). Each
+  baseline run is scored against the *other* runs only, so neither side is graded against a
+  reference it helped build. Priced against the previous engine over every committed corpus: on
+  the held-out sets (3,196 same-model and 150 detection trials per mode), **no new false
+  alarms**, one removed, and detection unchanged. No calibrated threshold moved.
+- **`Tool match` / `Arg match` print `—` when the mode required nothing.** Under `superset`, a
+  baseline that shares no call across its runs requires nothing of the candidate, so no run can
+  fail the check. 0.4.1 still printed a number there, scored against a single baseline run —
+  sometimes `1.00`, which reads as "identical". It now prints `—`, the same as any other
+  unmeasured signal, and the field is `null` in the JSON outputs.
 
 ## [0.4.1] - 2026-09-16
 
@@ -1471,7 +1474,10 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/samarthputhraya/modelpin/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/samarthputhraya/modelpin/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/samarthputhraya/modelpin/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/samarthputhraya/modelpin/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...v0.2.1
