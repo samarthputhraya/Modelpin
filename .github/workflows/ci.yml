@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
 
@@ -73,7 +73,7 @@ jobs:
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"      # floor from requires-python; wheel is py3-none-any
+          python-version: "3.11"      # floor from requires-python; wheel is py3-none-any
 
       # Git Bash on Windows inherits RUNNER_TEMP as a backslash path (D:\a\_temp).
       - name: Normalize temp path
