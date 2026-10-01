@@ -75,17 +75,37 @@ def _pr(number, *, updated=STALE, body=OURS_MARKER, fork=False):
     return {"number": number, "updatedAt": updated, "body": body, "isCrossRepository": fork}
 
 
+#: The one file Modelpin's commit touches, relative to the repository root.
+OURS_PATH = f".modelpin/migrations/{MODEL}-to-{SUCCESSOR}.md"
+
+
 class GitHub:
     """A recording fake of `gh` and `git` that answers as GitHub does."""
 
-    def __init__(self, cwd, *, prs=(), tip=None, ahead=(), ahead_by=None, ls_remote_code=None):
+    def __init__(
+        self,
+        cwd,
+        *,
+        prs=(),
+        tip=None,
+        ahead=(),
+        ahead_by=None,
+        files=None,
+        ls_remote_code=None,
+        ls_remote_lines=None,
+    ):
         self.cwd = cwd
         self.calls: list[list[str]] = []
         self.prs = list(prs)  # every open PR whose head branch is named BRANCH, forks included
         self.tip = tip  # the sha origin's BRANCH points at, or None when it does not exist
-        self.ahead = list(ahead)  # author emails of the commits BRANCH carries beyond the base
+        #: The commits BRANCH carries beyond the base: an email (author and committer both), or
+        #: an (author, committer) pair, which is how an amended or rebased commit reads.
+        self.ahead = [a if isinstance(a, tuple) else (a, a) for a in ahead]
         self.ahead_by = len(self.ahead) if ahead_by is None else ahead_by
+        #: The files those commits change; by default only Modelpin's migrations file.
+        self.files = [OURS_PATH] if files is None and self.ahead else list(files or [])
         self.ls_remote_code = ls_remote_code
+        self.ls_remote_lines = ls_remote_lines
 
     def __call__(self, cmd, *, cwd):
         assert cwd == self.cwd
@@ -96,13 +116,20 @@ class GitHub:
         if cmd[:2] == ["git", "ls-remote"]:
             if self.ls_remote_code is not None:
                 return watch_pr.Result(self.ls_remote_code, "")
+            if self.ls_remote_lines is not None:
+                return watch_pr.Result(0, "".join(f"{s}\t{r}\n" for s, r in self.ls_remote_lines))
             if self.tip is None:
                 return watch_pr.Result(2, "")
             return watch_pr.Result(0, f"{self.tip}\trefs/heads/{BRANCH}\n")
         if cmd[:2] == ["gh", "api"]:
             assert cmd[2].endswith(f"/compare/main...{self.tip}"), cmd
-            commits = [{"commit": {"author": {"email": e}}} for e in self.ahead]
-            return watch_pr.Result(0, json.dumps({"ahead_by": self.ahead_by, "commits": commits}))
+            commits = [
+                {"commit": {"author": {"email": a}, "committer": {"email": c}}}
+                for a, c in self.ahead
+            ]
+            files = [{"filename": f} for f in self.files]
+            payload = {"ahead_by": self.ahead_by, "commits": commits, "files": files}
+            return watch_pr.Result(0, json.dumps(payload))
         if cmd[:2] == ["mp", "check"]:
             (cwd / ".modelpin").mkdir(exist_ok=True)
             (cwd / watch_pr.REPORT_PATH).write_text("## report\n\nchanged\n", encoding="utf-8")
@@ -258,3 +285,75 @@ def test_the_pull_request_body_does_not_invite_a_commit_without_saying_what_it_d
     )
     assert "push an empty commit" not in body
     assert "leaves the branch alone" in body
+
+
+# ------------------------------------- finding 2, residual: what an amend or another bot looks like
+# Confirmation pass on 9d484ce: git keeps the AUTHOR through `commit --amend`, rebase,
+# cherry-pick and a fixup folded into the bot's commit; only the COMMITTER changes. A maintainer
+# who folded their migration into Modelpin's single commit therefore still read as "bot only",
+# and the next stale run replaced their work. Any other workflow committing as the same bot
+# identity read the same way.
+
+
+def test_an_amended_bot_commit_is_someone_elses_and_is_left_alone(tmp_path) -> None:
+    gh = GitHub(tmp_path, prs=[_pr(7)], tip=TIP, ahead=[(watch_pr.BOT_EMAIL, HUMAN)])
+    out = _run(gh)
+    assert gh.commands("git", "push") == [], "an amended commit was overwritten"
+    assert out[0].action == "human-commits"
+    assert gh.commands("mp", "check") == []
+
+
+def test_a_bot_commit_that_touches_any_other_file_is_not_modelpins(tmp_path) -> None:
+    """Another workflow committing as the same bot identity (an autofix job) changes other files."""
+    gh = GitHub(
+        tmp_path,
+        prs=[_pr(7)],
+        tip=TIP,
+        ahead=[watch_pr.BOT_EMAIL],
+        files=[OURS_PATH, "src/app.py"],
+    )
+    out = _run(gh)
+    assert gh.commands("git", "push") == []
+    assert out[0].action == "human-commits"
+
+
+def test_a_branch_whose_only_change_is_our_file_under_a_subdirectory_is_ours(tmp_path) -> None:
+    """The Action's `working-directory` puts the store below the repository root."""
+    gh = GitHub(
+        tmp_path, prs=[_pr(7)], tip=TIP, ahead=[watch_pr.BOT_EMAIL], files=[f"app/{OURS_PATH}"]
+    )
+    out = _run(gh)
+    assert out[0].action == "updated"
+
+
+def test_a_branch_that_changes_no_file_at_all_is_not_assumed_ours(tmp_path) -> None:
+    gh = GitHub(tmp_path, prs=[_pr(7)], tip=TIP, ahead=[watch_pr.BOT_EMAIL], files=[])
+    out = _run(gh)
+    assert out[0].action == "human-commits"
+
+
+def test_the_lease_is_taken_from_the_exact_ref_not_a_tail_match(tmp_path) -> None:
+    """`ls-remote origin refs/heads/<b>` tail-matches: a ref named `refs/heads/x/refs/heads/<b>`
+    sorts first and its sha was taken as the lease."""
+    decoy = "d" * 40
+    gh = GitHub(
+        tmp_path,
+        prs=[_pr(7)],
+        tip=TIP,
+        ahead=[watch_pr.BOT_EMAIL],
+        ls_remote_lines=[
+            (decoy, f"refs/heads/aaa/refs/heads/{BRANCH}"),
+            (TIP, f"refs/heads/{BRANCH}"),
+        ],
+    )
+    _run(gh)
+    (push,) = gh.commands("git", "push")
+    assert f"--force-with-lease=refs/heads/{BRANCH}:{TIP}" in push
+
+
+def test_only_a_tail_matching_ref_means_our_branch_does_not_exist(tmp_path) -> None:
+    gh = GitHub(tmp_path, ls_remote_lines=[("d" * 40, f"refs/heads/aaa/refs/heads/{BRANCH}")])
+    _run(gh)
+    (push,) = gh.commands("git", "push")
+    assert f"--force-with-lease=refs/heads/{BRANCH}:" in push
+    assert gh.commands("gh", "api") == []
