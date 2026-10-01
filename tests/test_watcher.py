@@ -3,6 +3,10 @@ from pathlib import Path
 
 from modelpin.watcher import deprecations, get_model, load_registry
 
+# A non-active status is a lifecycle claim, and `Model` refuses one without its source
+# (MP-276), so fixtures carry one.
+_SRC = {"source_url": "https://example.test/deprecations", "fetched_at": "2026-09-17"}
+
 
 def test_registry_includes_current_anthropic_ids():
     ids = {m.id for m in load_registry()}
@@ -20,9 +24,9 @@ def test_deprecations_filters_to_deprecated_and_retired(tmp_path):
         json.dumps(
             {
                 "models": [
-                    {"id": "a", "provider": "x", "status": "active"},
-                    {"id": "b", "provider": "x", "status": "deprecated"},
-                    {"id": "c", "provider": "x", "status": "retired"},
+                    {"id": "a", "provider": "x", "status": "active", **_SRC},
+                    {"id": "b", "provider": "x", "status": "deprecated", **_SRC},
+                    {"id": "c", "provider": "x", "status": "retired", **_SRC},
                 ]
             }
         )
