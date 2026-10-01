@@ -44,6 +44,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   were removed; the dated snapshots behind those aliases were added from their model pages.
   `scripts/registry_check.py` validates the JSON and regenerates the Python mirror.
 
+## [0.4.2] - 2026-10-01
+
+Two changes. Python 3.11 is now supported. And a fix that affects you only if you set
+`match: subset` or `match: superset`: the default `strict` mode and `unordered` are not on
+that code path and are unchanged.
+
+### Added
+
+- **Python 3.11 is supported.** `requires-python` is now `>=3.11`, so Modelpin installs on the
+  interpreter many long-tail projects and CI images are still pinned to. The only 3.12-only call
+  in the package was `os.path.isjunction`, used by `modelpin scan` to refuse to follow an NTFS
+  junction out of the repository; below 3.12 the detector reads the reparse tag the way CPython's
+  own `ntpath.isjunction` reads it, and a test asserts the two agree wherever both exist. CI runs
+  the full suite on 3.11, 3.12 and 3.13. The GitHub Action's `python-version` default is
+  unchanged at `3.12`: a default, not a floor.
+
+### Fixed
+
+- **A directional match mode could miss a real regression when the baseline was noisy.** Under
+  `subset`/`superset`, both sides were scored against a single representative baseline run, and
+  the baseline's disagreements with *itself* were subtracted from the candidate's. So a baseline
+  that varied run to run could hide a genuine change. Measured, with the candidate calling a tool
+  `subset` forbids on 10 of 10 runs: a quiet baseline reported `regression` and exit 1, a noisy
+  one reported `unchanged` and exit 0 — same candidate, same forbidden call.
+
+  Each side is now compared against the baseline's whole repertoire instead: everything it was
+  ever seen to do (`subset`), or what it did on every run that called a tool (`superset`). Each
+  baseline run is scored against the *other* runs only, so neither side is graded against a
+  reference it helped build. Priced against the previous engine over every committed corpus: on
+  the held-out sets (3,196 same-model and 150 detection trials per mode), **no new false
+  alarms**, one removed, and detection unchanged. No calibrated threshold moved.
+- **`Tool match` / `Arg match` print `—` when the mode required nothing.** Under `superset`, a
+  baseline that shares no call across its runs requires nothing of the candidate, so no run can
+  fail the check. 0.4.1 still printed a number there, scored against a single baseline run —
+  sometimes `1.00`, which reads as "identical". It now prints `—`, the same as any other
+  unmeasured signal, and the field is `null` in the JSON outputs.
+
 ## [0.4.1] - 2026-09-16
 
 ### Added
@@ -1473,7 +1510,10 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/samarthputhraya/modelpin/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/samarthputhraya/modelpin/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/samarthputhraya/modelpin/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/samarthputhraya/modelpin/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...v0.2.1
