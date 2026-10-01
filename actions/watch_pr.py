@@ -16,9 +16,24 @@ For every row that decides the exit code, is affected, and names a successor:
   the successor's vendor differs), and the report becomes
   ``.modelpin/migrations/<model>-to-<successor>.md`` on the branch
   ``modelpin/migrate-<model>-to-<successor>``, rebased on the base branch, committed as
-  ``github-actions[bot]`` and force-pushed (the branch is Modelpin's own);
+  ``github-actions[bot]`` and pushed with a lease on the exact sha that was inspected;
 * the pull request is created, or updated when the report changed, or left untouched when the
   body hash is the same. The title never says "regression" for exit 3 or 4 (ADR-0035).
+
+Modelpin acts only on what it made, and never destroys anyone else's work (security review of
+MP-277, 2026-09-18; reproductions in ``tests/test_watch_pr_security.py``):
+
+* **A pull request is Modelpin's only if it comes from this repository AND its body starts with
+  Modelpin's marker for this exact (model, successor) pair.** ``gh pr list --head`` matches by
+  branch NAME, forks included, and the name is predictable from a public config; an adopted fork
+  pull request would have carried Modelpin's verdict over an attacker's diff. Any other pull
+  request on the name is ignored, never edited, and named in a warning.
+* **A branch carrying any commit Modelpin did not make is left alone, before anything is spent.**
+  The commits it carries beyond the base are read from GitHub's compare API (server-side, so a
+  shallow checkout cannot distort them); one by any other author, or more than the API lists,
+  and the branch is not touched. The push that replaces a bot-only branch is leased to the sha
+  that was inspected, so a commit pushed during the minutes ``mp check`` runs makes the push
+  fail instead of vanishing. There is no unconditional ``--force`` anywhere.
 
 A row with no stored baseline gets a warning and no pull request: a verdict cannot be invented.
 The run stops after ``--max-prs`` pull requests. Nothing here edits the consumer's own files.
@@ -90,7 +105,9 @@ def subprocess_runner(cmd: list[str], *, cwd: Path) -> Result:
 class Outcome:
     model: str
     successor: Optional[str]
-    action: str  # "opened" | "updated" | "unchanged" | "fresh" | "no-baseline" | "no-successor" | "capped"
+    #: "opened" | "updated" | "unchanged" | "fresh" | "no-baseline" | "no-successor" |
+    #: "capped" | "no-verdict" | "human-commits"
+    action: str
     number: Optional[int] = None
     code: Optional[int] = None
 
@@ -178,34 +195,85 @@ def render(row: dict, code: int, report: str, *, version: str) -> tuple[str, str
         "",
         "Pull requests opened with the default `GITHUB_TOKEN` do not trigger your other workflows. "
         "To run CI on this branch, pass a personal-access or GitHub App token as the Action's "
-        "`github-token` input, or push an empty commit to it.",
+        "`github-token` input. Pushing a commit of your own to this branch is fine: Modelpin then "
+        "leaves the branch alone and stops updating this pull request.",
         "",
     ]
     return title, "\n".join(lines), digest
 
 
-def existing_pr(runner: Runner, cwd: Path, branch: str) -> Optional[dict]:
-    """The open pull request on ``branch``, with number, updatedAt and body; None when there is none."""
-    res = runner(
-        [
-            "gh",
-            "pr",
-            "list",
-            "--head",
-            branch,
-            "--state",
-            "open",
-            "--json",
-            "number,updatedAt,body",
-            "--limit",
-            "1",
-        ],
-        cwd=cwd,
-    )
-    if res.returncode != 0 or not res.stdout.strip():
+def marker_prefix(model: str, successor: str) -> str:
+    """The start of the first line of every pull request body Modelpin writes for this pair."""
+    return MARKER.split("{digest}")[0].format(model=model, successor=successor)
+
+
+def existing_pr(
+    runner: Runner, cwd: Path, branch: str, *, model: str, successor: str
+) -> tuple[Optional[dict], list[int]]:
+    """Modelpin's own open pull request on ``branch``, and the numbers of any others on that name.
+
+    ``gh pr list --head`` matches by branch NAME, so it returns pull requests from forks too.
+    Only one that comes from this repository (``isCrossRepository`` is literally False; a
+    listing that cannot say is read as not ours) AND whose body starts with the marker for this
+    exact pair is Modelpin's. A failed listing raises: guessing "none" would open a duplicate.
+    """
+    cmd = [
+        "gh",
+        "pr",
+        "list",
+        "--head",
+        branch,
+        "--state",
+        "open",
+        "--json",
+        "number,updatedAt,body,isCrossRepository",
+        "--limit",
+        "100",
+    ]
+    res = runner(cmd, cwd=cwd)
+    if res.returncode != 0:
+        raise RuntimeError(f"{' '.join(cmd)} failed with exit {res.returncode}")
+    prs = json.loads(res.stdout) if res.stdout.strip() else []
+    prefix = marker_prefix(model, successor)
+    ours: Optional[dict] = None
+    others: list[int] = []
+    for pr in prs:
+        mine = pr.get("isCrossRepository") is False and (pr.get("body") or "").startswith(prefix)
+        if mine and ours is None:
+            ours = pr
+        else:
+            others.append(pr.get("number"))
+    return ours, others
+
+
+def remote_branch_sha(runner: Runner, cwd: Path, branch: str) -> Optional[str]:
+    """The sha ``branch`` points at on origin; None when it does not exist. Raises otherwise."""
+    cmd = ["git", "ls-remote", "--exit-code", "--heads", "origin", f"refs/heads/{branch}"]
+    res = runner(cmd, cwd=cwd)
+    if res.returncode == 2:  # --exit-code: no matching ref on the remote
         return None
-    prs = json.loads(res.stdout)
-    return prs[0] if prs else None
+    if res.returncode != 0 or not res.stdout.strip():
+        raise RuntimeError(f"{' '.join(cmd)} failed with exit {res.returncode}")
+    return res.stdout.split()[0]
+
+
+def foreign_commits(runner: Runner, cwd: Path, *, base: str, sha: str) -> int:
+    """How many commits ``sha`` carries beyond ``base`` that Modelpin did not make.
+
+    Read from GitHub's compare API rather than from local history: the Action's checkout is
+    shallow, and a shallow history would list the base's own commits as if they were on the
+    branch. Commits beyond the 250 the API lists cannot be inspected, so they count as foreign.
+    """
+    cmd = ["gh", "api", f"repos/{{owner}}/{{repo}}/compare/{base}...{sha}"]
+    res = runner(cmd, cwd=cwd)
+    if res.returncode != 0:
+        raise RuntimeError(f"{' '.join(cmd)} failed with exit {res.returncode}")
+    data = json.loads(res.stdout)
+    commits = data.get("commits") or []
+    emails = [((c.get("commit") or {}).get("author") or {}).get("email") for c in commits]
+    foreign = sum(1 for e in emails if e != BOT_EMAIL)
+    unlisted = max(0, int(data.get("ahead_by", len(commits))) - len(commits))
+    return foreign + unlisted
 
 
 def is_fresh(pr: dict, *, recheck_days: int, now: datetime) -> bool:
@@ -235,10 +303,16 @@ def publish(
     body: str,
     digest: str,
     existing: Optional[dict],
+    lease: Optional[str],
     store_dir: str = DEFAULT_STORE,
 ) -> tuple[str, Optional[int]]:
-    """Put ``body`` on ``branch`` and create or update its pull request. Returns (action, number)."""
-    if existing is not None and digest in (existing.get("body") or ""):
+    """Put ``body`` on ``branch`` and create or update its pull request. Returns (action, number).
+
+    ``lease`` is the sha the branch pointed at when it was inspected, or None when it did not
+    exist; the push succeeds only if that is still true, so nothing pushed in between is lost.
+    """
+    marker_line = body.split("\n", 1)[0]
+    if existing is not None and (existing.get("body") or "").startswith(marker_line):
         return "unchanged", existing.get("number")
     git = ["git", "-c", f"user.name={BOT_NAME}", "-c", f"user.email={BOT_EMAIL}"]
     for cmd in (
@@ -255,7 +329,14 @@ def publish(
         # doing so for the consumer's ordinary runs; this one file is the pull request's diff.
         ["git", "add", "-f", str(file)],
         git + ["commit", "--quiet", "-m", title],
-        ["git", "push", "--quiet", "--force", "origin", branch],
+        [
+            "git",
+            "push",
+            "--quiet",
+            f"--force-with-lease=refs/heads/{branch}:{lease or ''}",
+            "origin",
+            branch,
+        ],
     ):
         res = runner(cmd, cwd=cwd)
         if res.returncode != 0:
@@ -345,10 +426,29 @@ def run(
             outcomes.append(Outcome(model, successor, "capped"))
             continue
         branch = row["branch"]
-        existing = existing_pr(runner, cwd, branch)
+        existing, others = existing_pr(runner, cwd, branch, model=model, successor=successor)
+        if others:
+            warn(
+                f"open pull request(s) {', '.join(f'#{n}' for n in others)} on branch {branch} "
+                "are not Modelpin's (from a fork, or without its marker); they are ignored and "
+                "never edited"
+            )
         if existing is not None and is_fresh(existing, recheck_days=recheck_days, now=now):
             outcomes.append(Outcome(model, successor, "fresh", existing.get("number")))
             continue
+        # Before anything is spent: a branch carrying anyone else's commit is theirs now.
+        lease = remote_branch_sha(runner, cwd, branch)
+        if lease is not None:
+            foreign = foreign_commits(runner, cwd, base=base, sha=lease)
+            if foreign:
+                warn(
+                    f"branch {branch} carries {foreign} commit(s) Modelpin did not make, so it "
+                    "is left alone and nothing is spent. Merge or close its pull request and "
+                    "delete the branch for Modelpin to manage it again."
+                )
+                number = existing.get("number") if existing is not None else None
+                outcomes.append(Outcome(model, successor, "human-commits", number))
+                continue
         code, report = _run_check(
             runner,
             cwd,
@@ -363,7 +463,7 @@ def run(
             store_dir,
         )
         if code not in (0, 1):
-            # No pull request without a measured verdict (wedge-warden C5/C6 on MP-277):
+            # No pull request without a measured verdict (scope review C5/C6 on MP-277):
             # exit 3 measured too little, exit 4 never ran. Both are the job's red step, not
             # a migration pull request that would carry prose where a verdict belongs.
             warn(
@@ -385,6 +485,7 @@ def run(
             body=body,
             digest=digest,
             existing=existing,
+            lease=lease,
             store_dir=store_dir,
         )
         if action == "opened":
