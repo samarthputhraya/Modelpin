@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import bisect
 import re
+import stat
 from pathlib import Path
 from typing import Iterable
 
@@ -310,6 +311,27 @@ def _is_virtualenv(d: Path) -> bool:
     return (d / "pyvenv.cfg").is_file()
 
 
+def _is_junction(p: Path) -> bool:
+    """Is `p` an NTFS junction, on every Python the wheel admits?
+
+    `os.path.isjunction` arrived in Python 3.12; MP-281 lowered `requires-python` to 3.11, and
+    the boundary check below it (MP-241) must not silently stop seeing junctions there. Below
+    3.12 the answer is read the way CPython's own `ntpath.isjunction` reads it: an `lstat` whose
+    reparse tag is a mount point. Off Windows there are no junctions, so False without a syscall.
+    """
+    stdlib = getattr(os.path, "isjunction", None)
+    if stdlib is not None:
+        return bool(stdlib(p))
+    if os.name != "nt":
+        return False
+    try:
+        st = os.lstat(p)
+    except OSError:
+        return False
+    mount_point = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003)
+    return getattr(st, "st_reparse_tag", 0) == mount_point
+
+
 def _iter_files(root: Path, exts: set[str]) -> Iterable[Path]:
     """Walk `root`, PRUNING directories rather than walking then filtering.
 
@@ -361,7 +383,7 @@ def _iter_files(root: Path, exts: set[str]) -> Iterable[Path]:
             # A regular file can only escape if its directory did, and directories are pruned
             # above -- so only a LINK needs its real path checked, which keeps the cost off
             # the ordinary case.
-            if (p.is_symlink() or os.path.isjunction(p)) and not _inside(p):
+            if (p.is_symlink() or _is_junction(p)) and not _inside(p):
                 continue
             if _is_secret_env(name) or _GENERATED_FILE.search(name):
                 continue
