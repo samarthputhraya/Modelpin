@@ -30,8 +30,10 @@ MP-277, 2026-09-18; reproductions in ``tests/test_watch_pr_security.py``):
   request on the name is ignored, never edited, and named in a warning.
 * **A branch carrying any commit Modelpin did not make is left alone, before anything is spent.**
   The commits it carries beyond the base are read from GitHub's compare API (server-side, so a
-  shallow checkout cannot distort them); one by any other author, or more than the API lists,
-  and the branch is not touched. The push that replaces a bot-only branch is leased to the sha
+  shallow checkout cannot distort them). A commit is Modelpin's only if both its author and its
+  committer are the bot (an amend keeps the author and changes the committer), and the branch is
+  Modelpin's only if the one file it changes is the migrations file; anything else, or more
+  commits than the API lists, and the branch is not touched. The push that replaces a bot-only branch is leased to the sha
   that was inspected, so a commit pushed during the minutes ``mp check`` runs makes the push
   fail instead of vanishing. There is no unconditional ``--force`` anywhere.
 
@@ -252,17 +254,30 @@ def remote_branch_sha(runner: Runner, cwd: Path, branch: str) -> Optional[str]:
     res = runner(cmd, cwd=cwd)
     if res.returncode == 2:  # --exit-code: no matching ref on the remote
         return None
-    if res.returncode != 0 or not res.stdout.strip():
+    if res.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)} failed with exit {res.returncode}")
-    return res.stdout.split()[0]
+    # The pattern tail-matches, so `refs/heads/x/refs/heads/<branch>` is listed too; only the
+    # exact refname is the branch, and its absence means the branch does not exist.
+    for line in res.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == f"refs/heads/{branch}":
+            return parts[0]
+    return None
 
 
-def foreign_commits(runner: Runner, cwd: Path, *, base: str, sha: str) -> int:
+def foreign_commits(runner: Runner, cwd: Path, *, base: str, sha: str, ours: str) -> int:
     """How many commits ``sha`` carries beyond ``base`` that Modelpin did not make.
 
     Read from GitHub's compare API rather than from local history: the Action's checkout is
     shallow, and a shallow history would list the base's own commits as if they were on the
-    branch. Commits beyond the 250 the API lists cannot be inspected, so they count as foreign.
+    branch. A commit is Modelpin's only if BOTH its author and its committer are the bot: git
+    keeps the author through an amend, a rebase or a folded fixup and changes only the
+    committer, so an author check alone read a maintainer's amended commit as the bot's. And the
+    branch is Modelpin's only if the one file it changes is ``ours`` (the migrations file,
+    repository-relative, or below the Action's working directory): another workflow committing
+    under the same bot identity changes other files. Commits beyond the 250 the API lists cannot
+    be inspected, so they count as foreign; a branch that changes no file, or any other file,
+    counts as one foreign commit.
     """
     cmd = ["gh", "api", f"repos/{{owner}}/{{repo}}/compare/{base}...{sha}"]
     res = runner(cmd, cwd=cwd)
@@ -270,10 +285,19 @@ def foreign_commits(runner: Runner, cwd: Path, *, base: str, sha: str) -> int:
         raise RuntimeError(f"{' '.join(cmd)} failed with exit {res.returncode}")
     data = json.loads(res.stdout)
     commits = data.get("commits") or []
-    emails = [((c.get("commit") or {}).get("author") or {}).get("email") for c in commits]
-    foreign = sum(1 for e in emails if e != BOT_EMAIL)
+
+    def _email(c: dict, role: str) -> Optional[str]:
+        return ((c.get("commit") or {}).get(role) or {}).get("email")
+
+    foreign = sum(
+        1
+        for c in commits
+        if _email(c, "author") != BOT_EMAIL or _email(c, "committer") != BOT_EMAIL
+    )
     unlisted = max(0, int(data.get("ahead_by", len(commits))) - len(commits))
-    return foreign + unlisted
+    files = [(f or {}).get("filename") or "" for f in data.get("files") or []]
+    only_ours = len(files) == 1 and (files[0] == ours or files[0].endswith("/" + ours))
+    return foreign + unlisted + (0 if only_ours else 1)
 
 
 def is_fresh(pr: dict, *, recheck_days: int, now: datetime) -> bool:
@@ -436,10 +460,11 @@ def run(
         if existing is not None and is_fresh(existing, recheck_days=recheck_days, now=now):
             outcomes.append(Outcome(model, successor, "fresh", existing.get("number")))
             continue
+        file = _migrations_dir(store_dir) / f"{_safe(model)}-to-{_safe(successor)}.md"
         # Before anything is spent: a branch carrying anyone else's commit is theirs now.
         lease = remote_branch_sha(runner, cwd, branch)
         if lease is not None:
-            foreign = foreign_commits(runner, cwd, base=base, sha=lease)
+            foreign = foreign_commits(runner, cwd, base=base, sha=lease, ours=file.as_posix())
             if foreign:
                 warn(
                     f"branch {branch} carries {foreign} commit(s) Modelpin did not make, so it "
@@ -474,7 +499,6 @@ def run(
             outcomes.append(Outcome(model, successor, "no-verdict", None, code))
             continue
         title, body, digest = render(row, code, report, version=version)
-        file = _migrations_dir(store_dir) / f"{_safe(model)}-to-{_safe(successor)}.md"
         action, number = publish(
             runner,
             cwd,

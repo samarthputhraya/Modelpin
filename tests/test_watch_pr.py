@@ -109,8 +109,11 @@ class FakeRunner:
                 return watch_pr.Result(2, "")
             return watch_pr.Result(0, f"{'b' * 40}\trefs/heads/{branch}\n")
         if cmd[:2] == ["gh", "api"]:
-            commit = {"commit": {"author": {"email": watch_pr.BOT_EMAIL}}}
-            return watch_pr.Result(0, json.dumps({"ahead_by": 1, "commits": [commit]}))
+            bot = {"email": watch_pr.BOT_EMAIL}
+            commit = {"commit": {"author": bot, "committer": bot}}
+            ours = ".modelpin/migrations/gpt-4o-2024-05-13-to-gpt-5.6-sol.md"
+            payload = {"ahead_by": 1, "commits": [commit], "files": [{"filename": ours}]}
+            return watch_pr.Result(0, json.dumps(payload))
         if cmd[:2] == ["mp", "check"]:
             (cwd / ".modelpin").mkdir(exist_ok=True)
             (cwd / watch_pr.REPORT_PATH).write_text(self.report, encoding="utf-8")
