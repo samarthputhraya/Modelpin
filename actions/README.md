@@ -146,6 +146,13 @@ jobs:
   another. The pull request's only diff is `.modelpin/migrations/<model>-to-<successor>.md`:
   the report, the vendor page and fetch date behind the retirement, and the exact command to
   reproduce. Your own files are never edited.
+- **It acts only on what it made.** A pull request counts as Modelpin's only if it comes from
+  your repository and its body starts with Modelpin's marker for that model and successor; a
+  pull request from a fork that reuses the branch name is ignored, never edited, and named in a
+  warning. **It never discards anyone's commits:** if the branch carries a commit Modelpin did
+  not make, the branch is left alone and nothing is spent, and the push that replaces a branch
+  carrying only Modelpin's commit is leased to the exact commit it inspected, so anything
+  pushed in between makes the push fail rather than disappear.
 - It opens **nothing** for a model with no recorded baseline (a verdict cannot be invented;
   the job log names the `mp baseline` to run), nothing when the check could not measure
   (exit 3) or could not run (exit 4), and nothing for a model the registry does not know.
@@ -153,7 +160,8 @@ jobs:
 - **Pull requests opened with the default `GITHUB_TOKEN` do not trigger your other workflows.**
   That is GitHub's rule against recursive runs. To run CI on a Modelpin pull request, pass a
   personal-access token or a GitHub App token as `github-token` and check out with the same
-  token, or push an empty commit to the branch.
+  token. Pushing a commit of your own to the branch also triggers CI, and from then on Modelpin
+  leaves that branch alone.
 - **It fetches nothing unless you ask.** The registry it reads is the copy inside the Action's
   checkout, pinned by the ref you chose; every date in it carries the vendor page it came from.
   `registry-url` is the only network call, and it is yours.

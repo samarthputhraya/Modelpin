@@ -19,7 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before. Needs `contents: write` and `pull-requests: write`. New inputs `mode`,
   `registry-url`, `watch-scan`, `watch-max-prs`, `watch-recheck-days`, `fail-on-affected`,
   `store-dir`; new outputs `watch-exit-code`, `watch-json`, `pull-requests`. Only `gh` and
-  `git` run with your token; no third-party action does.
+  `git` run with your token; no third-party action does. It acts only on what it made: a
+  pull request counts as Modelpin's only if it comes from your repository and carries
+  Modelpin's marker for that model and successor, so a fork that reuses the branch name is
+  ignored and never edited. It never discards anyone's commits: a branch carrying a commit
+  Modelpin did not make is left alone before anything is spent, and every push is leased to
+  the exact commit that was inspected; there is no unconditional force-push.
 - **`modelpin watch`: which of your models are retiring, when, and what to check next.** It
   crosses the models in `modelpin.yaml` (its `models:` and `judge_model`; with `--scan`, the
   ids in your source; recorded baselines are listed, never alarmed on) with a registry shipped

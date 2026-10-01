@@ -65,8 +65,22 @@ def _doc(*rows):
     }
 
 
+def _ours(number, updated, *, model="gpt-4o-2024-05-13", successor="gpt-5.6-sol", digest="old"):
+    """An open pull request as `gh pr list` returns one Modelpin itself opened."""
+    return {
+        "number": number,
+        "updatedAt": updated,
+        "body": f"<!-- modelpin-watch: {model} -> {successor} | sha256:{digest} -->\n...",
+        "isCrossRepository": False,
+    }
+
+
 class FakeRunner:
-    """Records every command; answers `gh pr list` from a script and `mp check` by writing a report."""
+    """Records every command; answers `gh pr list` from a script and `mp check` by writing a report.
+
+    A branch with an open pull request exists on origin and carries only the bot's commit, as it
+    would after Modelpin opened it; `tests/test_watch_pr_security.py` covers every other shape.
+    """
 
     def __init__(
         self,
@@ -89,6 +103,14 @@ class FakeRunner:
             branch = cmd[cmd.index("--head") + 1]
             pr = self.open_prs.get(branch)
             return watch_pr.Result(0, json.dumps([pr] if pr else []))
+        if cmd[:2] == ["git", "ls-remote"]:
+            branch = cmd[-1].removeprefix("refs/heads/")
+            if branch not in self.open_prs:
+                return watch_pr.Result(2, "")
+            return watch_pr.Result(0, f"{'b' * 40}\trefs/heads/{branch}\n")
+        if cmd[:2] == ["gh", "api"]:
+            commit = {"commit": {"author": {"email": watch_pr.BOT_EMAIL}}}
+            return watch_pr.Result(0, json.dumps({"ahead_by": 1, "commits": [commit]}))
         if cmd[:2] == ["mp", "check"]:
             (cwd / ".modelpin").mkdir(exist_ok=True)
             (cwd / watch_pr.REPORT_PATH).write_text(self.report, encoding="utf-8")
@@ -165,11 +187,7 @@ def test_the_branch_is_rebased_on_the_base_branch_each_run(tmp_path: Path) -> No
 
 
 def test_an_open_pull_request_is_updated_not_duplicated(tmp_path: Path) -> None:
-    stale = {
-        "number": 7,
-        "updatedAt": "2026-09-01T00:00:00Z",
-        "body": "<!-- modelpin-watch: x | sha256:old -->",
-    }
+    stale = _ours(7, "2026-09-01T00:00:00Z")
     runner = FakeRunner(tmp_path, open_prs={_row()["branch"]: stale})
     out = _run(runner, _doc(_row()))
     assert out[0].action == "updated" and out[0].number == 7
@@ -180,7 +198,7 @@ def test_an_open_pull_request_is_updated_not_duplicated(tmp_path: Path) -> None:
 def test_a_pull_request_updated_within_the_recheck_window_spends_nothing(
     tmp_path: Path,
 ) -> None:
-    fresh = {"number": 7, "updatedAt": "2026-09-16T00:00:00Z", "body": ""}
+    fresh = _ours(7, "2026-09-16T00:00:00Z")
     runner = FakeRunner(tmp_path, open_prs={_row()["branch"]: fresh})
     out = _run(runner, _doc(_row()), recheck_days=7)
     assert out[0].action == "fresh" and out[0].number == 7
@@ -190,7 +208,7 @@ def test_a_pull_request_updated_within_the_recheck_window_spends_nothing(
 def test_an_unchanged_report_is_neither_pushed_nor_edited(tmp_path: Path) -> None:
     report = "## report\n\nunchanged\n"
     digest = watch_pr.hashlib.sha256(report.encode()).hexdigest()[:16]
-    stale = {"number": 7, "updatedAt": "2026-09-01T00:00:00Z", "body": f"x {digest} y"}
+    stale = _ours(7, "2026-09-01T00:00:00Z", digest=digest)
     runner = FakeRunner(tmp_path, open_prs={_row()["branch"]: stale}, report=report)
     out = _run(runner, _doc(_row()))
     assert out[0].action == "unchanged"
