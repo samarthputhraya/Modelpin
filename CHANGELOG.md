@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The GitHub Action opens the migration pull request: `mode: watch`.** On your schedule it
+  runs `mp watch`, and for every model in `modelpin.yaml` inside its retirement notice window
+  replays the vendor-named successor against your committed baseline and opens one pull
+  request per (model, successor) with the verdict, the vendor page and fetch date behind the
+  retirement, and the command to reproduce. The pull request is updated on later runs, never
+  duplicated; an open one updated inside `watch-recheck-days` spends nothing; nothing is
+  opened without a recorded baseline, without a measured verdict, or for a model the registry
+  does not know. Opt-in only: a workflow that never sets `mode` runs exactly what it ran
+  before. Needs `contents: write` and `pull-requests: write`. New inputs `mode`,
+  `registry-url`, `watch-scan`, `watch-max-prs`, `watch-recheck-days`, `fail-on-affected`,
+  `store-dir`; new outputs `watch-exit-code`, `watch-json`, `pull-requests`. Only `gh` and
+  `git` run with your token; no third-party action does. It acts only on what it made: a
+  pull request counts as Modelpin's only if it comes from your repository and carries
+  Modelpin's marker for that model and successor, so a fork that reuses the branch name is
+  ignored and never edited. It never discards anyone's commits: a branch carrying a commit
+  Modelpin did not make is left alone before anything is spent, and every push is leased to
+  the exact commit that was inspected; there is no unconditional force-push.
 - **`modelpin watch`: which of your models are retiring, when, and what to check next.** It
   crosses the models in `modelpin.yaml` (its `models:` and `judge_model`; with `--scan`, the
   ids in your source; recorded baselines are listed, never alarmed on) with a registry shipped
