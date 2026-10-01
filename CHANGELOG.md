@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
-## [0.4.2] - 2026-09-16
+## [0.4.2] - 2026-10-01
 
-Affects you only if you set `match: subset` or `match: superset`. The default `strict` and
-`unordered` modes are not on this code path and are unchanged.
+Two changes. Python 3.11 is now supported. And a fix that affects you only if you set
+`match: subset` or `match: superset`: the default `strict` and `unordered` modes are not on
+that code path and are unchanged.
 
 ### Added
 
@@ -1471,7 +1472,10 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/samarthputhraya/modelpin/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/samarthputhraya/modelpin/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/samarthputhraya/modelpin/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/samarthputhraya/modelpin/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/samarthputhraya/modelpin/compare/v0.2.0...v0.2.1
