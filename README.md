@@ -421,9 +421,12 @@ borderline change rather than raise a false alarm. Know the trade-offs:
   unmeasured.
 - **It measures change, not quality.** It never says one model is better.
 
-**What happened when it was run at scale, live:** 972 same-model checks across six Gemini
-models raised **0** false alarms, and across six real Gemini upgrades it flagged 28 regressions,
-every one of which an independent model rated a material behavior change —
+**What happened when it was run at scale, live:** 972 same-model scenario-checks across six
+Gemini models raised **0** false alarms. They are 82 scenarios re-used across models and
+repeats, not 972 independent trials, so this says the tool does not cry wolf in ordinary use;
+it is not a per-trial false-positive rate. Across six real Gemini upgrades it flagged 28
+regressions, and a second language model asked to judge materiality rated every one a
+material behavior change, which is an opinion, not ground truth —
 [docs/live-validation.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/live-validation.md),
 with the bugs that campaign found in Modelpin itself.
 

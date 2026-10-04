@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.5.0] - 2026-10-04
+
 ### Added
 
 - **`modelpin watch`: which of your models are retiring, when, and what to check next.** It
@@ -16,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retired, `3` for a model the registry does not know (unknown is not a clearance), `0` when
   all clear. `--json` for scripts; `--registry <path>` to use a different `data/models.json`.
   It never touches the network.
-- **The model registry now carries real dates, and every entry carries its source.** 83
-  sourced entries (51 OpenAI, 16 Anthropic, 16 Google), a transcription of the vendor sections
+- **The model registry now carries real dates, and every entry carries its source.** 87
+  sourced entries (55 OpenAI, 16 Anthropic, 16 Google), a transcription of the vendor sections
   named per entry rather than a complete catalogue, each naming the page it was read from and
   the day it was read; `Model` refuses an entry without both, so an unsourced claim cannot enter
   from the shipped seed or from a `--registry` file. Vendor aliases are recorded, so `gpt-4`
@@ -25,7 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a `modality` so no chat check is suggested for them. The two placeholder ids the old seed
   self-declared "UNVERIFIED" appeared on none of the six vendor pages fetched on 2026-09-17 and
   were removed; the dated snapshots behind those aliases were added from their model pages.
-  `scripts/registry_check.py` validates the JSON and regenerates the Python mirror.
+  `scripts/registry_check.py` validates the JSON and regenerates the Python mirror. The
+  OpenAI entries were re-read on 2026-10-04: the 2026-10-23 shutdowns are unchanged, GPT-5.1
+  and GPT-5.4-Nano are now deprecated with a 2027-04-01 shutdown, and the GPT Image rows name
+  their new replacements.
 
 ## [0.4.2] - 2026-10-01
 
@@ -1493,7 +1500,8 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/samarthputhraya/modelpin/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/samarthputhraya/modelpin/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/samarthputhraya/modelpin/compare/v0.3.1...v0.4.0
