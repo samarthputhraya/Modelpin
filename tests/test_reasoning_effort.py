@@ -206,7 +206,10 @@ def _traces(model: str, efforts: dict[str, str | None]) -> dict[str, list[Trace]
     }
 
 
-def _gpt4_to_sol(requested=None):
+TOOL_SCENARIOS = {"t0", "t1", "t2"}
+
+
+def _gpt4_to_sol(requested=None, tools_without_own_effort=TOOL_SCENARIOS):
     efforts = {f"t{i}": "none" for i in range(3)} | {f"p{i}": None for i in range(5)}
     return reasoning_disclosure(
         [
@@ -214,6 +217,8 @@ def _gpt4_to_sol(requested=None):
             ("gpt-5.6-sol", _traces("gpt-5.6-sol", efforts), True),
         ],
         requested=requested,
+        tools_need_reasoning_off=_tools_need_reasoning_off,
+        tools_without_own_effort=tools_without_own_effort,
         fmt=_md_code,
     )
 
@@ -223,13 +228,52 @@ def test_the_disclosure_states_each_side_per_scenario_and_why_none_was_sent() ->
     assert d is not None
     assert "`gpt-4-turbo` not sent (not a reasoning model)" in d.note
     assert "`gpt-5.6-sol` `none` on 3 scenarios, not sent (the model's default) on 5" in d.note
-    assert "accepts tools from" in d.note and "Set `reasoning_effort`" in d.note
+    assert "accepts tools from this model only with reasoning off" in d.note
+    assert "needs the Responses API" in d.note
+    assert "Set `reasoning_effort`" not in d.note and "gpt-5.1" not in d.note
     assert d.reasoning_off_for_tools == ("gpt-5.6-sol",)
 
 
 def test_a_chosen_none_is_not_explained_as_forced() -> None:
     d = _gpt4_to_sol(requested="none")
     assert d is not None and d.reasoning_off_for_tools == () and "accepts tools" not in d.note
+
+
+def test_a_none_the_scenario_chose_itself_is_not_put_down_to_tools() -> None:
+    d = _gpt4_to_sol(tools_without_own_effort=set())
+    assert d is not None and d.reasoning_off_for_tools == () and "accepts tools" not in d.note
+
+
+def test_a_none_on_a_model_the_tools_rule_does_not_bind_is_not_put_down_to_tools() -> None:
+    efforts = {"q": "none"}
+    d = reasoning_disclosure(
+        [
+            ("gpt-4-turbo", _traces("gpt-4-turbo", {"q": None}), False),
+            ("gpt-5.4", _traces("gpt-5.4", efforts), True),
+        ],
+        requested=None,
+        tools_need_reasoning_off=_tools_need_reasoning_off,
+        tools_without_own_effort={"q"},
+        fmt=_md_code,
+    )
+    assert d is not None and d.reasoning_off_for_tools == ()
+    assert "`gpt-5.4` `none` on every scenario" in d.note
+
+
+def test_the_recorded_side_is_stated_but_never_explained() -> None:
+    efforts = {"t0": "none"}
+    d = reasoning_disclosure(
+        [
+            ("gpt-5.6-sol", _traces("gpt-5.6-sol", efforts), True),
+            ("gpt-6-sol", _traces("gpt-6-sol", {"t0": "none"}), True),
+        ],
+        requested=None,
+        tools_need_reasoning_off=_tools_need_reasoning_off,
+        tools_without_own_effort={"t0"},
+        fmt=_md_code,
+    )
+    assert d is not None and d.reasoning_off_for_tools == ("gpt-6-sol",)
+    assert "`gpt-6-sol` got `none`" in d.note and "`gpt-5.6-sol` got" not in d.note
 
 
 def test_a_check_with_no_reasoning_model_states_nothing() -> None:
@@ -240,6 +284,8 @@ def test_a_check_with_no_reasoning_model_states_nothing() -> None:
             ("gemini-3.1-flash-lite", _traces("y", gem), False),
         ],
         requested=None,
+        tools_need_reasoning_off=_tools_need_reasoning_off,
+        tools_without_own_effort={"a"},
         fmt=_md_code,
     )
     assert d is None

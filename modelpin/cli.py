@@ -72,6 +72,7 @@ from modelpin.providers.openai import (
     OPENAI_COMPATIBLE_PROVIDERS,
     OpenAIAdapter,
     _is_reasoning_model,
+    _tools_need_reasoning_off,
 )
 from modelpin.replay import replay
 from modelpin.report import (
@@ -326,13 +327,13 @@ def _resolve_reasoning_effort(
     if provider != "openai" and provider not in OPENAI_COMPATIBLE_PROVIDERS:
         console.print(
             f"[yellow]note:[/] reasoning_effort={_rich_escape(effort)} is sent only to OpenAI "
-            f"reasoning models (gpt-5.x, o-series); the {_rich_escape(provider)} adapter does "
-            f"not send it."
+            f"reasoning models (gpt-5.x, gpt-6, o-series); the {_rich_escape(provider)} adapter "
+            f"does not send it."
         )
     else:
         console.print(
             f"[dim]reasoning_effort={_rich_escape(effort)}: sent to reasoning models only "
-            f"(gpt-5.x, o-series), never to other models.[/]"
+            f"(gpt-5.x, gpt-6, o-series), never to other models.[/]"
         )
     return effort
 
@@ -2361,6 +2362,10 @@ def check(
                 ),
             ],
             requested=effort,
+            tools_need_reasoning_off=_tools_need_reasoning_off,
+            tools_without_own_effort={
+                s.id for s in compared if s.input.get("tools") and "reasoning_effort" not in s.input
+            },
             fmt=fmt,
         )
 

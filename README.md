@@ -314,13 +314,15 @@ model that is neither the one you run today nor the candidate. Remove `judge_mod
 only tool calls, refusals and text checks, with no extra calls.
 
 **Reasoning effort** (OpenAI reasoning models): set `reasoning_effort:` in `modelpin.yaml`, or
-pass `--reasoning-effort` to `baseline` and `check`, to measure the effort you will ship
-(`none`, `minimal`, `low`, `medium`, `high` or `xhigh`; which values a model accepts is
-OpenAI's call). It is sent only to reasoning models. Unset, Modelpin sends nothing, with one
-exception: `gpt-5.6` (Sol, Terra, Luna), `gpt-6-sol` and `gpt-6-luna` accept tools on Chat
-Completions only with reasoning off, so a scenario that sends tools to them runs with `none`.
-Both reports state the effort each model was sent. Testing tool use on those models at another
-effort needs OpenAI's Responses API, which Modelpin does not support yet.
+pass `--reasoning-effort` to `baseline` and `check` (both read it), to measure the effort you
+will ship (`none`, `minimal`, `low`, `medium`, `high` or `xhigh`; which values a model accepts
+is OpenAI's call). A scenario can set its own `reasoning_effort:`. It is sent only to reasoning
+models. Unset, and unless a scenario sets its own, Modelpin sends nothing, with one exception:
+`gpt-5.6` (Sol, Terra, Luna), `gpt-6-sol` and `gpt-6-luna` accept tools on Chat Completions only
+with reasoning off, so a scenario that sends tools to them runs with `none`. `last-report.md`
+(the pull-request comment) and `migration-report.md` state the effort each model was sent.
+Testing tool use on those models at another effort needs OpenAI's Responses API, which
+Modelpin does not support yet.
 
 **Cross-vendor:** the baseline and the candidate can be on different providers — record the
 baseline with one `--provider`, check with another (`modelpin check --provider google --to

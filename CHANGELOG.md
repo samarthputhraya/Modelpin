@@ -8,13 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Tool scenarios now replay on `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-6-sol`
-  and `gpt-6-luna`.** OpenAI's Chat Completions API accepts tools from these models only with
-  `reasoning_effort: none`, and rejects the request otherwise, even when no effort is sent. So
-  every tool scenario in a check against the successor OpenAI names for the 23 October 2026
-  retirements came back "could not replay". Modelpin now sends `none` when a scenario sends
-  tools to one of them and no effort was chosen, and the reports say so. Requests to every
-  other model are unchanged.
+- **Tool scenarios should now replay on `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`,
+  `gpt-6-sol` and `gpt-6-luna`.** According to OpenAI's and Azure OpenAI's documentation, Chat
+  Completions accepts tools from these models only with `reasoning_effort: none` and rejects the
+  request otherwise (for gpt-5.6, even when no effort is sent). So every tool scenario in a
+  check against the successor OpenAI names for its 23 October 2026 retirements would come back
+  "could not replay"; this has not yet been confirmed by a live call. Modelpin now sends `none`
+  when a scenario sends tools to one of them and no effort was chosen, and the reports say so.
+  With no `reasoning_effort` set, no other request changes, apart from the `gpt-6*` change
+  below.
 - `gpt-6*` ids are now treated as reasoning models: they get `max_completion_tokens` and no
   `temperature`.
 
@@ -23,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`reasoning_effort` for OpenAI reasoning models**, in `modelpin.yaml` or as
   `--reasoning-effort` on `baseline` and `check`, so a check measures the effort you will ship.
   It is sent only to reasoning models (gpt-5.x, gpt-6, o-series); a scenario can set its own.
-  The engineer report and the migration report state the effort each side was sent, read from
-  the recorded runs. Choosing an effort other than `none` for a tool scenario on one of the
+  `last-report.md` (the pull-request comment) and `migration-report.md` state the effort each
+  side was sent, read from the recorded runs. `modelpin report` does not read the setting yet. Choosing an effort other than `none` for a tool scenario on one of the
   models above stops that scenario before any call, because Chat Completions would reject it.
   The Responses API is not supported yet.
 

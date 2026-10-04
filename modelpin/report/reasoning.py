@@ -2,13 +2,15 @@
 
 Read off the traces, which record the effort the adapter put on the wire, never re-derived
 from settings: a report that described the configured effort rather than the sent one would
-be describing a run that did not happen. Pure; the CLI says which models are reasoning models.
+be describing a run that did not happen. Pure; the CLI says which models are reasoning models,
+which ones take tools on Chat Completions only with reasoning off, and which scenarios send
+tools without choosing an effort of their own.
 """
 
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Optional
 
@@ -21,7 +23,8 @@ _NOT_SENT = "not sent (the model's default)"
 class ReasoningDisclosure:
     #: One sentence for the reports: the effort each side was sent, per scenario.
     note: str
-    #: Models that got `none` because their scenarios sent tools and no effort was chosen.
+    #: The replacement, when it got `none` because its scenarios sent tools and nothing chose
+    #: an effort. Empty otherwise, including for a `none` someone chose.
     reasoning_off_for_tools: tuple[str, ...] = ()
 
 
@@ -57,31 +60,44 @@ def reasoning_disclosure(
     sides: Sequence[tuple[str, Mapping[str, Sequence[Trace]], bool]],
     *,
     requested: Optional[str],
+    tools_need_reasoning_off: Callable[[str], bool],
+    tools_without_own_effort: Collection[str],
     fmt: Callable[[str], str],
 ) -> Optional[ReasoningDisclosure]:
     """The disclosure for a check, or None when neither side is a reasoning model and nothing
     was sent (a Gemini or Claude check: there is no such setting to state).
 
     ``sides`` is ``(model id, its traces per compared scenario, is it a reasoning model)`` for
-    the model in use and then the replacement. ``requested`` is the run's own setting, used
-    only to tell a chosen `none` from the one sent because tools require it.
+    the model in use and then the replacement. ``requested`` is THIS run's setting, so it
+    describes the replacement only: the recorded side was set when it was recorded, which this
+    run cannot know, so its values are stated and never explained. A `none` is put down to the
+    tools rule only for the replacement, only on a model the rule binds, only when nothing was
+    requested, and only on scenarios that send tools without choosing an effort themselves.
     """
     texts: list[str] = []
-    off_for_tools: list[str] = []
     any_relevant = False
     for model, by_scenario, applies in sides:
         text, counts = _side(model, by_scenario, applies, fmt)
         texts.append(text)
         any_relevant = any_relevant or applies or any(v is not None for v in counts)
-        if requested is None and counts.get("none"):
-            off_for_tools.append(model)
     if not any_relevant:
         return None
+    off_for_tools: tuple[str, ...] = ()
+    to_model, to_traces, _ = sides[-1]
+    if requested is None and tools_need_reasoning_off(to_model):
+        forced = [
+            sid
+            for sid in tools_without_own_effort
+            if _scenario_effort(to_traces.get(sid) or ()) == "none"
+        ]
+        if forced:
+            off_for_tools = (to_model,)
     note = "reasoning effort sent: " + "; ".join(texts) + "."
     if off_for_tools:
         note += (
-            " `none` went to scenarios that send tools: OpenAI's Chat Completions API accepts "
-            "tools from gpt-5.1 and later only with reasoning off. Set `reasoning_effort` to "
-            "test the effort you will ship."
+            f" {fmt(to_model)} got `none` on the scenarios that send tools: OpenAI's Chat "
+            "Completions API accepts tools from this model only with reasoning off. Measuring "
+            "tool use at another effort needs the Responses API, which Modelpin does not "
+            "support yet."
         )
-    return ReasoningDisclosure(note=note, reasoning_off_for_tools=tuple(off_for_tools))
+    return ReasoningDisclosure(note=note, reasoning_off_for_tools=off_for_tools)

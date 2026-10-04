@@ -72,11 +72,12 @@ class ModelpinConfig(BaseModel):
     #: channel that reads meaning.
     judge_provider: Optional[str] = None
     regression_threshold: float = 0.2
-    #: MP-153. The `reasoning_effort` sent to OpenAI reasoning models (gpt-5.x, o-series) on
-    #: every replay, so a check measures the effort you will ship. Never sent to a model that
-    #: is not a reasoning model. Unset, Modelpin sends nothing (the model's default applies),
-    #: except `none` when a scenario sends tools to gpt-5.1 or later, the only effort Chat
-    #: Completions accepts tools with. `--reasoning-effort` overrides it per command.
+    #: MP-153. The `reasoning_effort` sent to OpenAI reasoning models (gpt-5.x, gpt-6,
+    #: o-series) on every replay by `baseline` and `check`, so a check measures the effort you
+    #: will ship. Never sent to a model that is not a reasoning model. Unset, Modelpin sends
+    #: nothing (the model's default applies), except `none` when a scenario sends tools to
+    #: gpt-5.6 or gpt-6-sol/luna, the only effort Chat Completions accepts tools with from
+    #: them. `--reasoning-effort` overrides it per command; a scenario's own key overrides both.
     reasoning_effort: Optional[ReasoningEffort] = None
 
 
