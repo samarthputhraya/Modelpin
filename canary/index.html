@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modelpin daily canary</title>
+<style>
+:root { --bg: #ffffff; --fg: #1d1d1f; --muted: #5f6368; --line: #dadce0; --flag: #b3261e;
+  --ok: #1e6b35; --warn: #8a5300; }
+@media (prefers-color-scheme: dark) { :root { --bg: #131314; --fg: #e8eaed; --muted: #9aa0a6;
+  --line: #3c4043; --flag: #f28b82; --ok: #81c995; --warn: #fdd663; } }
+body { background: var(--bg); color: var(--fg); margin: 0;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 8px; }
+p { max-width: 70ch; }
+.muted { color: var(--muted); }
+.table { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line);
+  vertical-align: top; }
+th, td:nth-child(1), td:nth-child(2), td:nth-child(4) { white-space: nowrap; }
+th { font-weight: 600; }
+code { font-size: 0.92em; }
+.r-no-change { color: var(--ok); }
+.r-change-flagged { color: var(--flag); font-weight: 600; }
+.r-could-not-measure, .r-could-not-run { color: var(--warn); }
+a { color: inherit; }
+</style>
+</head>
+<body><main>
+<h1>Modelpin daily canary</h1>
+<p>Every day, each model below is replayed on Modelpin's open example suite (<code>examples/suite</code>, every scenario 5 times) and compared with a recording of the <em>same model</em> made on the baseline date shown. A flag means the model behaved differently from its own earlier recording: either its host changed what the model does under the same name, or Modelpin raised a false alarm. Both are published here.</p>
+<p>This page measures change, not quality, and ranks no model. Compared: tool calls, refusals and the suite's text checks. Not compared: meaning, because no judge model runs here, so an answer that says something different in the same shape would not be flagged. Free-tier hosts; the reports carry every setting.</p>
+<div class="table"><table>
+<thead><tr><th>Date (UTC)</th><th>Model</th><th>Host</th><th>Baseline</th><th>Result</th><th>Scenarios</th><th>Modelpin</th><th>Reports</th></tr></thead>
+<tbody>
+<tr><td colspan="8" class="muted">No runs yet.</td></tr>
+</tbody></table></div>
+<p class="muted">Generated 2026-10-04 11:38 UTC by <code>scripts/canary.py</code> in <a href="https://github.com/samarthputhraya/Modelpin">samarthputhraya/Modelpin</a>. Raw data: <a href="results.json">results.json</a>.</p>
+</main></body></html>
