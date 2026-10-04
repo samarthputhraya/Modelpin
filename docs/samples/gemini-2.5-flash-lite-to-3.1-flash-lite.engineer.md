@@ -71,8 +71,8 @@ Replayed 70 scenario(s) ×5 runs using your API key.
 ⚠️ json_null_or_omitted_key — output format drift: violates the scenario's text assertions
 <details><summary>example runs</summary>
 
-- baseline: ````"```json { "name": "Dana Whitfield", "email": "dana@northgate.co.uk", "office": "London" } ```"````
-- candidate: `"{ "name": "Dana Whitfield", "email": "dana@northgate.co.uk", "phone": null, "office": "London" }"`
+- baseline: ````"```json { "name": "Dana Whitfield", "email": "dana@example.com", "office": "London" } ```"````
+- candidate: `"{ "name": "Dana Whitfield", "email": "dana@example.com", "phone": null, "office": "London" }"`
 
 </details>
 

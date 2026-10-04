@@ -1,39 +1,71 @@
 # Sample report: `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`
 
-This is an unedited `modelpin check` report from a run on 2026-10-04, on Modelpin's open example
-scenarios. It shows what Modelpin hands the person deciding on a model switch. It is a
-measurement of behavior change on these scenarios, under these settings, not a verdict on
-either model.
+This is a `modelpin check` report from a run on 2026-10-04, on Modelpin's open example
+scenarios, shown unedited except for one email address (see the end of this intro). It shows
+what Modelpin hands the person deciding on a model switch. It is a measurement of behavior
+change on these scenarios, under these settings, not a verdict on either model.
 
-**Why this pair.** Vertex AI's model lifecycle table gives 20 October 2026 as the retirement
-date for `gemini-2.5-flash-lite` on Vertex AI, and lists `gemini-3.8-flash`,
+**Why this pair.** Google Cloud's model lifecycle table for Vertex AI gives 20 October 2026 as
+the retirement date for `gemini-2.5-flash-lite` on Vertex AI, and lists `gemini-3.8-flash`,
 `gemini-3.1-flash-lite` or Gemma 4 as replacements
-([Vertex AI model versions](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions),
-page updated 2026-10-02, read 2026-10-04). That date is Vertex AI's. The Gemini API's
-deprecations page lists `gemini-2.5-flash-lite` with "No shutdown date announced"
+([Model versions and lifecycle](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions),
+now published under the name Gemini Enterprise Agent Platform; the former Vertex AI URL
+redirects there; page updated 2026-10-02, read 2026-10-04). That date is Vertex AI's. The
+Gemini API's deprecations page lists `gemini-2.5-flash-lite` with "No shutdown date announced"
 ([Gemini API deprecations](https://ai.google.dev/gemini-api/docs/deprecations), page updated
 2026-10-01, read 2026-10-04).
 
-**What was run.** 70 distinct scenarios: every scenario in the eight suites under
-[`examples/`](../../examples), with `drift-suite`'s 12 run once because they are identical
-copies of scenarios in `report-suite`. 5 runs per scenario on each model, `--match strict`,
-confirmation on (a flagged scenario is replayed on fresh runs and must flag again), and
-`gemini-3.5-flash` as the judge of meaning, which is neither model being compared. All calls
-went to Vertex AI.
+**What was run.** 70 distinct scenarios: every scenario in eight of the suites under
+[`examples/`](../../examples) at commit `a1a2649` (`suite`, `report-suite`, `fp-suite`,
+`fp-suite-v2`, `fp-suite-v3`, `refusal-suite`, `voicerag-suite` and `drift-suite`; not
+`calibration`), with `drift-suite`'s 12 run once because they are identical copies of scenarios
+in `report-suite`. 5 runs per scenario on each model, `--match strict`, confirmation on (a
+flagged scenario is replayed on fresh runs and must flag again), the engine's default
+thresholds in Modelpin 0.5.1, and `gemini-3.5-flash` as the judge of meaning, which is neither
+model being compared. All calls went to Vertex AI.
 
 **How to read it.** A flag means the new model behaves differently on that scenario. It does
-not say which behavior is right. Some changes here may be ones you want: the new model refuses
-a prompt injection the old model followed, and it checks availability before booking. Others
-would break an app built on the old behavior: it stops calling the documentation-search tool,
-and it states a 2024 stock price instead of declining to give a live one. Which is which
-depends on your app, and that call is yours.
+not say which behavior is right. Some changes here may be ones you want: the new model no
+longer follows a prompt injection the old model obeyed (it replies, in French, that it cannot
+answer and asks for text to translate), and it checks availability before booking. Others could
+break an app built on the old behavior: it stops calling the documentation-search tool, and it
+states a 2024 stock price instead of declining to give a live one. Which is which depends on
+your app, and that call is yours.
 
-To reproduce, copy the scenario files from the eight suites into one directory, point
-`scenarios_dir` at it with `judge_model: gemini-3.5-flash`, and run
-`modelpin baseline --model gemini-2.5-flash-lite --provider google`, then
-`modelpin check --to gemini-3.1-flash-lite --provider google`. The same run as the pull-request
+The "Before" example shown for `optional_availability_before_booking` is one of five recorded
+runs. In the other four, the old model never called `check_availability` at all.
+
+**To reproduce.** Modelpin 0.5.1 is not on PyPI yet; until it is, install it from commit
+`a1a2649` (`pip install "modelpin[providers] @ git+https://github.com/samarthputhraya/Modelpin@a1a2649"`).
+From a checkout at that commit:
+
+```bash
+mkdir sample-scenarios
+for s in suite report-suite fp-suite fp-suite-v2 fp-suite-v3 refusal-suite voicerag-suite drift-suite; do
+  cp -n examples/$s/*.json sample-scenarios/
+done
+cat > modelpin.yaml <<'EOF'
+models:
+  - gemini-2.5-flash-lite
+scenarios_dir: sample-scenarios
+providers:
+  - google
+runs: 5
+judge_model: gemini-3.5-flash
+judge_provider: google
+EOF
+export GOOGLE_GENAI_USE_VERTEXAI=true GOOGLE_CLOUD_PROJECT=<your-project> GOOGLE_CLOUD_LOCATION=global
+modelpin baseline
+modelpin check --to gemini-3.1-flash-lite
+```
+
+A re-run makes fresh model calls, so the details will differ. The same run as the pull-request
 comment an engineer sees is in
 [`gemini-2.5-flash-lite-to-3.1-flash-lite.engineer.md`](gemini-2.5-flash-lite-to-3.1-flash-lite.engineer.md).
+
+**The one edit.** A scenario fixture (`json_null_or_omitted_key`) contains an email address on a
+real domain; it is shown here as `dana@example.com`. Everything else below is as Modelpin wrote
+it.
 
 ---
 
@@ -114,8 +146,8 @@ A scenario counts as changed in a way that matters only when the difference is s
 ### json_null_or_omitted_key: minor change
 
 - Its answers fail the text checks written into this scenario more often than the current model's answers do.
-- **Before** (`gemini-2.5-flash-lite`, a typical run): ````"```json { "name": "Dana Whitfield", "email": "dana@northgate.co.uk", "office": "London" } ```"````
-- **After** (`gemini-3.1-flash-lite`, a run showing the change): `"{ "name": "Dana Whitfield", "email": "dana@northgate.co.uk", "phone": null, "office": "London" }"`
+- **Before** (`gemini-2.5-flash-lite`, a typical run): ````"```json { "name": "Dana Whitfield", "email": "dana@example.com", "office": "London" } ```"````
+- **After** (`gemini-3.1-flash-lite`, a run showing the change): `"{ "name": "Dana Whitfield", "email": "dana@example.com", "phone": null, "office": "London" }"`
 - What the check measured: output format drift: violates the scenario's text assertions
 
 ## No difference detected
