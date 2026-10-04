@@ -5,12 +5,17 @@ from __future__ import annotations
 import difflib
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 DEFAULT_CONFIG_FILE = "modelpin.yaml"
+
+#: The `reasoning_effort` values OpenAI's Chat Completions API names. Which model accepts
+#: which value is the API's decision; its 400 reaches the user verbatim (MP-153).
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+REASONING_EFFORTS: tuple[str, ...] = ("none", "minimal", "low", "medium", "high", "xhigh")
 
 #: The default provider when none is given. Every live adapter bills the user's own
 #: credentials, so the default is the one `mp init` scaffolds and documents (`OPENAI_API_KEY`);
@@ -67,6 +72,13 @@ class ModelpinConfig(BaseModel):
     #: channel that reads meaning.
     judge_provider: Optional[str] = None
     regression_threshold: float = 0.2
+    #: MP-153. The `reasoning_effort` sent to OpenAI reasoning models (gpt-5.x, gpt-6,
+    #: o-series) on every replay by `baseline` and `check`, so a check measures the effort you
+    #: will ship. Never sent to a model that is not a reasoning model. Unset, Modelpin sends
+    #: nothing (the model's default applies), except `none` when a scenario sends tools to
+    #: gpt-5.6 or gpt-6-sol/luna, the only effort Chat Completions accepts tools with from
+    #: them. `--reasoning-effort` overrides it per command; a scenario's own key overrides both.
+    reasoning_effort: Optional[ReasoningEffort] = None
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_FILE) -> ModelpinConfig:

@@ -258,6 +258,11 @@ class Trace(BaseModel):
     tokens_out: int = 0
     latency_ms: float = 0.0
     ts: datetime = Field(default_factory=_utcnow)
+    #: The `reasoning_effort` the adapter SENT on this run, or None when it sent none (the
+    #: model's own default applied, or the model takes no such setting). Recorded rather than
+    #: re-derived so the report states what actually reached the API (MP-153). Added in
+    #: 0.5.1; older baselines read None, and an older Modelpin ignores the key.
+    reasoning_effort: Optional[str] = None
 
     @field_validator("incomplete_reason", mode="before")
     @classmethod

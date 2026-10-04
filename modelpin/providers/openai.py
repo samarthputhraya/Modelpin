@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any
 
@@ -32,6 +33,8 @@ _GEN_PARAM_KEYS: tuple[str, ...] = (
     "tool_choice",
     "seed",
     "response_format",
+    # MP-153: per scenario, overriding the run's setting; sent only to reasoning models.
+    "reasoning_effort",
 )
 
 #: Reasoning models reject a non-default ``temperature``/``top_p`` and require
@@ -56,7 +59,69 @@ _GEN_PARAM_KEYS: tuple[str, ...] = (
 #: whole run. `[A]` Sending `reasoning_effort: "none"` alongside `temperature: 0` may restore
 #: determinism for gpt-5.x -- NOT confirmed against a primary doc, so it is not done here.
 #: Falsified by: a primary OpenAI doc documenting temperature support on a gpt-5.x model.
-_REASONING_PREFIXES: tuple[str, ...] = ("o1", "o3", "o4", "gpt-5")
+#: `gpt-6` added with MP-153: `[S] 2026-10-04` developers.openai.com/api/docs/guides/
+#: latest-model, "When reasoning effort is not `none`, remove `temperature`, `top_p`" --
+#: without the prefix every gpt-6-sol/luna call carried `temperature` and the tool gate
+#: below could never fire for them.
+_REASONING_PREFIXES: tuple[str, ...] = ("o1", "o3", "o4", "gpt-5", "gpt-6")
+
+
+#: MP-153. Models that take function tools on Chat Completions ONLY with reasoning off.
+#: `[S] 2026-10-04` learn.microsoft.com/en-us/azure/foundry/openai/how-to/reasoning (updated
+#: 2026-09-29), footnote 9 on the three gpt-5.6 columns, verbatim: *"Function tools with
+#: reasoning_effort are not supported for gpt-5.6-sol in /v1/chat/completions. To use function
+#: tools, use /v1/responses or set reasoning_effort to 'none'."* The request fails even when no
+#: effort is sent, because these models default to `medium`: sending `tools` is enough.
+#: `[S] 2026-10-04` developers.openai.com/api/docs/guides/latest-model: "GPT-6 Sol and GPT-6
+#: Luna support function calling in Chat Completions only with `reasoning_effort: "none"`."
+#: Every OpenAI id retiring 2026-10-23 names a gpt-5.6 successor, and tool trajectory is the
+#: strongest channel this product has, so without this every tool scenario on exactly those
+#: checks came back "could not replay".
+#:
+#: NOT gpt-5.1..5.5: the same pages attach no such rule to them. On 5.1/5.2/5.4 `none` is
+#: already the default, and 5.5 defaults to `medium` with tools allowed, so forcing `none`
+#: there would change the configuration being measured for no reason. Not the original
+#: `gpt-5` (takes `minimal`, not `none`), not the o-series (reject `none`; they are the
+#: BASELINE side of these migrations), not gpt-6-astra / gpt-6.1-sol (no tools on Chat
+#: Completions at any effort: the Responses API, MP-289, not built).
+_TOOLS_ONLY_WITH_REASONING_OFF = re.compile(
+    r"(?:gpt-5[.]6(?:-(?:sol|terra|luna))?|gpt-6-(?:sol|luna))(?:-\d{4}-\d{2}-\d{2})?"
+)
+
+
+def _tools_need_reasoning_off(model_id: str) -> bool:
+    """True for a model whose Chat Completions tool calls require `reasoning_effort: none`.
+    Matched on the tail so a host-namespaced id (`openai/gpt-5.6-sol`) is covered too."""
+    return _TOOLS_ONLY_WITH_REASONING_OFF.fullmatch(model_id.rsplit("/", 1)[-1]) is not None
+
+
+def reasoning_effort_for(
+    model_id: str, *, has_tools: bool, requested: str | None = None
+) -> str | None:
+    """The `reasoning_effort` this adapter sends for one run, or None when it sends none.
+
+    Pure, and the only place the decision is made: `_build_request` sends what this returns
+    and `run` records it on the trace, so the report can never describe a different effort
+    from the one the API received. A model that is not a reasoning model never gets the
+    parameter (the API rejects it there), whatever was requested.
+    """
+    if not _is_reasoning_model(model_id):
+        return None
+    if requested is not None:
+        if has_tools and requested != "none" and _tools_need_reasoning_off(model_id):
+            # A certain 400, so refuse it before spending anything, with the reason and the
+            # way out, rather than replaying the API's error once per run.
+            raise ProviderError(
+                f"{model_id} accepts tools on OpenAI's Chat Completions API only with "
+                f"reasoning_effort 'none', and this run asked for {requested!r}. Measuring "
+                "tool use at another effort needs the Responses API, which Modelpin does not "
+                "support yet. Scenarios without tools still run at the effort you chose."
+            )
+        return requested
+    if has_tools and _tools_need_reasoning_off(model_id):
+        return "none"
+    return None
+
 
 #: Cap on model<->tool turns per run so a model that loops on tool calls can't run forever.
 MAX_TOOL_TURNS = 6
@@ -203,12 +268,21 @@ def _to_tools(raw: Any) -> list[dict[str, Any]] | None:
 
 
 def _build_request(
-    model_id: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None, gen: dict
+    model_id: str,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    gen: dict,
+    effort: str | None = None,
 ) -> dict[str, Any]:
-    """Assemble create() kwargs, honoring o-series param restrictions."""
+    """Assemble create() kwargs, honoring o-series param restrictions.
+
+    ``effort`` comes from `reasoning_effort_for`; None sends no `reasoning_effort` at all, so
+    a request to any model the gate does not touch is byte-identical to before MP-153."""
     req: dict[str, Any] = {"model": model_id, "messages": messages}
     if tools:
         req["tools"] = tools
+    if effort is not None:
+        req["reasoning_effort"] = effort
     reasoning = _is_reasoning_model(model_id)
     for key in ("temperature", "top_p"):
         if key in gen and not reasoning:
@@ -344,6 +418,7 @@ class OpenAIAdapter(ProviderAdapter):
         api_key_env: str = "OPENAI_API_KEY",
         base_url: str | None = None,
         label: str = "OpenAI",
+        reasoning_effort: str | None = None,
     ) -> None:
         # An injected client makes the adapter unit-testable with no network or key.
         # base_url + api_key_env + label let this same adapter drive an OpenAI-compatible
@@ -352,6 +427,9 @@ class OpenAIAdapter(ProviderAdapter):
         self._api_key_env = api_key_env
         self._base_url = base_url
         self._label = label
+        #: The run's `reasoning_effort` (config or `--reasoning-effort`); a scenario's own
+        #: `reasoning_effort` overrides it. Sent only to reasoning models (MP-153).
+        self.reasoning_effort = reasoning_effort
 
     def preflight(self) -> None:
         """Validate the key + SDK before any replay runs — no network call."""
@@ -382,6 +460,11 @@ class OpenAIAdapter(ProviderAdapter):
         tools = _to_tools(scenario.input.get("tools"))
         gen = {k: scenario.input[k] for k in _GEN_PARAM_KEYS if k in scenario.input}
         tool_results = scenario.input.get("tool_results") or {}
+        effort = reasoning_effort_for(
+            model_id,
+            has_tools=bool(tools),
+            requested=gen.get("reasoning_effort", self.reasoning_effort),
+        )
 
         client = self._get_client()
         conversation = list(scenario.input.get("messages", []))
@@ -397,7 +480,7 @@ class OpenAIAdapter(ProviderAdapter):
         # what lets multi-step agent trajectories (e.g. lookup_order -> issue_refund)
         # actually emerge instead of stopping at the first tool call.
         for _turn in range(MAX_TOOL_TURNS):
-            request = _build_request(model_id, conversation, tools, gen)
+            request = _build_request(model_id, conversation, tools, gen, effort)
             response = self._complete(client, request, scenario.id, model_id)
             choice = response.choices[0]
             message = choice.message
@@ -437,6 +520,7 @@ class OpenAIAdapter(ProviderAdapter):
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             latency_ms=latency_ms,
+            reasoning_effort=effort,
         )
 
 

@@ -111,6 +111,10 @@ class MigrationFacts:
     confirm: bool = True
     #: The distinct numbers of recorded runs per compared scenario (a store can be uneven).
     baseline_counts: tuple[int, ...] = ()
+    #: MP-153: the reasoning effort each side was sent, or None when neither side takes one.
+    reasoning_note: Optional[str] = None
+    #: Models that ran with reasoning off because their scenarios sent tools.
+    reasoning_off_for_tools: tuple[str, ...] = ()
 
 
 def plain_reasons(explanation: str) -> list[str]:
@@ -249,6 +253,12 @@ def render_migration_report(
             "- Meaning was not compared: no judge ran in this check, so an answer that says "
             "something different in the same shape would not show here."
         )
+    for model in facts.reasoning_off_for_tools:
+        not_covered.append(
+            f"- {_md_code(model)} ran with reasoning switched off on the scenarios that use "
+            "tools, because OpenAI's Chat Completions API accepts tools from it only that way. "
+            "If you will run it with reasoning on, those scenarios did not measure that."
+        )
     weak = (
         bool(underpowered)
         or (census is not None and bool(census.inert))
@@ -364,6 +374,11 @@ def render_migration_report(
         ),
         f"| Tokens used by {new} | {facts.tokens_in:,} in, {facts.tokens_out:,} out |",
         f"| Tool-call comparison | {_md_code(facts.match_mode)} |",
+        *(
+            [f"| Reasoning effort | {facts.reasoning_note[0].upper()}{facts.reasoning_note[1:]} |"]
+            if facts.reasoning_note
+            else []
+        ),
         f"| Modelpin | {facts.modelpin_version} |",
         "",
         "Each run of a model is one request, plus one more for each turn in which it called a "
