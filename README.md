@@ -47,7 +47,8 @@ source) with a registry shipped inside each release, and tells you which of the 
 are retiring, when, the successor the vendor names, and the exact check to run next. Every entry
 in that registry carries the vendor page it was read from and the day it was read; a model the
 registry has never heard of is reported as unknown, never as clear. The registry is transcribed
-from OpenAI, Anthropic and Google model pages, not from the catalogues of OpenAI-compatible
+from OpenAI, Anthropic and Google's own deprecation and model pages, not from the catalogues
+of OpenAI-compatible
 hosts. **Nothing in Modelpin polls provider feeds**: the registry is refreshed when a release
 ships, so it is only as current as the release you installed (`--registry <path>` points at a
 newer file). Modelpin does not open pull requests on its own: you choose the candidate model,
@@ -421,9 +422,15 @@ borderline change rather than raise a false alarm. Know the trade-offs:
   unmeasured.
 - **It measures change, not quality.** It never says one model is better.
 
-**What happened when it was run at scale, live:** 972 same-model checks across six Gemini
-models raised **0** false alarms, and across six real Gemini upgrades it flagged 28 regressions,
-every one of which an independent model rated a material behavior change —
+**What happened when it was run at scale, live:** 972 same-model scenario-checks across six
+Gemini models raised **0** false alarms. They are 82 scenarios re-used across models and
+repeats, not 972 independent trials, and many of those scenarios answered so consistently at
+these settings that no signal could have fired (a harness run on two of the same models put
+that at 230 of 240 trials). So this says the tool did not cry wolf in ordinary use on this
+suite; it is not a false-positive rate, and the bounds are in `docs/fp-measurement.md`.
+Across six real Gemini upgrades it flagged 28
+regressions, and a second language model asked to judge materiality rated every one a
+material behavior change, which is an opinion, not ground truth —
 [docs/live-validation.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/live-validation.md),
 with the bugs that campaign found in Modelpin itself.
 
