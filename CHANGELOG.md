@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A migration report for the person who decides on the switch.** Every `modelpin check` now
+  writes `.modelpin/migration-report.md` beside `last-report.md`: the same run in plain English,
+  with a one-line bottom line, a one-paragraph verdict, each changed scenario with what it means
+  for your app and a before and after example, what the check did not cover (untested
+  behavior, changes that show up in only some runs, scenarios that could not be measured or
+  compared), and the run's date, both models, runs per scenario, judge calls and tokens. It is
+  a renderer over the verdicts `check` already computes and changes no verdict or exit code.
 
 ## [0.5.0] - 2026-10-04
 

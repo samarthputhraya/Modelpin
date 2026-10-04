@@ -16,6 +16,7 @@ import json
 import os
 import shlex
 import sys
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Mapping, Sequence, Set as AbstractSet
@@ -76,6 +77,11 @@ from modelpin.report import (
     to_report_sidecar,
 )
 from modelpin.report.evidence import Example, pick_examples
+from modelpin.report.migration import (
+    MIGRATION_REPORT_FILENAME,
+    MigrationFacts,
+    render_migration_report,
+)
 from modelpin.report.suite import (
     compute_suite_hash,
     read_manifest,
@@ -416,6 +422,87 @@ def _replay_plan(
         judged = sum(b * max(b - 1, 0) + runs * b for b in depths)
         plan += f" + up to {judged} judge calls"
     return plan
+
+
+class _CountingJudge:
+    """A judge that counts its calls and changes nothing else.
+
+    The migration report states how many judge calls a check made. The judge classes keep no
+    count, and the diff engine must not change (ADR-0047), so the count is taken here, at the
+    one place `check` hands the judge to the engine. Every attribute reads through, including
+    ``parallel_safe``, which decides whether the engine judges runs concurrently.
+    """
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self.calls = 0
+        self._lock = threading.Lock()
+
+    def equivalent(self, reference: str, candidate: str, task: Optional[str] = None) -> bool:
+        with self._lock:
+            self.calls += 1
+        return bool(self._inner.equivalent(reference, candidate, task))
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def _write_migration_report(
+    results: list[DiffResult],
+    *,
+    store_dir: str,
+    from_model: str,
+    to_model: str,
+    provider: Optional[str],
+    runs: int,
+    match_mode: str,
+    judge: Any,
+    judge_model: Optional[str],
+    baseline_runs: int,
+    candidate_runs: Mapping[str, list[Trace]],
+    underpowered: Sequence[str],
+    census: Any,
+    rejected: Sequence[tuple[str, str]],
+    skipped: Sequence[str],
+    examples: Mapping[str, tuple[Example, Example]],
+) -> str:
+    """Write `migration-report.md` beside `last-report.md`; return the note to print.
+
+    A failure to write it is reported and never changes the exit code, for the reason
+    `_publish_report` gives: a report-write failure must not mask a real regression.
+    """
+    traces = [t for runs_ in candidate_runs.values() for t in runs_]
+    facts = MigrationFacts(
+        date_iso=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        from_model=from_model,
+        to_model=to_model,
+        provider=provider,
+        runs=runs,
+        match_mode=match_mode,
+        modelpin_version=__version__,
+        judge_model=judge_model if judge is not None else None,
+        baseline_runs=baseline_runs,
+        candidate_runs=len(traces),
+        judge_calls=getattr(judge, "calls", None) if judge is not None else None,
+        tokens_in=sum(t.tokens_in for t in traces),
+        tokens_out=sum(t.tokens_out for t in traces),
+    )
+    text = render_migration_report(
+        results,
+        facts,
+        underpowered=underpowered,
+        census=census,
+        rejected=rejected,
+        skipped=skipped,
+        examples=examples,
+    )
+    path = Path(store_dir) / MIGRATION_REPORT_FILENAME
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        return f"[yellow]note:[/] could not write the migration report: {_rich_escape(str(exc))}"
+    return f"[dim]Migration report for a non-engineering reader: {_rich_escape(str(path))}[/]"
 
 
 def _build_judge(
@@ -1914,6 +2001,8 @@ def check(
         )
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to, from_model=from_model)
+    # Counted for the migration report's "calls made" line; delegates every call unchanged.
+    judge = _CountingJudge(judge) if judge is not None else None
 
     results = []
     skipped: list[str] = []
@@ -2175,6 +2264,26 @@ def check(
     _exit_code = 1 if has_regression else EXIT_UNMEASURED if (unmeasured or rejected) else 0
     _publish_notes = _publish_report(
         markdown, store_dir, from_model, to, candidate_runs, results, _exit_code
+    )
+    _publish_notes.append(
+        _write_migration_report(
+            results,
+            store_dir=store_dir,
+            from_model=from_model,
+            to_model=to,
+            provider=prov,
+            runs=n,
+            match_mode=mode,
+            judge=judge,
+            judge_model=cfg.judge_model,
+            baseline_runs=sum(len(base.get(s.id) or []) for s in compared),
+            candidate_runs=candidate_runs,
+            underpowered=underpowered,
+            census=census,
+            rejected=rejected,
+            skipped=skipped,
+            examples=examples,
+        )
     )
     console.print(_summary)
     for _note in _publish_notes:
