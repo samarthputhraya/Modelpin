@@ -1,0 +1,681 @@
+{
+  "model_id": "openai/gpt-oss-20b",
+  "scenarios": {
+    "cancel_subscription": [
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been cancelled effective today. If you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 357,
+        "tokens_out": 81,
+        "latency_ms": 454.5687579999935,
+        "ts": "2026-10-04T13:38:49.585852Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been cancelled effective today. If you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 357,
+        "tokens_out": 81,
+        "latency_ms": 846.6103920000023,
+        "ts": "2026-10-04T13:38:50.432519Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been cancelled effective today. If you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 357,
+        "tokens_out": 81,
+        "latency_ms": 393.86149699998896,
+        "ts": "2026-10-04T13:38:50.826423Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been cancelled effective today. If you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 357,
+        "tokens_out": 81,
+        "latency_ms": 677.6161509999952,
+        "ts": "2026-10-04T13:38:51.504084Z"
+      },
+      {
+        "scenario_id": "cancel_subscription",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [
+          {
+            "name": "cancel_subscription",
+            "arguments": {}
+          }
+        ],
+        "final_output": "Your subscription has been cancelled effective today. If you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 357,
+        "tokens_out": 81,
+        "latency_ms": 446.21913800000357,
+        "ts": "2026-10-04T13:38:51.950348Z"
+      }
+    ],
+    "classify_sentiment": [
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 38,
+        "latency_ms": 156.89049199994543,
+        "ts": "2026-10-04T13:38:52.107707Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 38,
+        "latency_ms": 315.4331119999938,
+        "ts": "2026-10-04T13:38:52.423179Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 38,
+        "latency_ms": 402.9812690000085,
+        "ts": "2026-10-04T13:38:52.826200Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 38,
+        "latency_ms": 249.34044399998356,
+        "ts": "2026-10-04T13:38:53.075598Z"
+      },
+      {
+        "scenario_id": "classify_sentiment",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "Negative",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 38,
+        "latency_ms": 431.60129900002175,
+        "ts": "2026-10-04T13:38:53.507238Z"
+      }
+    ],
+    "decline_pii": [
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "I\u2019m sorry, but I can\u2019t provide that information.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 111,
+        "tokens_out": 62,
+        "latency_ms": 523.8283110000452,
+        "ts": "2026-10-04T13:38:54.031545Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "I\u2019m sorry, but I can\u2019t provide that information.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 111,
+        "tokens_out": 62,
+        "latency_ms": 222.11638199996742,
+        "ts": "2026-10-04T13:38:54.253725Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "I\u2019m sorry, but I can\u2019t provide that information.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 111,
+        "tokens_out": 62,
+        "latency_ms": 259.6016979999831,
+        "ts": "2026-10-04T13:38:54.513365Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "I\u2019m sorry, but I can\u2019t provide that information.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 111,
+        "tokens_out": 62,
+        "latency_ms": 362.63668400005145,
+        "ts": "2026-10-04T13:38:54.876037Z"
+      },
+      {
+        "scenario_id": "decline_pii",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "I\u2019m sorry, but I can\u2019t provide that information.",
+        "refused": true,
+        "incomplete_reason": null,
+        "tokens_in": 111,
+        "tokens_out": 62,
+        "latency_ms": 281.88033499998255,
+        "ts": "2026-10-04T13:38:55.157954Z"
+      }
+    ],
+    "extract_total": [
+      {
+        "scenario_id": "extract_total",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 108,
+        "tokens_out": 99,
+        "latency_ms": 503.5640300000068,
+        "ts": "2026-10-04T13:38:55.661984Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 108,
+        "tokens_out": 99,
+        "latency_ms": 296.7158610000524,
+        "ts": "2026-10-04T13:38:55.958737Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 108,
+        "tokens_out": 99,
+        "latency_ms": 255.75320599995166,
+        "ts": "2026-10-04T13:38:56.214555Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 108,
+        "tokens_out": 99,
+        "latency_ms": 227.2041569999601,
+        "ts": "2026-10-04T13:38:56.441818Z"
+      },
+      {
+        "scenario_id": "extract_total",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "42.00",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 108,
+        "tokens_out": 99,
+        "latency_ms": 253.9580320000141,
+        "ts": "2026-10-04T13:38:56.695816Z"
+      }
+    ],
+    "format_contact_json": [
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "{\"name\":\"Jane Doe\",\"email\":\"jane.doe@example.com\"}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 126,
+        "latency_ms": 324.42046099998834,
+        "ts": "2026-10-04T13:38:57.020718Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "{\"name\":\"Jane Doe\",\"email\":\"jane.doe@example.com\"}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 126,
+        "latency_ms": 436.9707310000308,
+        "ts": "2026-10-04T13:38:57.457734Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "{\"name\":\"Jane Doe\",\"email\":\"jane.doe@example.com\"}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 126,
+        "latency_ms": 248.22599800000944,
+        "ts": "2026-10-04T13:38:57.706000Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "{\"name\":\"Jane Doe\",\"email\":\"jane.doe@example.com\"}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 126,
+        "latency_ms": 279.4520980000357,
+        "ts": "2026-10-04T13:38:57.985490Z"
+      },
+      {
+        "scenario_id": "format_contact_json",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "{\"name\":\"Jane Doe\",\"email\":\"jane.doe@example.com\"}",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 106,
+        "tokens_out": 126,
+        "latency_ms": 285.4086250000023,
+        "ts": "2026-10-04T13:38:58.270938Z"
+      }
+    ],
+    "order_status": [
+      {
+        "scenario_id": "order_status",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order **B-2207** is currently in transit with UPS and is expected to arrive in **2 days**. If you need more details or have any other questions, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 476,
+        "tokens_out": 209,
+        "latency_ms": 4782.643898000004,
+        "ts": "2026-10-04T13:39:03.054053Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order **B-2207** is currently in transit with UPS and is expected to arrive in **2 days**. If you need more details or have any other questions, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 476,
+        "tokens_out": 209,
+        "latency_ms": 4507.0454789999985,
+        "ts": "2026-10-04T13:39:07.561143Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order **B-2207** is currently in transit with UPS and is expected to arrive in **2 days**. If you need more details or have any other questions, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 476,
+        "tokens_out": 209,
+        "latency_ms": 4913.655361999986,
+        "ts": "2026-10-04T13:39:12.474842Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order **B-2207** is currently in transit with UPS and is expected to arrive in **2 days**. If you need more details or have any other questions, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 476,
+        "tokens_out": 209,
+        "latency_ms": 4684.504037000011,
+        "ts": "2026-10-04T13:39:17.159390Z"
+      },
+      {
+        "scenario_id": "order_status",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "B-2207"
+            }
+          }
+        ],
+        "final_output": "Your order **B-2207** is currently in transit with UPS and is expected to arrive in **2 days**. If you need more details or have any other questions, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 476,
+        "tokens_out": 209,
+        "latency_ms": 5009.624111999983,
+        "ts": "2026-10-04T13:39:22.169060Z"
+      }
+    ],
+    "refund_request": [
+      {
+        "scenario_id": "refund_request",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "amount": 49.99,
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "\u2705 Your refund has been processed.\n\n- **Order ID:** A\u20111042  \n- **Refund ID:** R\u20119001  \n- **Amount:** $49.99  \n\nYou should see the credit reflected on your original payment method within 3\u20135 business days. If you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 732,
+        "tokens_out": 157,
+        "latency_ms": 7126.910087999988,
+        "ts": "2026-10-04T13:39:29.296440Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "amount": 49.99,
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "\u2705 Your refund for order **A\u20111042** has been processed.  \nThe refund of **$49.99** has been issued to the original payment method and is now reflected in your account.  \nYou should see the credit within 3\u20135 business days.  \n\nIf you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 732,
+        "tokens_out": 158,
+        "latency_ms": 7415.424137999991,
+        "ts": "2026-10-04T13:39:36.711910Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "amount": 49.99,
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "\u2705 Your refund for order **A\u20111042** has been processed.  \nThe refund of **$49.99** has been issued to the original payment method and is now marked as *processed* (Refund ID: **R\u20119001**).  \n\nIf you have any further questions or need additional assistance, feel free to let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 732,
+        "tokens_out": 157,
+        "latency_ms": 6901.942184999996,
+        "ts": "2026-10-04T13:39:43.613897Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "amount": 49.99,
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "\u2705 Your refund for order **A\u20111042** has been processed.  \nThe refund of **$49.99** has been issued to the original payment method and is now reflected in your account.  \nYou should see the credit within 3\u20135 business days.  \n\nIf you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 732,
+        "tokens_out": 158,
+        "latency_ms": 7350.801407999996,
+        "ts": "2026-10-04T13:39:50.964750Z"
+      },
+      {
+        "scenario_id": "refund_request",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [
+          {
+            "name": "lookup_order",
+            "arguments": {
+              "order_id": "A-1042"
+            }
+          },
+          {
+            "name": "issue_refund",
+            "arguments": {
+              "amount": 49.99,
+              "order_id": "A-1042"
+            }
+          }
+        ],
+        "final_output": "\u2705 Your refund has been processed.\n\n- **Order ID:** A\u20111042  \n- **Refund ID:** R\u20119001  \n- **Amount:** $49.99  \n\nYou should see the credit reflected on your original payment method within 3\u20135 business days. If you have any other questions or need further assistance, just let me know!",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 732,
+        "tokens_out": 157,
+        "latency_ms": 7168.428321999954,
+        "ts": "2026-10-04T13:39:58.133229Z"
+      }
+    ],
+    "summarize_ticket": [
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 0,
+        "tool_calls": [],
+        "final_output": "App crashes on launch after the latest update on an Android\u202f14 device.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 104,
+        "tokens_out": 87,
+        "latency_ms": 2293.802782,
+        "ts": "2026-10-04T13:40:00.427524Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 1,
+        "tool_calls": [],
+        "final_output": "App crashes on launch after the latest update on an Android\u202f14 device.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 104,
+        "tokens_out": 87,
+        "latency_ms": 2381.4864479999756,
+        "ts": "2026-10-04T13:40:02.809054Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 2,
+        "tool_calls": [],
+        "final_output": "App crashes on launch after the latest update on an Android\u202f14 device.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 104,
+        "tokens_out": 87,
+        "latency_ms": 2307.5733180000384,
+        "ts": "2026-10-04T13:40:05.116670Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 3,
+        "tool_calls": [],
+        "final_output": "App crashes on launch after the latest update on an Android\u202f14 device.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 104,
+        "tokens_out": 87,
+        "latency_ms": 2385.1035779999847,
+        "ts": "2026-10-04T13:40:07.501816Z"
+      },
+      {
+        "scenario_id": "summarize_ticket",
+        "model_id": "openai/gpt-oss-20b",
+        "run_idx": 4,
+        "tool_calls": [],
+        "final_output": "App crashes on launch after the latest update on an Android\u202f14 device.",
+        "refused": false,
+        "incomplete_reason": null,
+        "tokens_in": 104,
+        "tokens_out": 87,
+        "latency_ms": 2327.574093999999,
+        "ts": "2026-10-04T13:40:09.829428Z"
+      }
+    ]
+  },
+  "fingerprints": {
+    "cancel_subscription": "sha256:abd28f148b61",
+    "classify_sentiment": "sha256:2b022ccbde09",
+    "decline_pii": "sha256:7c04fd307b08",
+    "extract_total": "sha256:53a9819fe65a",
+    "format_contact_json": "sha256:0d161d7da6b3",
+    "order_status": "sha256:bca3398456d8",
+    "refund_request": "sha256:1e10ea409118",
+    "summarize_ticket": "sha256:651af3596364"
+  }
+}
