@@ -47,6 +47,7 @@ def _facts(**over) -> MigrationFacts:
         judge_calls=123,
         tokens_in=12345,
         tokens_out=6789,
+        baseline_counts=(5,),
     )
     base.update(over)
     return MigrationFacts(**base)
@@ -101,7 +102,9 @@ def test_the_verdict_paragraph_names_both_models_and_every_bucket() -> None:
     assert "`gpt-4o-2024-05-13`, the model you use today" in para
     assert "2 scenarios behaved differently in a way that matters" in para
     assert "`refund_request`, `angry_customer`" in para
-    assert "1 changed in a smaller way" in para and "1 behaved the same" in para
+    assert "1 changed in a smaller way" in para
+    assert "1 showed no difference this check could detect" in para
+    assert "behaved the same" not in para
 
 
 def test_each_flagged_scenario_has_plain_reasons_and_before_after() -> None:
@@ -109,9 +112,9 @@ def test_each_flagged_scenario_has_plain_reasons_and_before_after() -> None:
     assert "### refund\\_request: changed in a way that matters" in md or (
         "### refund_request: changed in a way that matters" in md
     )
-    assert "It takes different actions in your app" in md
-    assert "It declines requests at a different rate" in md
-    assert "Its answers no longer pass the text checks" in md
+    assert "it uses your app's tools differently" in md
+    assert "more often than the model you use today" in md
+    assert "fail the text checks written into this scenario more often" in md
     assert "**Before** (`gpt-4o-2024-05-13`, a typical run)" in md
     assert "**After** (`gpt-5.6-sol`, a run showing the change)" in md
     assert "issue_refund(amount=20)" in md
@@ -129,7 +132,7 @@ def test_the_run_table_carries_date_models_runs_calls_and_tokens() -> None:
         "| Date | 2026-10-04 12:00 UTC |",
         "| Model in use | `gpt-4o-2024-05-13` |",
         "| Model moving to | `gpt-5.6-sol` |",
-        "| Runs per scenario | 5 on each model |",
+        "| Runs per scenario | 5 of `gpt-5.6-sol`; recorded runs of `gpt-4o-2024-05-13`: 5 |",
         "| Recorded runs of `gpt-4o-2024-05-13` compared | 40 |",
         "| Runs of `gpt-5.6-sol` made by this check | 45,",
         "`gemini-3.5-flash`, 123 calls",
@@ -153,7 +156,7 @@ def test_no_judge_withholds_the_all_clear_and_says_meaning_was_not_compared() ->
     assert "looks safe" not in md
     assert "could not see every kind of change" in md.splitlines()[2]
     assert "Meaning was not compared" in md
-    assert "| Judge (compares meaning) | none configured |" in md
+    assert "| Judge (compares meaning) | none ran |" in md
 
 
 def test_an_underpowered_run_is_never_called_clear() -> None:
@@ -178,7 +181,8 @@ def test_unmeasured_and_skipped_scenarios_make_it_incomplete() -> None:
 def test_the_reader_is_told_a_partial_change_can_go_unnoticed() -> None:
     results = [_r("a", DiffVerdict.unchanged, confidence=1.0)]
     md = render_migration_report(results, _facts())
-    assert "Each scenario ran 5 times on each model." in md
+    assert "Each scenario ran 5 times on `gpt-5.6-sol`." in md
+    assert "`modelpin baseline --runs 10`" in md
     assert "only some of those runs can go unnoticed" in md
     assert "(s)" not in md
     assert "We ran 1 scenario from your app" in md
@@ -212,9 +216,10 @@ def test_no_ranking_words_on_any_shape() -> None:
 
 def test_plain_reasons_glosses_each_engine_clause_once() -> None:
     assert plain_reasons(f"{TOOLS}; {REFUSAL}; {TOOLS}") == [
-        "It takes different actions in your app: it calls different tools, or calls them in "
-        "a different order.",
-        "It declines requests at a different rate than the model you use today.",
+        "On some or all runs it uses your app's tools differently: which tools it calls, how "
+        "many times, or in what order.",
+        "It refused, or answered in a way the check reads as refusing, more often than the "
+        "model you use today.",
     ]
     assert plain_reasons("tool-call arguments changed: x -> y")[0].startswith("It calls the same")
     assert plain_reasons("not confirmed: flagged as a regression ...")[0].startswith("It looked")
@@ -257,5 +262,50 @@ def test_check_writes_the_migration_report_and_keeps_its_exit_code(
     assert "**Bottom line: Hold the switch to `demo-model-v2`" in md
     assert "refund_request" in md and "angry_customer" in md
     assert "**Before**" in md and "**After**" in md
-    assert "| Runs per scenario | 5 on each model |" in md
+    assert "| Runs per scenario | 5 of `demo-model-v2`; recorded runs of `demo-model-v1`: 5 |" in md
     assert "Migration report for a non-engineering reader" in r.output
+
+
+def test_a_check_that_compares_nothing_replaces_the_previous_migration_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_demo(tmp_path)
+    demo = tmp_path / DEMO_DIRNAME
+    monkeypatch.chdir(demo)
+    runner = CliRunner()
+    assert runner.invoke(app, ["baseline", "--fixtures", DEMO_FIXTURES]).exit_code == 0
+    runner.invoke(app, ["check", "--to", "demo-model-v2", "--fixtures", DEMO_FIXTURES])
+    report = demo / ".modelpin" / MIGRATION_REPORT_FILENAME
+    assert "Hold the switch" in report.read_text(encoding="utf-8")
+    r = runner.invoke(
+        app,
+        ["check", "--from", "no-such-model", "--to", "demo-model-v2", "--fixtures", DEMO_FIXTURES],
+    )
+    assert r.exit_code == 3, r.output
+    md = report.read_text(encoding="utf-8")
+    assert "Hold the switch" not in md and "demo-model-v1" not in md
+    assert "clears nothing" in md.splitlines()[2]
+    assert "No scenario could be compared between `no-such-model`" in md
+
+
+def test_no_confirm_never_claims_a_re_run() -> None:
+    md = render_migration_report(_mixed(), _facts(confirm=False))
+    assert "held up when we ran them again" not in md
+    assert "repeats on a fresh set of runs" not in md
+    assert "so this was seen once" in md
+    assert "did not re-check flagged changes on fresh runs (`--no-confirm`)" in md
+
+
+def test_a_superseded_first_sample_is_not_glossed_as_a_current_finding() -> None:
+    not_confirmed = (
+        "not confirmed: flagged as a regression on the first candidate runs, but a second set "
+        f"did not repeat it ({TOOLS}). First sample: {REFUSAL}; {TOOLS}"
+    )
+    assert plain_reasons(not_confirmed) == [
+        "It looked like a regression on the first set of runs but did not repeat on a second, "
+        "fresh set, so it is not counted as one."
+    ]
+    could_not = f"could not confirm: second set unusable (x). First sample: {REFUSAL}"
+    reasons = plain_reasons(could_not)
+    assert reasons and reasons[0].startswith("It looked like a regression")
+    assert "neither confirmed nor cleared" in reasons[0] and len(reasons) == 1

@@ -458,13 +458,14 @@ def _write_migration_report(
     match_mode: str,
     judge: Any,
     judge_model: Optional[str],
-    baseline_runs: int,
+    confirm: bool,
+    baseline_counts: Sequence[int],
     candidate_runs: Mapping[str, list[Trace]],
-    underpowered: Sequence[str],
-    census: Any,
-    rejected: Sequence[tuple[str, str]],
-    skipped: Sequence[str],
-    examples: Mapping[str, tuple[Example, Example]],
+    underpowered: Sequence[str] = (),
+    census: Any = None,
+    rejected: Sequence[tuple[str, str]] = (),
+    skipped: Sequence[str] = (),
+    examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
 ) -> str:
     """Write `migration-report.md` beside `last-report.md`; return the note to print.
 
@@ -481,11 +482,13 @@ def _write_migration_report(
         match_mode=match_mode,
         modelpin_version=__version__,
         judge_model=judge_model if judge is not None else None,
-        baseline_runs=baseline_runs,
+        baseline_runs=sum(baseline_counts),
         candidate_runs=len(traces),
         judge_calls=getattr(judge, "calls", None) if judge is not None else None,
         tokens_in=sum(t.tokens_in for t in traces),
         tokens_out=sum(t.tokens_out for t in traces),
+        confirm=confirm,
+        baseline_counts=tuple(sorted(set(baseline_counts))),
     )
     text = render_migration_report(
         results,
@@ -1938,7 +1941,25 @@ def check(
             store_dir,
             from_model,
             to,
-        ):
+        ) + [
+            # The previous run's migration report must not outlive a run that compared
+            # nothing, for the same reason as `last-report.md` above.
+            _write_migration_report(
+                [],
+                store_dir=store_dir,
+                from_model=from_model,
+                to_model=to,
+                provider=prov,
+                runs=runs or cfg.runs,
+                match_mode=mode,
+                judge=None,
+                judge_model=None,
+                confirm=confirm,
+                baseline_counts=[],
+                candidate_runs={},
+                skipped=[x.id for x in scenarios],
+            )
+        ]:
             console.print(_note)
         raise typer.Exit(code=EXIT_UNMEASURED)
     # [M] MP-116: an uneven baseline is scored correctly per scenario (MP-72), but it splits
@@ -2195,7 +2216,24 @@ def check(
             store_dir,
             from_model,
             to,
-        ):
+        ) + [
+            _write_migration_report(
+                [],
+                store_dir=store_dir,
+                from_model=from_model,
+                to_model=to,
+                provider=prov,
+                runs=n,
+                match_mode=mode,
+                judge=judge,
+                judge_model=cfg.judge_model,
+                confirm=confirm,
+                baseline_counts=[],
+                candidate_runs=candidate_runs,
+                rejected=rejected,
+                skipped=skipped,
+            )
+        ]:
             console.print(_note)
         raise typer.Exit(code=EXIT_UNMEASURED)
 
@@ -2276,7 +2314,8 @@ def check(
             match_mode=mode,
             judge=judge,
             judge_model=cfg.judge_model,
-            baseline_runs=sum(len(base.get(s.id) or []) for s in compared),
+            confirm=confirm,
+            baseline_counts=[len(base.get(s.id) or []) for s in compared],
             candidate_runs=candidate_runs,
             underpowered=underpowered,
             census=census,

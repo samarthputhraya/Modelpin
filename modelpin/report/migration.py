@@ -43,28 +43,39 @@ _GLOSS: tuple[tuple[str, str], ...] = (
         "fresh set, so it is not counted as one.",
     ),
     (
+        "could not confirm",
+        "It looked like a regression on the first set of runs, but the second set returned "
+        "nothing usable, so it is neither confirmed nor cleared.",
+    ),
+    (
         "tool-call arguments changed",
         "It calls the same tools in your app with different inputs.",
     ),
     (
         "tool-call",
-        "It takes different actions in your app: it calls different tools, or calls them in a "
-        "different order.",
+        "On some or all runs it uses your app's tools differently: which tools it calls, how "
+        "many times, or in what order.",
     ),
     (
         "refusal rate",
-        "It declines requests at a different rate than the model you use today.",
+        "It refused, or answered in a way the check reads as refusing, more often than the "
+        "model you use today.",
     ),
     (
         "output format drift",
-        "Its answers no longer pass the text checks written into this scenario.",
+        "Its answers fail the text checks written into this scenario more often than the "
+        "current model's answers do.",
     ),
     (
         "semantic drift",
         "Its answers mean something different from the current model's answers, as judged by "
-        "a separate model.",
+        "the configured judge model.",
     ),
 )
+
+#: A clause starting with one of these describes a superseded first sample after it
+#: (`modelpin/diff/confirm.py`), so nothing after it is a current finding.
+_LAST_CLAUSE = ("not confirmed", "could not confirm")
 
 _VERDICT_WORD = {
     DiffVerdict.regression: "changed in a way that matters",
@@ -96,16 +107,26 @@ class MigrationFacts:
     judge_calls: Optional[int]
     tokens_in: int
     tokens_out: int
+    #: False under `--no-confirm`: a flagged change was then seen once, never re-checked.
+    confirm: bool = True
+    #: The distinct numbers of recorded runs per compared scenario (a store can be uneven).
+    baseline_counts: tuple[int, ...] = ()
 
 
 def plain_reasons(explanation: str) -> list[str]:
-    """Each clause of an engine explanation in plain English, in order, without repeats."""
+    """Each clause of an engine explanation in plain English, in order, without repeats.
+
+    Stops after a "not confirmed" or "could not confirm" clause: what follows it is the first
+    sample's explanation, which the confirmation replay superseded."""
     out: list[str] = []
     for clause in (c.strip() for c in explanation.split(";")):
         for prefix, gloss in _GLOSS:
-            if clause.startswith(prefix) and gloss not in out:
-                out.append(gloss)
+            if clause.startswith(prefix):
+                if gloss not in out:
+                    out.append(gloss)
                 break
+        if clause.startswith(_LAST_CLAUSE):
+            break
     return out
 
 
@@ -132,26 +153,39 @@ def _verdict_paragraph(
     n = len(results)
     cur, new = _md_code(facts.from_model), _md_code(facts.to_model)
     parts = [
-        f"We ran {_count(n, 'scenario')} from your app {facts.runs} times each on {new}, the model you "
-        f"are moving to, and compared them with recorded runs of {cur}, the model you use "
-        "today."
+        (
+            (
+                f"We ran {_count(n, 'scenario')} from your app {facts.runs} times each on {new}, "
+                f"the model you are moving to, and compared them with recorded runs of {cur}, the "
+                "model you use today."
+            )
+            if n
+            else f"No scenario could be compared between {cur}, the model you use today, and "
+            f"{new}, the model you are moving to."
+        )
     ]
-    if regs:
+    if regs and facts.confirm:
         parts.append(
-            f"{_count(len(regs), 'scenario')} behaved differently in a way that matters, and the change "
-            f"held up when we ran them again: {_names(regs)}."
+            f"{_count(len(regs), 'scenario')} behaved differently in a way that matters, and the "
+            f"change held up when we ran them again: {_names(regs)}."
+        )
+    elif regs:
+        parts.append(
+            f"{_count(len(regs), 'scenario')} behaved differently in a way that would fail a "
+            f"build: {_names(regs)}. Re-checking on fresh runs was turned off (`--no-confirm`), "
+            "so this was seen once."
         )
     if minors:
         parts.append(
-            f"{len(minors)} changed in a smaller way that would not fail a build but is worth a "
-            f"look: {_names(minors)}."
+            f"{len(minors)} changed in a smaller way (a smaller change, or one that did not "
+            f"repeat) that would not fail a build but is worth a look: {_names(minors)}."
         )
     if unmeasured:
         parts.append(
             f"{len(unmeasured)} could not be measured, which is not a pass: {_names(unmeasured)}."
         )
     if same:
-        parts.append(f"{len(same)} behaved the same on both models.")
+        parts.append(f"{len(same)} showed no difference this check could detect.")
     if not_compared:
         parts.append(
             f"{not_compared} more {'scenario was' if not_compared == 1 else 'scenarios were'} "
@@ -212,7 +246,7 @@ def render_migration_report(
         not_covered.append("- " + note[0].upper() + note[1:] + ".")
     if facts.judge_model is None:
         not_covered.append(
-            "- Meaning was not compared: no judge model was configured, so an answer that says "
+            "- Meaning was not compared: no judge ran in this check, so an answer that says "
             "something different in the same shape would not show here."
         )
     weak = (
@@ -231,11 +265,18 @@ def render_migration_report(
         "",
         paragraph,
         "",
-        "A scenario counts as changed in a way that matters only when the difference is "
-        "statistically significant across the repeated runs, large enough to matter, and repeats "
-        "on a fresh set of runs. Models answer differently every time, so a single different "
-        "answer is never enough. A change says nothing about which model is good: it means your "
-        "app would behave differently, which may be neutral or even welcome.",
+        (
+            "A scenario counts as changed in a way that matters only when the difference is "
+            "statistically significant across the repeated runs, large enough to matter, and "
+            "repeats on a fresh set of runs."
+            if facts.confirm
+            else "A scenario counts as changed in a way that matters only when the difference "
+            "is statistically significant across the repeated runs and large enough to matter. "
+            "This check did not re-check flagged changes on fresh runs (`--no-confirm`)."
+        )
+        + " Models answer differently every time, so a single different answer is never "
+        "enough. A change says nothing about which model is good: it means your app would "
+        "behave differently, which may be neutral or even welcome.",
         "",
     ]
 
@@ -278,9 +319,9 @@ def render_migration_report(
     unchanged = [r for r in results if r.verdict == DiffVerdict.unchanged]
     if unchanged:
         lines += [
-            "## No change",
+            "## No difference detected",
             "",
-            f"These behaved the same on both models: {_names(unchanged)}.",
+            f"This check detected no difference in: {_names(unchanged)}.",
             "",
         ]
 
@@ -291,9 +332,10 @@ def render_migration_report(
         "exercises was not measured.",
         *(
             [
-                f"- Each scenario ran {facts.runs} times on each model. A change that shows up in "
-                "only some of those runs can go unnoticed; more runs (`--runs 10`) can see "
-                "smaller changes, at proportionally more cost."
+                f"- Each scenario ran {facts.runs} times on {new}. A change that shows up in only "
+                "some of those runs can go unnoticed. More runs can see smaller changes: "
+                "re-record with `modelpin baseline --runs 10`, then run `modelpin check --runs "
+                "10`; model calls grow in proportion to the runs, and judge calls grow faster."
             ]
             if results
             else []
@@ -309,22 +351,24 @@ def render_migration_report(
         f"| Model moving to | {new} |",
         f"| Provider | {_md_inline(facts.provider or 'from config')} |",
         f"| Scenarios compared | {len(results)} |",
-        f"| Runs per scenario | {facts.runs} on each model |",
+        f"| Runs per scenario | {facts.runs} of {new}; recorded runs of {cur}: "
+        f"{', '.join(str(c) for c in facts.baseline_counts) or '-'} |",
         f"| Recorded runs of {cur} compared | {facts.baseline_runs} |",
-        f"| Runs of {new} made by this check | {facts.candidate_runs}, including any re-runs "
-        "that confirmed a change |",
+        f"| Runs of {new} made by this check | {facts.candidate_runs}, including re-runs made "
+        "to check a flagged change |",
         "| Judge (compares meaning) | "
         + (
             f"{_md_code(facts.judge_model)}, {_count(facts.judge_calls or 0, 'call')} |"
             if facts.judge_model is not None
-            else "none configured |"
+            else "none ran |"
         ),
         f"| Tokens used by {new} | {facts.tokens_in:,} in, {facts.tokens_out:,} out |",
         f"| Tool-call comparison | {_md_code(facts.match_mode)} |",
         f"| Modelpin | {facts.modelpin_version} |",
         "",
         "Each run of a model is one request, plus one more for each turn in which it called a "
-        "tool. Recorded runs of the model in use were made earlier and cost nothing here.",
+        "tool, up to 6 requests per run. Recorded runs of the model in use were made earlier "
+        "and cost nothing here.",
         "",
     ]
     return "\n".join(lines)
