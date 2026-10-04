@@ -1,7 +1,8 @@
 # Sample report: `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`
 
 This is a `modelpin check` report from a run on 2026-10-04, on Modelpin's open example
-scenarios, shown unedited except for one email address (see the end of this intro). It shows
+scenarios, shown as Modelpin wrote it except for one email address and one re-picked example,
+both explained in this intro. It shows
 what Modelpin hands the person deciding on a model switch. It is a measurement of behavior
 change on these scenarios, under these settings, not a verdict on either model.
 
@@ -32,14 +33,16 @@ break an app built on the old behavior: it stops calling the documentation-searc
 states a 2024 stock price instead of declining to give a live one. Which is which depends on
 your app, and that call is yours.
 
-The run was made with Modelpin 0.5.1 (commit `a1a2649`). Its examples were then re-picked
-from the same recorded runs by the corrected example picker in Modelpin 0.5.2, which chooses
-each side's typical run by what the model did before how it worded it; no model was called
-again, and only one example changed (the old model's run for
-`optional_availability_before_booking`, which had shown the one run in five that called
-`check_availability`).
+The run was made with a pre-release build of Modelpin 0.5.1 (commit `a1a2649`). Its examples
+were then re-picked from the same recorded runs by the corrected example picker in Modelpin
+0.5.2, which chooses each side's typical run by what the model did before how it worded it; no
+model was called again, and only one example changed, here and in the engineer view: the old
+model's run for `optional_availability_before_booking`, which had shown the one run in five
+that called `check_availability`.
 
-**To reproduce.** Install Modelpin 0.5.2 or later (`pip install "modelpin[providers]>=0.5.2"`),
+**To reproduce.** Install Modelpin 0.5.2 or later (`pip install "modelpin[providers]>=0.5.2"`;
+until 0.5.2 is on PyPI:
+`pip install "modelpin[providers] @ git+https://github.com/samarthputhraya/Modelpin@main"`),
 then, from a checkout of this repository at commit `a1a2649` (the scenarios this run used):
 
 ```bash
@@ -66,9 +69,9 @@ A re-run makes fresh model calls, so the details will differ. The same run as th
 comment an engineer sees is in
 [`gemini-2.5-flash-lite-to-3.1-flash-lite.engineer.md`](gemini-2.5-flash-lite-to-3.1-flash-lite.engineer.md).
 
-**The one edit.** A scenario fixture (`json_null_or_omitted_key`) contains an email address on a
-real domain; it is shown here as `dana@example.com`. Everything else below is as Modelpin wrote
-it.
+**The two edits.** A scenario fixture (`json_null_or_omitted_key`) contains an email address on
+a real domain; it is shown here as `dana@example.com`. Apart from this and the re-picked example
+above, everything below is as Modelpin 0.5.1 wrote it.
 
 ---
 
