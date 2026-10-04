@@ -80,7 +80,7 @@ Python 3.11 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.5.0
+modelpin version                        # -> modelpin 0.5.1
 ```
 
 The `providers` extra installs the OpenAI, Anthropic and Google SDKs. Plain `pip install modelpin`
@@ -119,7 +119,10 @@ You will see one scenario per verdict:
 
 The command exits **1** because regressions were found — that is what fails a CI build. The full
 report is written to `.modelpin/last-report.md`, the same file the GitHub Action posts on a pull
-request. Edit `traces.json` and re-run to watch the verdicts move.
+request. Beside it, `.modelpin/migration-report.md` tells the same result in plain English for
+whoever decides on the switch: a one-paragraph verdict, each changed scenario with a before and
+after example, what the check did not cover, and the run's date, models, runs and calls. Edit
+`traces.json` and re-run to watch the verdicts move.
 
 ## Use it on your app
 
