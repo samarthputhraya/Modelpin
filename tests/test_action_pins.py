@@ -37,8 +37,8 @@ def _third_party_uses(path: Path) -> list[str]:
 
 @pytest.mark.parametrize(
     "rel",
-    ["action.yml", ".github/workflows/release.yml"],
-    ids=["consumer-action", "release-workflow"],
+    ["action.yml", ".github/workflows/release.yml", ".github/workflows/canary.yml"],
+    ids=["consumer-action", "release-workflow", "canary-workflow"],
 )
 def test_every_third_party_action_is_pinned_to_a_commit_sha(rel: str) -> None:
     path = _ROOT / rel

@@ -1,0 +1,70 @@
+# The public daily canary (`scripts/canary.py`). Once a day each listed model replays
+# examples/suite against its own earlier recording on a free tier, and the results page on
+# the gh-pages branch is rebuilt: https://samarthputhraya.github.io/Modelpin/canary/
+#
+# A flag means the model behaved differently from its own recording -- a silent change by its
+# host, or a false alarm by Modelpin -- and the page publishes both. It ranks nothing.
+#
+# Needs a GROQ_API_KEY repository secret and GitHub Pages serving the gh-pages branch. Runs on
+# a schedule or by hand, from this repository only, never on a pull request, so a fork never
+# sees the key. Spend: free tiers only. `[M] 2026-10-04` Groq allows 1,000 requests a day per
+# model; a day's check uses about 50, plus about 50 more on the day a model is first recorded.
+# The run installs the released package from PyPI, so the page measures what users install.
+
+name: Canary
+
+on:
+  schedule:
+    - cron: "23 5 * * *"   # daily 05:23 UTC; off the hour, when scheduled runs queue
+  workflow_dispatch:
+
+permissions:
+  contents: write          # pushes the results to gh-pages, nothing else
+
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    if: github.repository == 'samarthputhraya/Modelpin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the results branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: gh-pages
+          path: site
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the released modelpin
+        run: python -m pip install --upgrade "modelpin[providers]"
+
+      - name: Run the canary
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python scripts/canary.py --site site --suite examples/suite
+
+      # Also after a failed run: a day on which nothing could be measured is published as
+      # "could not run", never left looking like the previous day's result.
+      - name: Publish the results
+        if: success() || failure()
+        working-directory: site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to publish"
+            exit 0
+          fi
+          git commit -q -m "canary: $(date -u +%F)"
+          git push -q origin HEAD:gh-pages
