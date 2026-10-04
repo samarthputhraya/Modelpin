@@ -22,7 +22,7 @@ Replayed 70 scenario(s) ×5 runs using your API key.
 &nbsp;&nbsp;&nbsp;&nbsp;confidence 0.99
 <details><summary>example runs</summary>
 
-- baseline: `tools create_booking(check_in="2026-10-14", check_out="2026-10-16", email="priya.raman@example.com", guest_name="Priya Raman", room="garden_double") -> check_availability(check_in="2026-10-14", check_out="2026-10-16", room="garden_double"); "Your booking is confirmed."`
+- baseline: `tools create_booking(check_in="2026-10-14", check_out="2026-10-16", email="priya.raman@example.com", guest_name="Priya Raman", room="garden_double"); "Your booking for the garden double from 2026-10-14 to 2026-10-16 is confirmed."`
 - candidate: `tools check_availability(check_in="2026-10-14", check_out="2026-10-16", room="garden_double") -> create_booking(check_in="2026-10-14", check_out="2026-10-16", email="priya.raman@example.com", guest_name="Priya Raman", room="garden_double"); "Your reservation for the garden double from 14 October to 16 October 2026 under Priya Raman has been successfully confirmed (reference: MG-1180)."`
 
 </details>

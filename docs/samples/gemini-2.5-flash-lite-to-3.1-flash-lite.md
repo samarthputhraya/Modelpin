@@ -32,12 +32,15 @@ break an app built on the old behavior: it stops calling the documentation-searc
 states a 2024 stock price instead of declining to give a live one. Which is which depends on
 your app, and that call is yours.
 
-The "Before" example shown for `optional_availability_before_booking` is one of five recorded
-runs. In the other four, the old model never called `check_availability` at all.
+The run was made with Modelpin 0.5.1 (commit `a1a2649`). Its examples were then re-picked
+from the same recorded runs by the corrected example picker in Modelpin 0.5.2, which chooses
+each side's typical run by what the model did before how it worded it; no model was called
+again, and only one example changed (the old model's run for
+`optional_availability_before_booking`, which had shown the one run in five that called
+`check_availability`).
 
-**To reproduce.** Modelpin 0.5.1 is not on PyPI yet; until it is, install it from commit
-`a1a2649` (`pip install "modelpin[providers] @ git+https://github.com/samarthputhraya/Modelpin@a1a2649"`).
-From a checkout at that commit:
+**To reproduce.** Install Modelpin 0.5.2 or later (`pip install "modelpin[providers]>=0.5.2"`),
+then, from a checkout of this repository at commit `a1a2649` (the scenarios this run used):
 
 ```bash
 mkdir sample-scenarios
@@ -98,7 +101,7 @@ A scenario counts as changed in a way that matters only when the difference is s
 ### optional_availability_before_booking: changed in a way that matters
 
 - On some or all runs it uses your app's tools differently: which tools it calls, how many times, or in what order.
-- **Before** (`gemini-2.5-flash-lite`, a typical run): `tools create_booking(check_in="2026-10-14", check_out="2026-10-16", email="priya.raman@example.com", guest_name="Priya Raman", room="garden_double") -> check_availability(check_in="2026-10-14", check_out="2026-10-16", room="garden_double"); "Your booking is confirmed."`
+- **Before** (`gemini-2.5-flash-lite`, a typical run): `tools create_booking(check_in="2026-10-14", check_out="2026-10-16", email="priya.raman@example.com", guest_name="Priya Raman", room="garden_double"); "Your booking for the garden double from 2026-10-14 to 2026-10-16 is confirmed."`
 - **After** (`gemini-3.1-flash-lite`, a run showing the change): `tools check_availability(check_in="2026-10-14", check_out="2026-10-16", room="garden_double") -> create_booking(check_in="2026-10-14", check_out="2026-10-16", email="priya.raman@example.com", guest_name="Priya Raman", room="garden_double"); "Your reservation for the garden double from 14 October to 16 October 2026 under Priya Raman has been successfully confirmed (reference: MG-1180)."`
 - What the check measured: tool-call behavior changed: \['create_booking'\] -\> \['check_availability', 'create_booking'\] (reproduced on a second set of candidate runs, scored on its own)
 - Confidence: 0.99
