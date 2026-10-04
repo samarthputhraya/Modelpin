@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **The report's "typical run" example now shows typical behavior.** Each side's example was
+  the most common exact run, wording included, so runs that did the same thing in different
+  words tied, and the first run won even when it was the one run that behaved differently. In
+  the live Gemini sample, the old model's example for `optional_availability_before_booking`
+  showed the one run in five that called `check_availability`. Examples are now chosen by what
+  the run did (which tools, in what order, refused or not), then by exact arguments and
+  wording; the new model's example prefers a new tool path or refusal first. Examples are
+  illustration chosen after the verdict; no verdict or exit code changes.
 
 ## [0.5.1] - 2026-10-04
 
