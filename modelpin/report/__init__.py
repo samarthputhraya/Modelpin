@@ -548,6 +548,7 @@ def render_pr_comment(
     skipped: Sequence[str] = (),
     match_overrides: Optional[Mapping[str, str]] = None,
     examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
+    reasoning_note: Optional[str] = None,
 ) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
@@ -809,6 +810,12 @@ def render_pr_comment(
     if note:
         lines.append("")
         lines.append(f"<sub>{note}</sub>")
+    # MP-153: the effort each side was SENT, from the traces. A replacement run with
+    # reasoning off is a different configuration from one run at its default, and this
+    # surface is the one `action.yml` posts.
+    if reasoning_note:
+        lines.append("")
+        lines.append(f"<sub>{reasoning_note}</sub>")
     return "\n".join(lines)
 
 

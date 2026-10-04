@@ -19,7 +19,7 @@ import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from collections.abc import Mapping, Sequence, Set as AbstractSet
+from collections.abc import Callable, Mapping, Sequence, Set as AbstractSet
 from typing import IO, Any, NoReturn, Optional, cast
 
 import typer
@@ -36,6 +36,7 @@ from modelpin.config import (
     DEFAULT_CONFIG_FILE,
     DEFAULT_PROVIDER,
     DEFAULT_RUNS,
+    REASONING_EFFORTS,
     ConfigError,
     ModelpinConfig,
     load_config,
@@ -66,11 +67,18 @@ from modelpin.diff.stats import (
 from modelpin.models import MATCH_MODES, Assertion, DiffResult, DiffVerdict, Scenario, Trace
 from modelpin.providers import ProviderAdapter, ProviderError, get_adapter, provider_help
 from modelpin.providers.fake import FakeProvider
-from modelpin.providers.openai import MAX_TOOL_TURNS, OPENAI_COMPATIBLE_PROVIDERS
+from modelpin.providers.openai import (
+    MAX_TOOL_TURNS,
+    OPENAI_COMPATIBLE_PROVIDERS,
+    OpenAIAdapter,
+    _is_reasoning_model,
+    _tools_need_reasoning_off,
+)
 from modelpin.replay import replay
 from modelpin.report import (
     ChannelCensus,
     ReportMeta,
+    _md_code,
     render_cli,
     render_pr_comment,
     render_report_md,
@@ -82,6 +90,7 @@ from modelpin.report.migration import (
     MigrationFacts,
     render_migration_report,
 )
+from modelpin.report.reasoning import ReasoningDisclosure, reasoning_disclosure
 from modelpin.report.suite import (
     compute_suite_hash,
     read_manifest,
@@ -300,6 +309,43 @@ def _adapter(provider: str, fixtures: Optional[str]) -> ProviderAdapter:
         _fail(str(exc))
 
 
+def _resolve_reasoning_effort(
+    flag: Optional[str], cfg: ModelpinConfig, provider: str
+) -> Optional[str]:
+    """`--reasoning-effort`, else `reasoning_effort:` in modelpin.yaml, else None (MP-153).
+
+    Printed when set, and when the provider will not use it: the setting reaches OpenAI
+    reasoning models only, and a check that silently ignored it would measure a configuration
+    the user did not ask for while they believed otherwise."""
+    if flag is not None and flag not in REASONING_EFFORTS:
+        _fail(
+            f"--reasoning-effort must be one of {', '.join(REASONING_EFFORTS)} " f"(got {flag!r})."
+        )
+    effort = flag if flag is not None else cfg.reasoning_effort
+    if effort is None:
+        return None
+    if provider != "openai" and provider not in OPENAI_COMPATIBLE_PROVIDERS:
+        console.print(
+            f"[yellow]note:[/] reasoning_effort={_rich_escape(effort)} is sent only to OpenAI "
+            f"reasoning models (gpt-5.x, gpt-6, o-series); the {_rich_escape(provider)} adapter "
+            f"does not send it."
+        )
+    else:
+        console.print(
+            f"[dim]reasoning_effort={_rich_escape(effort)}: sent to reasoning models only "
+            f"(gpt-5.x, gpt-6, o-series), never to other models.[/]"
+        )
+    return effort
+
+
+def _with_reasoning_effort(adapter: ProviderAdapter, effort: Optional[str]) -> ProviderAdapter:
+    """Hand the run's `reasoning_effort` to the OpenAI adapter (and the hosts it drives);
+    every other adapter has no such setting, which `_resolve_reasoning_effort` already said."""
+    if isinstance(adapter, OpenAIAdapter):
+        adapter.reasoning_effort = effort
+    return adapter
+
+
 def _unimplemented_msg(provider: str) -> str:
     return (
         f"the {provider!r} adapter isn't implemented yet. Try `--provider fake "
@@ -466,6 +512,7 @@ def _write_migration_report(
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
     examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
+    reasoning: Optional[ReasoningDisclosure] = None,
 ) -> str:
     """Write `migration-report.md` beside `last-report.md`; return the note to print.
 
@@ -489,6 +536,8 @@ def _write_migration_report(
         tokens_out=sum(t.tokens_out for t in traces),
         confirm=confirm,
         baseline_counts=tuple(sorted(set(baseline_counts))),
+        reasoning_note=reasoning.note if reasoning is not None else None,
+        reasoning_off_for_tools=reasoning.reasoning_off_for_tools if reasoning is not None else (),
     )
     text = render_migration_report(
         results,
@@ -1735,6 +1784,12 @@ def baseline(
     config_path: str = typer.Option("modelpin.yaml", "--config"),
     scenarios_dir: Optional[str] = typer.Option(None, "--scenarios-dir"),
     store_dir: str = typer.Option(STORE_DIRNAME, "--store-dir"),
+    reasoning_effort: Optional[str] = typer.Option(
+        None,
+        "--reasoning-effort",
+        help="reasoning_effort for OpenAI reasoning models (none, minimal, low, medium, high, "
+        "xhigh). Overrides `reasoning_effort:` in modelpin.yaml.",
+    ),
 ) -> None:
     """Record current model behavior for your scenarios (N runs)."""
     cfg = _load_config_or_fail(config_path)
@@ -1749,7 +1804,9 @@ def baseline(
         _fail("no model to baseline. Pass --model or set `models:` in modelpin.yaml.")
     n = _resolve_runs(runs, cfg)
     prov = _resolve_provider(provider, cfg)
-    adapter = _adapter(prov, fixtures)
+    adapter = _with_reasoning_effort(
+        _adapter(prov, fixtures), _resolve_reasoning_effort(reasoning_effort, cfg, prov)
+    )
     plan = _replay_plan(len(scenarios), src_dir, n, prov, judge_model=None)
     console.print(f"[dim]provider={prov} model={_rich_escape(from_model)} runs={n} | {plan}[/]")
     _preflight_or_fail(adapter, prov)
@@ -1871,6 +1928,12 @@ def check(
         help="Before a regression can fail the build, replay the candidate again for that "
         "scenario and require the regression to reproduce (default: on).",
     ),
+    reasoning_effort: Optional[str] = typer.Option(
+        None,
+        "--reasoning-effort",
+        help="reasoning_effort for OpenAI reasoning models (none, minimal, low, medium, high, "
+        "xhigh). Overrides `reasoning_effort:` in modelpin.yaml.",
+    ),
 ) -> None:
     """Replay scenarios on a new model and report behavioral regressions.
 
@@ -1983,7 +2046,8 @@ def check(
             f"`modelpin baseline --runs {RECOMMENDED_RUNS}` for uniform coverage."
         )
     n = _resolve_runs(runs, cfg, mode=mode, baseline_sizes=[len(v) for v in base.values() if v])
-    adapter = _adapter(prov, fixtures)
+    effort = _resolve_reasoning_effort(reasoning_effort, cfg, prov)
+    adapter = _with_reasoning_effort(_adapter(prov, fixtures), effort)
     # Only scenarios that HAVE a baseline are replayed (the rest are skipped below), so
     # count those - an inflated pre-spend number is its own kind of false claim. MP-32.
     billable = sum(1 for s in scenarios if base.get(s.id))
@@ -2282,6 +2346,33 @@ def check(
     # cost the artifact entirely and let `action.yml` republish the previous run's verdict.
     # The housekeeping notes are held and printed after the summary, so reading order is
     # unchanged: verdict first, file paths after.
+    # MP-153. Read off the traces, which record what each side was actually sent.
+    def _reasoning(fmt: Callable[[str], str]) -> Optional[ReasoningDisclosure]:
+        return reasoning_disclosure(
+            [
+                (
+                    from_model,
+                    {s.id: base.get(s.id) or [] for s in compared},
+                    _is_reasoning_model(from_model),
+                ),
+                (
+                    to,
+                    {s.id: candidate_runs.get(s.id) or [] for s in compared},
+                    _is_reasoning_model(to),
+                ),
+            ],
+            requested=effort,
+            tools_need_reasoning_off=_tools_need_reasoning_off,
+            tools_without_own_effort={
+                s.id for s in compared if s.input.get("tools") and "reasoning_effort" not in s.input
+            },
+            fmt=fmt,
+        )
+
+    reasoning = _reasoning(_md_code)
+    _console_reasoning = _reasoning(str)
+    if _console_reasoning is not None:
+        console.print(f"[dim]{_rich_escape(_console_reasoning.note)}[/]")
     markdown = render_pr_comment(
         results,
         from_model,
@@ -2298,6 +2389,7 @@ def check(
         # that declared a mode but was never diffed does not claim to have been.
         match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
         examples=examples,
+        reasoning_note=reasoning.note if reasoning is not None else None,
     )
     _exit_code = 1 if has_regression else EXIT_UNMEASURED if (unmeasured or rejected) else 0
     _publish_notes = _publish_report(
@@ -2322,6 +2414,7 @@ def check(
             rejected=rejected,
             skipped=skipped,
             examples=examples,
+            reasoning=reasoning,
         )
     )
     console.print(_summary)

@@ -302,7 +302,7 @@ key, is not recognised.
 
 | Provider (`providers:` / `--provider`) | Credentials | Notes |
 |---|---|---|
-| `openai` | `OPENAI_API_KEY` | Chat Completions, multi-turn tool calls. Reasoning models (`o1`/`o3`/`o4`/`gpt-5*`) get `max_completion_tokens` and no temperature |
+| `openai` | `OPENAI_API_KEY` | Chat Completions, multi-turn tool calls. Reasoning models (`o1`/`o3`/`o4`/`gpt-5*`/`gpt-6*`) get `max_completion_tokens` and no temperature |
 | `anthropic` | `ANTHROPIC_API_KEY`, **or** Claude on Vertex AI: `ANTHROPIC_VERTEX_PROJECT_ID` + `gcloud auth application-default login` (`CLOUD_ML_REGION` defaults to `global`) | Messages API, multi-turn tool calls. Newer Claude models accept only default sampling, so a scenario's `temperature` is not sent to them. Verified offline against the SDK's request shapes; not yet validated by a live run |
 | `google` | `GEMINI_API_KEY` (AI Studio), **or** Vertex AI: `GOOGLE_GENAI_USE_VERTEXAI=true` + `GOOGLE_CLOUD_PROJECT` + application-default login | Multi-turn tool calls. On Vertex, `GOOGLE_CLOUD_LOCATION` defaults to `global`; in the project's testing `gemini-3.x` ids were not served on `us-central1`, so set it only if you need a specific region |
 | `groq`, `openrouter`, `together`, `cerebras` | `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, `CEREBRAS_API_KEY` | OpenAI-compatible endpoints. Groq has a free tier |
@@ -312,6 +312,17 @@ It can run on any provider above; set `judge_provider:` when the model id does n
 vendor (`gpt-*`, `claude-*` and `gemini-*` do; `openai/gpt-oss-120b` on Groq does not). Choose a
 model that is neither the one you run today nor the candidate. Remove `judge_model:` to compare
 only tool calls, refusals and text checks, with no extra calls.
+
+**Reasoning effort** (OpenAI reasoning models): set `reasoning_effort:` in `modelpin.yaml`, or
+pass `--reasoning-effort` to `baseline` and `check` (both read it), to measure the effort you
+will ship (`none`, `minimal`, `low`, `medium`, `high` or `xhigh`; which values a model accepts
+is OpenAI's call). A scenario can set its own `reasoning_effort:`. It is sent only to reasoning
+models. Unset, and unless a scenario sets its own, Modelpin sends nothing, with one exception:
+`gpt-5.6` (Sol, Terra, Luna), `gpt-6-sol` and `gpt-6-luna` accept tools on Chat Completions only
+with reasoning off, so a scenario that sends tools to them runs with `none`. `last-report.md`
+(the pull-request comment) and `migration-report.md` state the effort each model was sent.
+Testing tool use on those models at another effort needs OpenAI's Responses API, which
+Modelpin does not support yet.
 
 **Cross-vendor:** the baseline and the candidate can be on different providers — record the
 baseline with one `--provider`, check with another (`modelpin check --provider google --to
