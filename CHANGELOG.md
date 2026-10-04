@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.5.1] - 2026-10-04
+
 ### Fixed
 
 - **Tool scenarios should now replay on `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`,
@@ -1533,7 +1537,8 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/samarthputhraya/modelpin/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/samarthputhraya/modelpin/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/samarthputhraya/modelpin/compare/v0.4.0...v0.4.1
