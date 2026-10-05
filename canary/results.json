@@ -73,6 +73,74 @@
       "result": "no change",
       "runs": 5,
       "suite": "examples/suite"
+    },
+    {
+      "baseline_date": "2026-10-04",
+      "baseline_recorded_today": false,
+      "counts": {
+        "unchanged": 8
+      },
+      "date": "2026-10-05",
+      "exit_code": 0,
+      "model": "openai/gpt-oss-120b",
+      "modelpin_version": "0.5.0",
+      "plain_report": "canary/reports/2026-10-05/openai-gpt-oss-120b-plain.md",
+      "provider": "groq",
+      "report": "canary/reports/2026-10-05/openai-gpt-oss-120b.md",
+      "result": "no change",
+      "runs": 5,
+      "suite": "examples/suite"
+    },
+    {
+      "baseline_date": "2026-10-04",
+      "baseline_recorded_today": false,
+      "counts": {
+        "unchanged": 8
+      },
+      "date": "2026-10-05",
+      "exit_code": 0,
+      "model": "openai/gpt-oss-20b",
+      "modelpin_version": "0.5.0",
+      "plain_report": "canary/reports/2026-10-05/openai-gpt-oss-20b-plain.md",
+      "provider": "groq",
+      "report": "canary/reports/2026-10-05/openai-gpt-oss-20b.md",
+      "result": "no change",
+      "runs": 5,
+      "suite": "examples/suite"
+    },
+    {
+      "baseline_date": "2026-10-04",
+      "baseline_recorded_today": false,
+      "counts": {
+        "unchanged": 8
+      },
+      "date": "2026-10-05",
+      "exit_code": 0,
+      "model": "openai/gpt-oss-safeguard-20b",
+      "modelpin_version": "0.5.0",
+      "plain_report": "canary/reports/2026-10-05/openai-gpt-oss-safeguard-20b-plain.md",
+      "provider": "groq",
+      "report": "canary/reports/2026-10-05/openai-gpt-oss-safeguard-20b.md",
+      "result": "no change",
+      "runs": 5,
+      "suite": "examples/suite"
+    },
+    {
+      "baseline_date": "2026-10-04",
+      "baseline_recorded_today": false,
+      "counts": {
+        "unchanged": 8
+      },
+      "date": "2026-10-05",
+      "exit_code": 0,
+      "model": "qwen/qwen3.8-27b",
+      "modelpin_version": "0.5.0",
+      "plain_report": "canary/reports/2026-10-05/qwen-qwen3.8-27b-plain.md",
+      "provider": "groq",
+      "report": "canary/reports/2026-10-05/qwen-qwen3.8-27b.md",
+      "result": "no change",
+      "runs": 5,
+      "suite": "examples/suite"
     }
   ],
   "schema": 1
