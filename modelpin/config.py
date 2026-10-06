@@ -12,6 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 DEFAULT_CONFIG_FILE = "modelpin.yaml"
 
+#: Issue #24. A real modelpin.yaml is a few hundred bytes. The cap stops a mistaken path
+#: (a log, a dataset, /dev/zero) from being read into memory and handed to the YAML parser
+#: before any validation runs. 1 MiB is far above any plausible config.
+MAX_CONFIG_BYTES = 1024 * 1024
+
 #: The `reasoning_effort` values OpenAI's Chat Completions API names. Which model accepts
 #: which value is the API's decision; its 400 reaches the user verbatim (MP-153).
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
@@ -85,6 +90,14 @@ def load_config(path: str | Path = DEFAULT_CONFIG_FILE) -> ModelpinConfig:
     p = Path(path)
     if not p.exists():
         return ModelpinConfig()
+    if not p.is_file():
+        raise ConfigError(f"{p} is not a regular file.")
+    size = p.stat().st_size
+    if size > MAX_CONFIG_BYTES:
+        raise ConfigError(
+            f"{p} is {size:,} bytes; a modelpin config is capped at {MAX_CONFIG_BYTES:,}. "
+            "Check that --config points at modelpin.yaml."
+        )
     try:
         data: Any = yaml.safe_load(p.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
