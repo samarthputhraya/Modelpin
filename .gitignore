@@ -43,3 +43,6 @@ nul
 
 # pytest-cov output
 .coverage
+
+# Claude Code session state
+HANDOFF.md
