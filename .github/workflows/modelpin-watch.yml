@@ -1,0 +1,43 @@
+# Modelpin watching itself: the scheduled retirement check, opening its own pull request.
+#
+# This is the Action's `mode: watch` run against THIS repository on a schedule (MP-277 /
+# MP-278). It reads the model-lifecycle registry shipped in the checkout, crosses it with the
+# models named in `.github/modelpin-watch.yaml`, and for every one inside its retirement notice
+# window replays the vendor-named successor against the committed baseline and opens ONE pull
+# request carrying the verdict -- updated, never duplicated, on later runs.
+#
+# Why a separate config: `.github/modelpin.yaml` names the fictional store key
+# `modelpin-dogfood` (ADR-0021), which no registry can know. This config names a REAL retiring
+# id with a baseline recorded under a NON-DEFAULT store directory, so it cannot collide with a
+# stranger's own `.modelpin/` store the way ADR-0021 describes.
+#
+# Cost: one `mp check` per retiring model per run, only when no open Modelpin pull request was
+# updated inside the last 7 days. Needs `contents: write` and `pull-requests: write`, and the
+# provider key for the successor as a repository secret.
+#
+# `schedule` fires only on the default branch; GitHub disables it after 60 days of inactivity.
+
+name: Modelpin watch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"   # daily 06:17 UTC; the registry decides whether anything is due
+
+permissions:
+  contents: write           # push the modelpin/migrate-* branch
+  pull-requests: write      # open or update the pull request
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Modelpin watch
+        uses: ./                          # the action in this repo (root action.yml)
+        with:
+          mode: watch
+          config: .github/modelpin-watch.yaml
+          modelpin-spec: ".[providers]"   # install this repo's code
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
