@@ -36,21 +36,22 @@ REGISTRY_NOTE: str = (
     "the day the page was fetched, never recalled. Where two Google surfaces publish different "
     "dates for one id, the entry carries the EARLIER date, the one that removes access first, and "
     "quotes the other surface in notes, until that date passes while the other surface still "
-    "serves the id: `watch` reads a passed date as retired, and a model one surface still serves "
-    "is not, so the entry then carries the other surface's date (none, if it announces none), "
-    "stays deprecated, and quotes the passed date in notes (2026-11-05, the gemini-2.5 rows); "
-    "where one surface's current lifecycle table and an older release note disagree, the current "
-    "table is carried and the note quoted. Anthropic dates are the Claude API's own: the page "
-    "states that partner platforms (Amazon Bedrock, Google Cloud/Vertex AI) set their own "
-    "schedules, so they can differ on the Vertex path Modelpin supports. Every field on an entry "
-    "is one `modelpin watch` or `modelpin check` reads; no comparative field (price, context "
-    "window, benchmark) is added, because the registry catalogues lifecycle, never quality "
-    "(ADR-0009). The OpenAI page's six ft-* rows (five in the fine-tuned-versions table, one in "
-    "the snapshot table) are not transcribed: they are not callable ids. The pre-2026-09-17 "
-    "placeholders gpt-5.2 and gpt-5.5 were self-declared UNVERIFIED and appeared on none of the "
-    "six vendor pages fetched on 2026-09-17; they were removed, and the dated snapshots behind "
-    "those aliases were added on 2026-09-18 from their model pages. modelpin/watcher/registry.py "
-    "mirrors the models array; regenerate it with `python scripts/registry_check.py --sync`."
+    "lists the id as available: `watch` reads a passed date as retired, and a model one surface "
+    "still lists as available is not, so the entry then carries the other surface's date (none, "
+    "if it announces none), stays deprecated, and quotes the passed date in notes (2026-11-05: "
+    "gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite); where one surface's current "
+    "lifecycle table and an older release note disagree, the current table is carried and the "
+    "note quoted. Anthropic dates are the Claude API's own: the page states that partner "
+    "platforms (Amazon Bedrock, Google Cloud/Vertex AI) set their own schedules, so they can "
+    "differ on the Vertex path Modelpin supports. Every field on an entry is one `modelpin watch` "
+    "or `modelpin check` reads; no comparative field (price, context window, benchmark) is added, "
+    "because the registry catalogues lifecycle, never quality (ADR-0009). The OpenAI page's six "
+    "ft-* rows (five in the fine-tuned-versions table, one in the snapshot table) are not "
+    "transcribed: they are not callable ids. The pre-2026-09-17 placeholders gpt-5.2 and gpt-5.5 "
+    "were self-declared UNVERIFIED and appeared on none of the six vendor pages fetched on "
+    "2026-09-17; they were removed, and the dated snapshots behind those aliases were added on "
+    "2026-09-18 from their model pages. modelpin/watcher/registry.py mirrors the models array; "
+    "regenerate it with `python scripts/registry_check.py --sync`."
 )
 SEED_MODELS: list[dict[str, Any]] = [
     {
@@ -597,9 +598,9 @@ SEED_MODELS: list[dict[str, Any]] = [
         "(https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions, "
         "'Last updated 2026-11-05') still lists it among available models with retirement "
         "date October 20, 2026 and replacement 'gemini-3.8-flash or gemini-3.5-flash'. That "
-        "date has passed while the Gemini API still serves the id, so it is quoted, not "
-        "carried (see _note). Vertex policy: 'While retirement timelines may be extended, "
-        "they won't be moved to an earlier date than what is listed.'",
+        "date has passed while the Gemini API still lists the id as available, so it is "
+        "quoted, not carried (see _note). Vertex policy: 'While retirement timelines may be "
+        "extended, they won't be moved to an earlier date than what is listed.'",
     },
     {
         "id": "gemini-2.5-flash",
@@ -616,13 +617,15 @@ SEED_MODELS: list[dict[str, Any]] = [
         "December 1, 2026, all API requests to gemini-2.5-flash will automatically route to "
         "gemini-3.5-flash-lite and be billed at Gemini 3.5 Flash-Lite rates.' Table: "
         "shutdown December 1, 2026, replacement gemini-3.5-flash-lite. After that date the "
-        "id still answers, from a different model. The Vertex AI lifecycle table "
+        "id still answers, from a different model. Same section: 'Access to the 2.5 models "
+        "is limited to users who have actively used them in the past.' The Vertex AI "
+        "lifecycle table "
         "(https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions, "
         "'Last updated 2026-11-05') still lists it among available models with retirement "
         "date October 20, 2026 and replacement 'gemini-3.8-flash or gemini-3.5-flash-lite'. "
-        "That date has passed while the Gemini API still serves the id, so it is quoted, "
-        "not carried (see _note). The replacement carried is the model the Gemini API "
-        "routes the id to.",
+        "That date has passed while the Gemini API still lists the id as available, so it "
+        "is quoted, not carried (see _note). The replacement carried is the model the "
+        "Gemini API routes the id to.",
     },
     {
         "id": "gemini-2.5-flash-lite",
@@ -632,7 +635,8 @@ SEED_MODELS: list[dict[str, Any]] = [
         "replacement_id": "gemini-3.8-flash",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
         "fetched_at": "2026-11-05",
-        "notes": "Deprecated on Vertex AI, live on the Gemini API. The Vertex AI lifecycle table "
+        "notes": "Deprecated on Vertex AI, listed as available on the Gemini API. The Vertex AI "
+        "lifecycle table "
         "(https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions, "
         "'Last updated 2026-11-05') still lists it among available models with retirement "
         "date October 20, 2026 and replacement 'gemini-3.8-flash or gemini-3.5-flash-lite "
@@ -641,9 +645,9 @@ SEED_MODELS: list[dict[str, Any]] = [
         "https://aistudio.google.com/docs/deprecations; read there): 'gemini-2.5-flash-lite "
         "is not deprecated and remains available through the API until further notice.' "
         "Table: 'No shutdown date announced'. The Vertex date has passed while the Gemini "
-        "API still serves the id, so no shutdown date is carried and the entry stays "
-        "deprecated: a vendor surface has scheduled its retirement, and no surface has "
-        "confirmed it gone (see _note).",
+        "API still lists the id as available, so no shutdown date is carried and the entry "
+        "stays deprecated: a vendor surface has scheduled its retirement, and no surface "
+        "has confirmed it gone (see _note).",
     },
     {
         "id": "gemini-live-2.5-flash-native-audio",
