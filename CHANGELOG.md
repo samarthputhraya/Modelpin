@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.5.3] - 2026-11-05
+
 ### Changed
 
 - **A new tagline: "Pin the behavior, not the model."** On PyPI it reads "For teams shipping LLM
@@ -46,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the run did (which tools, in what order, refused or not), then by exact arguments and
   wording; the new model's example prefers a new tool path or refusal first. Examples are
   illustration chosen after the verdict; no verdict or exit code changes.
+
+### Security
+
+- **A `--config` path that is not a file, or a `modelpin.yaml` over 1 MiB, is refused before
+  it is read or parsed** (#24). The Action's README now says `modelpin-spec` is trusted input:
+  it goes straight to `pip install` with the job's secrets in the environment, so it must never
+  come from pull-request titles, branch names or other user-controlled values.
 
 ### Documentation
 
@@ -1614,7 +1625,8 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/samarthputhraya/modelpin/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/samarthputhraya/modelpin/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...v0.5.0
