@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2026-11-05. The 20 entries read from a model page, which was not re-read, and
   `gpt-5.6-cyber`, which today's deprecations page no longer names, keep their earlier dates.
 
+### Documentation
+
+- **The README states the build-failing false-alarm bound**, with the denominator of each
+  figure, in its limits section: 0 in 9 exposed trials, 28.3% over trials or 39.3% over the 6
+  distinct scenarios, none of them on tool calls.
+- **A "Related tools" section** lists eval platforms and eight 2026 model-migration and
+  statistical A/B tools, each described from its own PyPI or npm page.
+
 ## [0.5.2] - 2026-11-05
 
 The first release on PyPI since 0.5.0: it also carries everything listed under 0.5.1.

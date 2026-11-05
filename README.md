@@ -75,6 +75,7 @@ CLI: `modelpin` (alias `mp`). License: Apache-2.0.
 - [CLI reference](#cli-reference)
 - [Troubleshooting](#troubleshooting)
 - [Limits, and the evidence behind the design](#limits-and-the-evidence-behind-the-design)
+- [Related tools](#related-tools)
 
 ---
 
@@ -463,6 +464,45 @@ calls, two from the semantic judge, one on a text assertion), and what the numbe
 Those measurements describe the engine without the confirmation replay, which can only remove
 alarms. A worked multi-model example is the
 **[Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md)**.
+
+## Related tools
+
+Descriptions are taken from each project's own PyPI or npm page, read on 5 Nov 2026.
+
+**Eval and observability platforms.** Promptfoo ("LLM eval & testing toolkit"), DeepEval ("The
+LLM Evaluation Framework"), LangSmith ("Observability and Evaluation Platform") and Arize Phoenix
+("AI Observability and Evaluation") cover evaluation broadly. Modelpin covers one step of it:
+checking a model change against your own scenarios.
+
+**Model-migration and statistical A/B tools (2026):**
+
+- [llmshift](https://pypi.org/project/llmshift/): scans code for model ids against a lifecycle
+  registry, replays real usage on a new model, compares the two case by case with a McNemar
+  test, and can open an upgrade pull request.
+- [llm-model-deprecation](https://pypi.org/project/llm-model-deprecation/): scans a project for
+  deprecated or retired model references and can fail CI when it finds one.
+- [llm-behavior-diff](https://pypi.org/project/llm-behavior-diff/): runs the same suite against
+  two model versions, with bootstrap, Wilson and permutation statistics and gate policies for CI.
+- [llmci](https://pypi.org/project/llmci/): CI regression testing and model migration, with
+  repeated samples, gating on statistical significance, and a GitHub Action.
+- [Kalibra](https://pypi.org/project/kalibra/): compares a baseline and a current population of
+  agent traces with significance-gated CI thresholds; no LLM calls.
+- [agent-regress-cli](https://pypi.org/project/agent-regress-cli/): runs two agent versions many
+  times each and reports a p-value (Mann-Whitney U), a bootstrap confidence interval and an
+  effect size.
+- [cli-modelarium](https://pypi.org/project/cli-modelarium/): compares LLM outputs side by side,
+  with repeated runs and statistical significance testing.
+- [flakeval](https://pypi.org/project/flakeval/): repeats evaluation runs, measures their
+  variance, and says whether a score change between two systems is real or noise.
+
+**What Modelpin does differently,** going by those descriptions:
+
+1. A flagged regression must reproduce, on the same channel, in a fresh set of candidate runs
+   scored on its own, before the build fails.
+2. The project publishes its own same-model false-alarm measurement with confidence bounds
+   ([docs/fp-measurement.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)).
+
+If a tool above already does one of these, open an issue and this section will be corrected.
 
 **Not goals:** Modelpin is a migration check. It is not an eval platform, an observability tool,
 a prompt manager, a model gateway, or a leaderboard.
