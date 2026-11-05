@@ -444,6 +444,18 @@ def test_the_version_is_not_one_that_was_already_published() -> None:
     version = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"][
         "version"
     ]
+    if version in tags:
+        # Checking out the release commit itself (`git checkout v0.5.1`, or a fresh clone of
+        # main right after tagging) is not an un-releasable repo: nothing will be built from
+        # it again. Only a commit PAST the tag that still carries the spent version is.
+        at_tag = subprocess.run(
+            ["git", "-C", str(repo), "describe", "--exact-match", "--tags", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if at_tag.returncode == 0 and at_tag.stdout.strip().lstrip("v") == version:
+            pytest.skip(f"HEAD is the v{version} release commit itself")
     assert version not in tags, (
         f"pyproject.toml says {version!r}, but tag v{version} already exists -- that version "
         "is published. Bump it before building, or PyPI will reject the upload and any "

@@ -128,6 +128,34 @@ def test_malformed_yaml_raises_config_error(tmp_path):
         load_config(p)
 
 
+def test_oversized_config_is_refused_before_parsing(tmp_path, monkeypatch):
+    """Issue #24: a wrong --config path must not be slurped into memory and parsed."""
+    import modelpin.config as config
+
+    p = tmp_path / "modelpin.yaml"
+    p.write_text("models: [a]\n" + "#" * 64)
+    monkeypatch.setattr(config, "MAX_CONFIG_BYTES", 32)
+    parsed = []
+    monkeypatch.setattr(config.yaml, "safe_load", lambda *a, **k: parsed.append(a) or {})
+    with pytest.raises(ConfigError, match="capped at"):
+        load_config(p)
+    assert parsed == []
+
+
+def test_config_at_the_cap_still_loads(tmp_path, monkeypatch):
+    import modelpin.config as config
+
+    p = tmp_path / "modelpin.yaml"
+    p.write_text("runs: 7\n")
+    monkeypatch.setattr(config, "MAX_CONFIG_BYTES", p.stat().st_size)
+    assert load_config(p).runs == 7
+
+
+def test_a_directory_as_config_is_a_config_error(tmp_path):
+    with pytest.raises(ConfigError, match="not a regular file"):
+        load_config(tmp_path)
+
+
 def test_non_mapping_yaml_raises_config_error(tmp_path):
     p = tmp_path / "modelpin.yaml"
     p.write_text("- just\n- a\n- list\n")
