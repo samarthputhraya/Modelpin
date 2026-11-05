@@ -8,7 +8,7 @@
 
 ## Why this report exists
 
-Modelpin is "Dependabot for AI models": it replays your app's own scenarios across a model migration and flags behavioral regressions — while staying quiet when nothing meaningfully changed. The north-star metric is a **low false-positive rate**, because an alerter that cries wolf is worthless.
+Modelpin is a model-migration check: it replays your app's own scenarios across a model migration and flags behavioral regressions — while staying quiet when nothing meaningfully changed. The north-star metric is a **low false-positive rate**, because an alerter that cries wolf is worthless.
 
 So the honest question for a launch report is: *does model migration actually break behavior often enough to be worth watching — and can a tool tell a real break from model-randomness noise?*
 

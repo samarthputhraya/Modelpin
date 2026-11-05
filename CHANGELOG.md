@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.5.3] - 2026-11-05
+
+### Changed
+
+- **A new tagline: "Pin the behavior, not the model."** On PyPI it reads "For teams shipping LLM
+  apps: before you switch models, replay your app's real requests on the new one and see what
+  actually changed." It replaces the old "Dependabot" tagline on PyPI, in `modelpin --help`
+  and in the README, and two published reports now call Modelpin "a model-migration check"
+  (their results are unchanged). Modelpin does not open upgrade pull requests, and another
+  tool already uses the old phrase. The package keywords drop `dependabot` and add
+  `model-migration` and `model-deprecation`.
+- **The registry was re-read against the vendors' deprecation pages on 5 November 2026.**
+  `modelpin watch` now reports:
+  - `gpt-4o-2024-08-06`, `gpt-4o-2024-11-20`, `gpt-4o-mini-2024-07-18`, `gpt-4.1-2025-04-14`
+    and `gpt-4.1-mini-2025-04-14` (and the `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini`
+    aliases): deprecated on 14 October 2026, removed from the OpenAI API on 14 January 2027,
+    successor `gpt-6-luna`. They were listed as active.
+  - `claude-sonnet-4-5-20250929` (alias `claude-sonnet-4-5`): deprecated on 30 September 2026,
+    retiring on 30 November 2026 on the Claude API and on Vertex AI, successor
+    `claude-sonnet-5-5`, which is now in the registry. It was listed as active.
+  - `gemini-3.7-flash` and `gemini-3.5-flash`: Modelpin now marks both deprecated. The Gemini
+    API already routes their requests to `gemini-3.8-flash` and `gemini-3.6-flash` respectively
+    (the page says the endpoints are not shutting down).
+    `gemini-3.7-flash` retires on Vertex AI on 28 January 2027.
+  - `gemini-omni-flash-preview`: shut down on 22 October 2026, not 30 September.
+  - `claude-sonnet-4-20250514` (retired): the successor Anthropic names is now
+    `claude-sonnet-5-5`.
+
+  52 other entries were re-read on those pages and still match; their `fetched_at` moved to
+  2026-11-05. The 20 entries read from a model page, which was not re-read, and
+  `gpt-5.6-cyber`, which today's deprecations page no longer names, keep their earlier dates.
+
 ### Fixed
 
 - **The report's "typical run" example now shows typical behavior.** Each side's example was
@@ -16,6 +50,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the run did (which tools, in what order, refused or not), then by exact arguments and
   wording; the new model's example prefers a new tool path or refusal first. Examples are
   illustration chosen after the verdict; no verdict or exit code changes.
+
+### Security
+
+- **A `--config` path that is not a file, or a `modelpin.yaml` over 1 MiB, is refused before
+  it is read or parsed** (#24). The Action's README now says `modelpin-spec` is trusted input:
+  it goes straight to `pip install` with the job's secrets in the environment, so it must never
+  come from pull-request titles, branch names or other user-controlled values.
+
+### Documentation
+
+- **The README states the build-failing false-alarm bound**, with the denominator of each
+  figure, in its limits section: 0 in 9 exposed trials, 28.3% over trials or 39.3% over the 6
+  distinct scenarios, none of them on tool calls.
+- **A "Related tools" section** lists eval platforms and eight 2026 model-migration and
+  statistical A/B tools, each described from its own PyPI or npm page.
 
 ## [0.5.2] - 2026-11-05
 
@@ -1576,7 +1625,8 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/samarthputhraya/modelpin/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/samarthputhraya/modelpin/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...v0.5.0
