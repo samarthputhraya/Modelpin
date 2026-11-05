@@ -651,7 +651,10 @@ def test_the_vertex_client_posts_to_the_project_scoped_rawpredict_url(monkeypatc
     )
     assert request.headers["authorization"] == "Bearer ya29.fake-token-for-tests"
     body = json.loads(request.content)
-    assert body["anthropic_version"] == "vertex-2023-10-16"
+    # `[M] 2026-11-05` The SDK fills `anthropic_version`, not Modelpin: anthropic 1.0.0 sends
+    # "vertex-2023-10-16", 2.5.0 sends its API version "2026-10-21". Pinning the value made CI
+    # red on an SDK release with no change here; the Vertex shape is the URL and the missing model.
+    assert body.get("anthropic_version")
     assert "model" not in body
 
 
