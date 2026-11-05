@@ -21,10 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     aliases): deprecated on 14 October 2026, removed from the OpenAI API on 14 January 2027,
     successor `gpt-6-luna`. They were listed as active.
   - `claude-sonnet-4-5-20250929` (alias `claude-sonnet-4-5`): deprecated on 30 September 2026,
-    retiring on 30 November 2026 on the Claude API, and on the same date on Vertex AI, successor
+    retiring on 30 November 2026 on the Claude API and on Vertex AI, successor
     `claude-sonnet-5-5`, which is now in the registry. It was listed as active.
-  - `gemini-3.7-flash` and `gemini-3.5-flash`: the Gemini API already routes their requests to
-    `gemini-3.8-flash` and `gemini-3.6-flash` respectively, so both are now deprecated.
+  - `gemini-3.7-flash` and `gemini-3.5-flash`: Modelpin now marks both deprecated. The Gemini
+    API already routes their requests to `gemini-3.8-flash` and `gemini-3.6-flash` respectively
+    (the page says the endpoints are not shutting down).
     `gemini-3.7-flash` retires on Vertex AI on 28 January 2027.
   - `gemini-omni-flash-preview`: shut down on 22 October 2026, not 30 September.
   - `claude-sonnet-4-20250514` (retired): the successor Anthropic names is now

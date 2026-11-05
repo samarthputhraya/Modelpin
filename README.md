@@ -51,8 +51,9 @@ from OpenAI, Anthropic and Google's own deprecation and model pages, not from th
 of OpenAI-compatible
 hosts. **Nothing in Modelpin polls provider feeds**: the registry is refreshed when a release
 ships, so it is only as current as the release you installed (`--registry <path>` points at a
-newer file). Registry last checked against the vendors' pages on 5 Nov 2026. Azure OpenAI and
-Amazon Bedrock set their own dates, which often differ: o3 retires on 19 Nov 2026 on Azure but
+newer file). Registry re-read against the vendors' deprecation pages on 5 Nov 2026 (67 of 88
+entries; each entry's `fetched_at` gives its date). Azure OpenAI and Amazon Bedrock set their own
+dates, which can differ: o3 retires on 19 Nov 2026 on Azure but
 11 Dec 2026 on OpenAI, and Claude Sonnet 4.5 on 30 Nov 2026 on the Anthropic API and Vertex AI
 but reaches end-of-life on Bedrock on 8 Apr 2027. Modelpin does not open pull requests on its
 own: you choose the candidate model,
@@ -451,7 +452,9 @@ Separately, on the channels that can fail a build, the run of record (7 Sep 2026
 against itself) saw 0 false alarms in 9 exposed trials: a one-sided 95% upper bound of 28.3% over
 trials, or 39.3% over the 6 distinct scenarios behind them. Those 9 trials were 8 on judged
 meaning and 1 on refusals; none was on tool calls. 671 of the 710 trials that reached a verdict
-could not have fired at all.
+could not have fired at all. The tool-call channel, measured separately on a corpus built for it,
+had 1 false alarm in 26 scored trials: a one-sided 95% upper bound of 17.0% over trials, with 24
+of the 26 from one scenario.
 Across six real Gemini upgrades it flagged 28
 regressions, and a second language model asked to judge materiality rated every one a
 material behavior change, which is an opinion, not ground truth —
@@ -497,10 +500,12 @@ checking a model change against your own scenarios.
 
 **What Modelpin does differently,** going by those descriptions:
 
-1. A flagged regression must reproduce, on the same channel, in a fresh set of candidate runs
-   scored on its own, before the build fails.
-2. The project publishes its own same-model false-alarm measurement with confidence bounds
+1. By default, a flagged regression must reproduce, on the same channel, in a fresh set of
+   candidate runs scored on its own, before the build fails.
+2. The project publishes the false-alarm rate of its own build-failing checks, measured with the
+   same model against itself, per channel and with confidence bounds
    ([docs/fp-measurement.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)).
+   flakeval also runs a same-model A/A check by default, on your own evals.
 
 If a tool above already does one of these, open an issue and this section will be corrected.
 
