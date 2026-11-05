@@ -14,6 +14,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published reports (their results are unchanged). Modelpin does not open upgrade pull requests,
   and another tool already uses that phrase. The package keywords drop `dependabot` and add
   `model-migration` and `model-deprecation`.
+- **The registry was re-read against the vendors' deprecation pages on 5 November 2026.**
+  `modelpin watch` now reports:
+  - `gpt-4o-2024-08-06`, `gpt-4o-2024-11-20`, `gpt-4o-mini-2024-07-18`, `gpt-4.1-2025-04-14`
+    and `gpt-4.1-mini-2025-04-14` (and the `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini`
+    aliases): deprecated on 14 October 2026, removed from the OpenAI API on 14 January 2027,
+    successor `gpt-6-luna`. They were listed as active.
+  - `claude-sonnet-4-5-20250929` (alias `claude-sonnet-4-5`): deprecated on 30 September 2026,
+    retiring on 30 November 2026 on the Claude API, and on the same date on Vertex AI, successor
+    `claude-sonnet-5-5`, which is now in the registry. It was listed as active.
+  - `gemini-3.7-flash` and `gemini-3.5-flash`: the Gemini API already routes their requests to
+    `gemini-3.8-flash` and `gemini-3.6-flash` respectively, so both are now deprecated.
+    `gemini-3.7-flash` retires on Vertex AI on 28 January 2027.
+  - `gemini-omni-flash-preview`: shut down on 22 October 2026, not 30 September.
+  - `claude-sonnet-4-20250514` (retired): the successor Anthropic names is now
+    `claude-sonnet-5-5`.
+
+  52 other entries were re-read on those pages and still match; their `fetched_at` moved to
+  2026-11-05. The 20 entries read from a model page, which was not re-read, and
+  `gpt-5.6-cyber`, which today's deprecations page no longer names, keep their earlier dates.
 
 ## [0.5.2] - 2026-11-05
 
