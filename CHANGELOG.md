@@ -17,7 +17,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wording; the new model's example prefers a new tool path or refusal first. Examples are
   illustration chosen after the verdict; no verdict or exit code changes.
 
+## [0.5.2] - 2026-11-05
+
+The first release on PyPI since 0.5.0: it also carries everything listed under 0.5.1.
+
+### Fixed
+
+- **`modelpin watch` no longer reports as retired four Gemini models that Google's pages still
+  list as available.** The registry carried Vertex AI's 20 October 2026 date for
+  `gemini-2.5-pro`, `gemini-2.5-flash` and `gemini-2.5-flash-lite`, and, for
+  `gemini-2.5-flash-image`, the 2 October 2026 date it read from the Gemini API on 17 September.
+  Once those dates passed (for `gemini-2.5-flash-image`, from the day 0.5.0 shipped), `watch`
+  called all four retired. Read again on 5 November 2026:
+  - `gemini-2.5-pro` and `gemini-2.5-flash`: the Gemini API gives 1 December 2026 as the
+    shutdown date, after which requests to them route to `gemini-3.8-flash` and
+    `gemini-3.5-flash-lite` respectively; access is already limited to earlier users. `watch`
+    now names those successors.
+  - `gemini-2.5-flash-lite`: the Gemini API says it "is not deprecated and remains available
+    through the API until further notice". Vertex AI still lists the passed 20 October date, so
+    `watch` reports it deprecated with no shutdown date, and names `gemini-3.8-flash`, the first
+    successor Vertex lists.
+  - `gemini-2.5-flash-image`: both Google pages now give 15 March 2027, successor
+    `gemini-3.1-flash-lite-image`.
+
+  Where two Google surfaces disagree, the registry still carries the earlier date, but no longer
+  once that date has passed while the other surface still lists the model as available.
+
 ## [0.5.1] - 2026-10-04
+
+Tagged and released on GitHub, but never published to PyPI: the publish job waited for the
+required `pypi` approval, none was given, and GitHub failed it after 30 days. These changes
+first reach PyPI in 0.5.2.
 
 ### Fixed
 
@@ -1546,7 +1576,8 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/samarthputhraya/modelpin/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/samarthputhraya/modelpin/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/samarthputhraya/modelpin/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/samarthputhraya/modelpin/compare/v0.4.1...v0.4.2
