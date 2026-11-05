@@ -162,7 +162,7 @@ RECOMMENDED_RUNS = DEFAULT_RUNS
 VALID_MATCH_MODES = MATCH_MODES
 
 app = typer.Typer(
-    help="Modelpin - Dependabot for AI models. Know before the model breaks you.",
+    help="Modelpin - model-migration checks for LLM apps. A red build means the change reproduced.",
     no_args_is_help=True,
     add_completion=False,
     rich_markup_mode=None,  # plain Click help: ASCII-only, never crashes on cp1252

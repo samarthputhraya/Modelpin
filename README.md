@@ -1,6 +1,6 @@
 # Modelpin
 
-**Dependabot for AI models.** Know before the model breaks you.
+**Model-migration checks for LLM apps.** A red build means the change reproduced.
 
 [![CI](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml/badge.svg)](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/modelpin.svg)](https://pypi.org/project/modelpin/)

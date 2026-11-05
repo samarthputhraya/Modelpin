@@ -1,13 +1,13 @@
 [project]
 name = "modelpin"
 version = "0.5.2"
-description = "Dependabot for AI models — catch model-migration regressions before they hit production."
+description = "Model-migration checks for LLM apps: replay your scenarios on the new model and fail CI only when a behavior change reproduces."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Samarth Puthraya" }]
-keywords = ["llm", "ai", "agents", "regression-testing", "model-pinning", "evals", "ci", "dependabot"]
+keywords = ["llm", "ai", "agents", "regression-testing", "model-pinning", "evals", "ci", "model-migration", "model-deprecation"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",

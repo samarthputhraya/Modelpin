@@ -382,7 +382,7 @@ archived verdicts are in [`data/runs/`](data/runs/).
 private operations repository, so they are named rather than linked; each one is quoted where
 it constrains a number on this page.*
 
-*Modelpin is "Dependabot for AI models": it replays your app's own scenarios across a model
+*Modelpin is a model-migration check: it replays your app's own scenarios across a model
 migration and flags behavioural regressions, while staying quiet when nothing meaningfully changed.
 The north-star metric is a low false-positive rate — an alerter that cries wolf is worthless. The
 harness and every scenario above are open source under Apache-2.0.*

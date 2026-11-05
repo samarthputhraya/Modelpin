@@ -1,4 +1,4 @@
-"""Modelpin — Dependabot for AI models. Know before the model breaks you."""
+"""Modelpin — model-migration checks for LLM apps. A red build means the change reproduced."""
 
 from importlib.metadata import PackageNotFoundError, version as _dist_version
 
