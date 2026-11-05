@@ -1,4 +1,4 @@
-"""Modelpin — Dependabot for AI models. Know before the model breaks you."""
+"""Modelpin. Pin the behavior, not the model."""
 
 from importlib.metadata import PackageNotFoundError, version as _dist_version
 

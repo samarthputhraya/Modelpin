@@ -1,6 +1,6 @@
 # Modelpin
 
-**Dependabot for AI models.** Know before the model breaks you.
+**Pin the behavior, not the model.** Model-migration checks for teams shipping LLM apps.
 
 [![CI](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml/badge.svg)](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/modelpin.svg)](https://pypi.org/project/modelpin/)
@@ -51,7 +51,12 @@ from OpenAI, Anthropic and Google's own deprecation and model pages, not from th
 of OpenAI-compatible
 hosts. **Nothing in Modelpin polls provider feeds**: the registry is refreshed when a release
 ships, so it is only as current as the release you installed (`--registry <path>` points at a
-newer file). Modelpin does not open pull requests on its own: you choose the candidate model,
+newer file). Registry re-read against the vendors' deprecation pages on 5 Nov 2026 (67 of 88
+entries; each entry's `fetched_at` gives its date). Azure OpenAI and Amazon Bedrock set their own
+dates, which can differ: o3 retires on 19 Nov 2026 on Azure but
+11 Dec 2026 on OpenAI, and Claude Sonnet 4.5 on 30 Nov 2026 on the Anthropic API and Vertex AI
+but reaches end-of-life on Bedrock on 8 Apr 2027. Modelpin does not open pull requests on its
+own: you choose the candidate model,
 and a scheduled workflow can re-check it on your clock.
 
 CLI: `modelpin` (alias `mp`). License: Apache-2.0.
@@ -71,6 +76,7 @@ CLI: `modelpin` (alias `mp`). License: Apache-2.0.
 - [CLI reference](#cli-reference)
 - [Troubleshooting](#troubleshooting)
 - [Limits, and the evidence behind the design](#limits-and-the-evidence-behind-the-design)
+- [Related tools](#related-tools)
 
 ---
 
@@ -80,7 +86,7 @@ Python 3.11 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.5.2
+modelpin version                        # -> modelpin 0.5.3
 ```
 
 The `providers` extra installs the OpenAI, Anthropic and Google SDKs. Plain `pip install modelpin`
@@ -442,6 +448,13 @@ repeats, not 972 independent trials, and many of those scenarios answered so con
 these settings that no signal could have fired (a harness run on two of the same models put
 that at 230 of 240 trials). So this says the tool did not cry wolf in ordinary use on this
 suite; it is not a false-positive rate, and the bounds are in `docs/fp-measurement.md`.
+Separately, on the channels that can fail a build, the run of record (7 Sep 2026, same model
+against itself) saw 0 false alarms in 9 exposed trials: a one-sided 95% upper bound of 28.3% over
+trials, or 39.3% over the 6 distinct scenarios behind them. Those 9 trials were 8 on judged
+meaning and 1 on refusals; none was on tool calls. 671 of the 710 trials that reached a verdict
+could not have fired at all. The tool-call channel, measured separately on a corpus built for it,
+had 1 false alarm in 26 scored trials: a one-sided 95% upper bound of 17.0% over trials, with 24
+of the 26 from one scenario.
 Across six real Gemini upgrades it flagged 28
 regressions, and a second language model asked to judge materiality rated every one a
 material behavior change, which is an opinion, not ground truth —
@@ -454,6 +467,47 @@ calls, two from the semantic judge, one on a text assertion), and what the numbe
 Those measurements describe the engine without the confirmation replay, which can only remove
 alarms. A worked multi-model example is the
 **[Drift Map #1](https://github.com/samarthputhraya/modelpin/blob/main/docs/reports/modelpin-drift-map-1.md)**.
+
+## Related tools
+
+Descriptions are taken from each project's own PyPI or npm page, read on 5 Nov 2026.
+
+**Eval and observability platforms.** Promptfoo ("LLM eval & testing toolkit"), DeepEval ("The
+LLM Evaluation Framework"), LangSmith ("Observability and Evaluation Platform") and Arize Phoenix
+("AI Observability and Evaluation") cover evaluation broadly. Modelpin covers one step of it:
+checking a model change against your own scenarios.
+
+**Model-migration and statistical A/B tools (2026):**
+
+- [llmshift](https://pypi.org/project/llmshift/): scans code for model ids against a lifecycle
+  registry, replays real usage on a new model, compares the two case by case with a McNemar
+  test, and can open an upgrade pull request.
+- [llm-model-deprecation](https://pypi.org/project/llm-model-deprecation/): scans a project for
+  deprecated or retired model references and can fail CI when it finds one.
+- [llm-behavior-diff](https://pypi.org/project/llm-behavior-diff/): runs the same suite against
+  two model versions, with bootstrap, Wilson and permutation statistics and gate policies for CI.
+- [llmci](https://pypi.org/project/llmci/): CI regression testing and model migration, with
+  repeated samples, gating on statistical significance, and a GitHub Action.
+- [Kalibra](https://pypi.org/project/kalibra/): compares a baseline and a current population of
+  agent traces with significance-gated CI thresholds; no LLM calls.
+- [agent-regress-cli](https://pypi.org/project/agent-regress-cli/): runs two agent versions many
+  times each and reports a p-value (Mann-Whitney U), a bootstrap confidence interval and an
+  effect size.
+- [cli-modelarium](https://pypi.org/project/cli-modelarium/): compares LLM outputs side by side,
+  with repeated runs and statistical significance testing.
+- [flakeval](https://pypi.org/project/flakeval/): repeats evaluation runs, measures their
+  variance, and says whether a score change between two systems is real or noise.
+
+**What Modelpin does differently,** going by those descriptions:
+
+1. By default, a flagged regression must reproduce, on the same channel, in a fresh set of
+   candidate runs scored on its own, before the build fails.
+2. The project publishes the false-alarm rate of its own build-failing checks, measured with the
+   same model against itself, per channel and with confidence bounds
+   ([docs/fp-measurement.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/fp-measurement.md)).
+   flakeval also runs a same-model A/A check by default, on your own evals.
+
+If a tool above already does one of these, open an issue and this section will be corrected.
 
 **Not goals:** Modelpin is a migration check. It is not an eval platform, an observability tool,
 a prompt manager, a model gateway, or a leaderboard.
