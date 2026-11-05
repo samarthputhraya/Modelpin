@@ -446,6 +446,11 @@ repeats, not 972 independent trials, and many of those scenarios answered so con
 these settings that no signal could have fired (a harness run on two of the same models put
 that at 230 of 240 trials). So this says the tool did not cry wolf in ordinary use on this
 suite; it is not a false-positive rate, and the bounds are in `docs/fp-measurement.md`.
+Separately, on the channels that can fail a build, the run of record (7 Sep 2026, same model
+against itself) saw 0 false alarms in 9 exposed trials: a one-sided 95% upper bound of 28.3% over
+trials, or 39.3% over the 6 distinct scenarios behind them. Those 9 trials were 8 on judged
+meaning and 1 on refusals; none was on tool calls. 671 of the 710 trials that reached a verdict
+could not have fired at all.
 Across six real Gemini upgrades it flagged 28
 regressions, and a second language model asked to judge materiality rated every one a
 material behavior change, which is an opinion, not ground truth —
