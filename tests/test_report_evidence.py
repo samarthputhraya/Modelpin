@@ -122,3 +122,32 @@ def test_an_early_stop_is_named_beside_the_example():
         incomplete_reason=IncompleteReason.tool_turns,
     )
     assert Example.of(looping).describe().endswith("stopped at the tool-call limit")
+
+
+def test_differently_worded_runs_do_not_let_an_outlier_stand_for_the_baseline():
+    """MP-291, from the live Gemini sample: four runs book without checking availability,
+    each worded differently; one checks after booking. The typical run is one of the four."""
+    base = [
+        _t("Booked.", tools=("create_booking", "check_availability"), i=0),
+        _t("Your booking is confirmed.", tools=("create_booking",), i=1),
+        _t("Done, you're booked.", tools=("create_booking",), i=2),
+        _t("Reservation made.", tools=("create_booking",), i=3),
+        _t("All set!", tools=("create_booking",), i=4),
+    ]
+    cand = [_t(f"Confirmed {i}.", tools=("check_availability", "create_booking")) for i in range(5)]
+    pair = pick_examples(base, cand)
+    assert pair is not None
+    assert pair[0].tools == ("create_booking",), pair[0].describe()
+    assert pair[1].tools == ("check_availability", "create_booking")
+
+
+def test_a_new_shape_outranks_new_wording_for_the_candidate_example():
+    base = [_t("Sure, done.", tools=("cancel",)) for _ in range(5)]
+    cand = [_t("I can't do that.", refused=True)] * 3 + [_t("Done!", tools=("cancel",))] * 2
+    pair = pick_examples(base, cand)
+    assert pair is not None and pair[1].refused and not pair[1].tools
+
+
+def test_same_shape_new_wording_is_still_shown_for_meaning_drift():
+    pair = pick_examples([_t("$14")] * 5, [_t("$12")] * 5)
+    assert pair is not None and (pair[0].output, pair[1].output) == ("$14", "$12")

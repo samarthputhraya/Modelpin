@@ -1,6 +1,6 @@
 [project]
 name = "modelpin"
-version = "0.5.2"
+version = "0.5.3"
 description = "Pin the behavior, not the model. For teams shipping LLM apps: before you switch models, replay your app's real requests on the new one and see what actually changed."
 readme = "README.md"
 requires-python = ">=3.11"
