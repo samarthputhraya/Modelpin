@@ -10,6 +10,13 @@ So every non-`unchanged` verdict now carries one representative example per side
 common behavior on the baseline, and the most common candidate behavior the baseline never
 showed (falling back to the most common candidate behavior). It is illustration, chosen after
 the verdict, and can never move one.
+
+"Most common" is decided on the run's SHAPE first -- which tools it called, in what order, and
+whether it refused -- and only then on its exact wording (MP-291). `[M] 2026-10-04` the live
+Gemini sample showed, as the old model's "typical run" for `optional_availability_before_booking`,
+the ONE baseline run of five that called `check_availability`: all five runs worded their reply
+differently, so keyed on the text they tied 1-1-1-1-1 and run 0 won. The other four never called
+the tool. A reader deciding on a migration was shown the exception as the rule.
 """
 
 from __future__ import annotations
@@ -37,13 +44,24 @@ def _behavior(trace: Trace) -> tuple[tuple[str, ...], str, bool]:
     )
 
 
-def _modal(traces: list[Trace], exclude: set | None = None) -> Trace | None:
-    exclude = exclude or set()
-    counts = Counter(_behavior(t) for t in traces if _behavior(t) not in exclude)
-    if not counts:
+def _shape(trace: Trace) -> tuple[tuple[str, ...], bool]:
+    """What the run DID, without its wording or argument values: the tools it called, in
+    order, and whether it refused."""
+    return tuple(call.name for call in trace.tool_calls), trace.refused
+
+
+def _typical(traces: list[Trace]) -> Trace | None:
+    """The run that stands for the most common behavior among `traces`.
+
+    The largest group by shape wins first; inside it, the most common exact run (arguments
+    and wording); ties go to the earliest run. Counting exact runs alone lets differently
+    worded runs tie, so an outlier can be shown as typical (MP-291)."""
+    if not traces:
         return None
-    top = counts.most_common(1)[0][0]
-    return next(t for t in traces if _behavior(t) == top)
+    shape = Counter(_shape(t) for t in traces).most_common(1)[0][0]
+    group = [t for t in traces if _shape(t) == shape]
+    top = Counter(_behavior(t) for t in group).most_common(1)[0][0]
+    return next(t for t in group if _behavior(t) == top)
 
 
 #: How an early stop reads beside an example. Keyed by `IncompleteReason` value.
@@ -106,10 +124,16 @@ class Example:
 
 def pick_examples(baseline: list[Trace], candidate: list[Trace]) -> tuple[Example, Example] | None:
     """(baseline example, candidate example), or None when either side has no runs."""
-    base = _modal(baseline)
+    base = _typical(baseline)
     if base is None or not candidate:
         return None
+    # The candidate's example is a behavior the baseline never showed: a new SHAPE when there
+    # is one (a different tool path, a refusal); otherwise new wording or arguments on the
+    # same shape (meaning or argument drift); otherwise simply its most common run.
+    seen_shapes = {_shape(t) for t in baseline}
     seen = {_behavior(t) for t in baseline}
-    cand = _modal(candidate, exclude=seen) or _modal(candidate)
+    new_shape = [t for t in candidate if _shape(t) not in seen_shapes]
+    new_behavior = [t for t in candidate if _behavior(t) not in seen]
+    cand = _typical(new_shape or new_behavior or candidate)
     assert cand is not None
     return Example.of(base), Example.of(cand)
