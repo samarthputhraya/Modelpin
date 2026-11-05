@@ -162,7 +162,10 @@ RECOMMENDED_RUNS = DEFAULT_RUNS
 VALID_MATCH_MODES = MATCH_MODES
 
 app = typer.Typer(
-    help="Modelpin - model-migration checks for LLM apps. A red build means the change reproduced.",
+    help=(
+        "Modelpin. Pin the behavior, not the model: check a new LLM model against your app's "
+        "recorded behavior before you switch."
+    ),
     no_args_is_help=True,
     add_completion=False,
     rich_markup_mode=None,  # plain Click help: ASCII-only, never crashes on cp1252

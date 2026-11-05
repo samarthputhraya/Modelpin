@@ -8,11 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **A new one-line description: "Model-migration checks for LLM apps: replay your scenarios on
-  the new model and fail CI only when a behavior change reproduces."** It replaces "Dependabot
-  for AI models" on PyPI, in `modelpin --help`, in the README and in the framing line of two
-  published reports (their results are unchanged). Modelpin does not open upgrade pull requests,
-  and another tool already uses that phrase. The package keywords drop `dependabot` and add
+- **A new tagline: "Pin the behavior, not the model."** On PyPI it reads "For teams shipping LLM
+  apps: before you switch models, replay your app's real requests on the new one and see what
+  actually changed." It replaces the old "Dependabot" tagline on PyPI, in `modelpin --help`
+  and in the README, and two published reports now call Modelpin "a model-migration check"
+  (their results are unchanged). Modelpin does not open upgrade pull requests, and another
+  tool already uses the old phrase. The package keywords drop `dependabot` and add
   `model-migration` and `model-deprecation`.
 - **The registry was re-read against the vendors' deprecation pages on 5 November 2026.**
   `modelpin watch` now reports:

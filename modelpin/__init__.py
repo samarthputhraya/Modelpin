@@ -1,4 +1,4 @@
-"""Modelpin — model-migration checks for LLM apps. A red build means the change reproduced."""
+"""Modelpin. Pin the behavior, not the model."""
 
 from importlib.metadata import PackageNotFoundError, version as _dist_version
 

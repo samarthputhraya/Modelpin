@@ -1,7 +1,7 @@
 [project]
 name = "modelpin"
 version = "0.5.2"
-description = "Model-migration checks for LLM apps: replay your scenarios on the new model and fail CI only when a behavior change reproduces."
+description = "Pin the behavior, not the model. For teams shipping LLM apps: before you switch models, replay your app's real requests on the new one and see what actually changed."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"

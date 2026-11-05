@@ -1,6 +1,6 @@
 # Modelpin
 
-**Model-migration checks for LLM apps.** A red build means the change reproduced.
+**Pin the behavior, not the model.** Model-migration checks for teams shipping LLM apps.
 
 [![CI](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml/badge.svg)](https://github.com/samarthputhraya/modelpin/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/modelpin.svg)](https://pypi.org/project/modelpin/)
