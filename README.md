@@ -51,11 +51,11 @@ from OpenAI, Anthropic and Google's own deprecation and model pages, not from th
 of OpenAI-compatible
 hosts. **Nothing in Modelpin polls provider feeds**: the registry is refreshed when a release
 ships, so it is only as current as the release you installed (`--registry <path>` points at a
-newer file). Registry re-read against the vendors' deprecation pages on 5 Nov 2026 (67 of 88
+newer file). Registry re-read against the vendors' deprecation pages on 22 Nov 2026 (40 of 95
 entries; each entry's `fetched_at` gives its date). Azure OpenAI and Amazon Bedrock set their own
-dates, which can differ: o3 retires on 19 Nov 2026 on Azure but
-11 Dec 2026 on OpenAI, and Claude Sonnet 4.5 on 30 Nov 2026 on the Anthropic API and Vertex AI
-but reaches end-of-life on Bedrock on 8 Apr 2027. Modelpin does not open pull requests on its
+dates, which can differ: o3's retirement date is 19 Nov 2026 on Azure but
+11 Dec 2026 on OpenAI; Claude Sonnet 4.5's is 30 Nov 2026 on the Anthropic API and Vertex AI,
+but it reaches end-of-life on Bedrock on 8 Apr 2027. Modelpin does not open pull requests on its
 own: you choose the candidate model,
 and a scheduled workflow can re-check it on your clock.
 
@@ -86,7 +86,7 @@ Python 3.11 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.5.3
+modelpin version                        # -> modelpin 0.5.4
 ```
 
 The `providers` extra installs the OpenAI, Anthropic and Google SDKs. Plain `pip install modelpin`

@@ -226,12 +226,16 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-02",
         "retired_at": "2026-12-01",
-        "replacement_id": "gpt-image-2.5-sunburst",
+        "replacement_id": "gpt-image-2.6-sunburst",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Section '2026-06-02: GPT Image model deprecations'. Replacement cell on the page "
-        "fetched 2026-10-04: 'gpt-image-2.5-sunburst or gpt-image-2.5-flare' (the first is "
-        "carried). An image model.",
+        "fetched_at": "2026-11-22",
+        "notes": "Read 2026-11-05: Section '2026-06-02: GPT Image model deprecations'. Replacement "
+        "cell on the page fetched 2026-10-04: 'gpt-image-2.5-sunburst or "
+        "gpt-image-2.5-flare' (the first is carried). An image model. OpenAI 'Upcoming "
+        "deprecations' table (read 2026-11-22; the page now lists one table instead of "
+        "dated sections): recommended replacement 'gpt-image-2.6-sunburst or "
+        "gpt-image-2.6-flare' (the first is carried; gpt-image-2.5-sunburst when read "
+        "2026-11-05).",
         "modality": "image",
     },
     {
@@ -241,12 +245,16 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-02",
         "retired_at": "2026-12-01",
-        "replacement_id": "gpt-image-2.5-sunburst",
+        "replacement_id": "gpt-image-2.6-sunburst",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Section '2026-06-02: GPT Image model deprecations'. Replacement cell on the page "
-        "fetched 2026-10-04: 'gpt-image-2.5-sunburst or gpt-image-2.5-flare' (the first is "
-        "carried). An image model.",
+        "fetched_at": "2026-11-22",
+        "notes": "Read 2026-11-05: Section '2026-06-02: GPT Image model deprecations'. Replacement "
+        "cell on the page fetched 2026-10-04: 'gpt-image-2.5-sunburst or "
+        "gpt-image-2.5-flare' (the first is carried). An image model. OpenAI 'Upcoming "
+        "deprecations' table (read 2026-11-22; the page now lists one table instead of "
+        "dated sections): recommended replacement 'gpt-image-2.6-sunburst or "
+        "gpt-image-2.6-flare' (the first is carried; gpt-image-2.5-sunburst when read "
+        "2026-11-05).",
         "modality": "image",
     },
     {
@@ -256,12 +264,16 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-02",
         "retired_at": "2026-12-01",
-        "replacement_id": "gpt-image-2.5-sunburst",
+        "replacement_id": "gpt-image-2.6-sunburst",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Section '2026-06-02: GPT Image model deprecations'. Replacement cell on the page "
-        "fetched 2026-10-04: 'gpt-image-2.5-sunburst or gpt-image-2.5-flare' (the first is "
-        "carried). An image model.",
+        "fetched_at": "2026-11-22",
+        "notes": "Read 2026-11-05: Section '2026-06-02: GPT Image model deprecations'. Replacement "
+        "cell on the page fetched 2026-10-04: 'gpt-image-2.5-sunburst or "
+        "gpt-image-2.5-flare' (the first is carried). An image model. OpenAI 'Upcoming "
+        "deprecations' table (read 2026-11-22; the page now lists one table instead of "
+        "dated sections): recommended replacement 'gpt-image-2.6-sunburst or "
+        "gpt-image-2.6-flare' (the first is carried; gpt-image-2.5-sunburst when read "
+        "2026-11-05).",
         "modality": "image",
     },
     {
@@ -271,15 +283,18 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-11",
         "retired_at": "2026-12-11",
-        "replacement_id": "gpt-5.6-sol",
-        "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Section '2026-06-11: GPT-5 and o3 model deprecations': 'On June 11, 2026, we "
-        "notified developers using older GPT-5 and o3 model snapshots of their deprecation "
-        "and removal from the API on December 11, 2026.' Alias per "
-        "https://developers.openai.com/api/docs/models/gpt-5 (fetched 2026-09-18), which "
-        "also says 'We recommend using the latest GPT-6 Astra'.",
+        "replacement_id": "gpt-6.1-sol",
         "aliases": ["gpt-5"],
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Read 2026-11-05: Section '2026-06-11: GPT-5 and o3 model deprecations': 'On June "
+        "11, 2026, we notified developers using older GPT-5 and o3 model snapshots of their "
+        "deprecation and removal from the API on December 11, 2026.' Alias per "
+        "https://developers.openai.com/api/docs/models/gpt-5 (fetched 2026-09-18), which "
+        "also says 'We recommend using the latest GPT-6 Astra'. OpenAI 'Upcoming "
+        "deprecations' table (read 2026-11-22; the page now lists one table instead of "
+        "dated sections): recommended replacement 'gpt-6.1-sol' (gpt-5.6-sol when read "
+        "2026-11-05).",
     },
     {
         "id": "gpt-5-mini-2025-08-07",
@@ -288,12 +303,15 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-11",
         "retired_at": "2026-12-11",
-        "replacement_id": "gpt-5.6-terra",
-        "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Section '2026-06-11: GPT-5 and o3 model deprecations'. Alias per "
-        "https://developers.openai.com/api/docs/models/gpt-5-mini (fetched 2026-09-18).",
+        "replacement_id": "gpt-6.1-terra",
         "aliases": ["gpt-5-mini"],
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Read 2026-11-05: Section '2026-06-11: GPT-5 and o3 model deprecations'. Alias per "
+        "https://developers.openai.com/api/docs/models/gpt-5-mini (fetched 2026-09-18). "
+        "OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now lists one "
+        "table instead of dated sections): recommended replacement 'gpt-6.1-terra' "
+        "(gpt-5.6-terra when read 2026-11-05).",
     },
     {
         "id": "gpt-5-nano-2025-08-07",
@@ -302,12 +320,15 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-11",
         "retired_at": "2026-12-11",
-        "replacement_id": "gpt-5.6-luna",
-        "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Section '2026-06-11: GPT-5 and o3 model deprecations'. Alias per "
-        "https://developers.openai.com/api/docs/models/gpt-5-nano (fetched 2026-09-18).",
+        "replacement_id": "gpt-6-luna",
         "aliases": ["gpt-5-nano"],
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Read 2026-11-05: Section '2026-06-11: GPT-5 and o3 model deprecations'. Alias per "
+        "https://developers.openai.com/api/docs/models/gpt-5-nano (fetched 2026-09-18). "
+        "OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now lists one "
+        "table instead of dated sections): recommended replacement 'gpt-6-luna' "
+        "(gpt-5.6-luna when read 2026-11-05).",
     },
     {
         "id": "gpt-5-pro-2025-10-06",
@@ -316,12 +337,15 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-11",
         "retired_at": "2026-12-11",
-        "replacement_id": "gpt-5.6-sol",
-        "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Replacement cell verbatim: 'gpt-5.6-sol (reasoning.mode: pro)'. Alias per "
-        "https://developers.openai.com/api/docs/models/gpt-5-pro (fetched 2026-09-18).",
+        "replacement_id": "gpt-6.1-sol",
         "aliases": ["gpt-5-pro"],
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Replacement cell read 2026-11-05: 'gpt-5.6-sol (reasoning.mode: pro)'. Alias per "
+        "https://developers.openai.com/api/docs/models/gpt-5-pro (fetched 2026-09-18). "
+        "OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now lists one "
+        "table instead of dated sections): recommended replacement 'gpt-6.1-sol "
+        "(reasoning.mode: pro) in the Responses API' (gpt-5.6-sol when read 2026-11-05).",
     },
     {
         "id": "o3-2025-04-16",
@@ -330,13 +354,15 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-11",
         "retired_at": "2026-12-11",
-        "replacement_id": "gpt-5.6-sol",
-        "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Section '2026-06-11: GPT-5 and o3 model deprecations'. Alias per "
-        "https://developers.openai.com/api/docs/models/o3 (fetched 2026-09-18), which says "
-        "'o3 is succeeded by GPT-5'.",
+        "replacement_id": "gpt-6.1-sol",
         "aliases": ["o3"],
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Read 2026-11-05: Section '2026-06-11: GPT-5 and o3 model deprecations'. Alias per "
+        "https://developers.openai.com/api/docs/models/o3 (fetched 2026-09-18), which says "
+        "'o3 is succeeded by GPT-5'. OpenAI 'Upcoming deprecations' table (read 2026-11-22; "
+        "the page now lists one table instead of dated sections): recommended replacement "
+        "'gpt-6.1-sol' (gpt-5.6-sol when read 2026-11-05).",
     },
     {
         "id": "o3-pro-2025-06-10",
@@ -345,18 +371,22 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2026-06-11",
         "retired_at": "2026-12-11",
-        "replacement_id": "gpt-5.6-sol",
-        "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Replacement cell verbatim: 'gpt-5.6-sol (reasoning.mode: pro)'. Alias per "
-        "https://developers.openai.com/api/docs/models/o3-pro (fetched 2026-09-18).",
+        "replacement_id": "gpt-6.1-sol",
         "aliases": ["o3-pro"],
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Replacement cell read 2026-11-05: 'gpt-5.6-sol (reasoning.mode: pro)'. Alias per "
+        "https://developers.openai.com/api/docs/models/o3-pro (fetched 2026-09-18). OpenAI "
+        "'Upcoming deprecations' table (read 2026-11-22; the page now lists one table "
+        "instead of dated sections): recommended replacement 'gpt-6.1-sol (reasoning.mode: "
+        "pro) in the Responses API' (gpt-5.6-sol when read 2026-11-05).",
     },
     {
         "id": "gpt-5.6-sol",
         "provider": "openai",
         "family": "gpt-5.6",
         "status": "active",
+        "aliases": ["gpt-5.6"],
         "source_url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
         "fetched_at": "2026-09-17",
         "notes": "Named as the recommended replacement for the 2026-10-23 and 2026-12-11 "
@@ -364,7 +394,6 @@ SEED_MODELS: list[dict[str, Any]] = [
         "supported; 'Reasoning.effort supports: none, low, medium (default), high, xhigh, "
         "and max.' Alias per the model page (fetched 2026-09-18): 'The gpt-5.6 alias routes "
         "requests to GPT-5.6 Sol.'",
-        "aliases": ["gpt-5.6"],
     },
     {
         "id": "gpt-5.6-terra",
@@ -403,12 +432,17 @@ SEED_MODELS: list[dict[str, Any]] = [
         "id": "gpt-image-2",
         "provider": "openai",
         "family": "gpt-image",
-        "status": "active",
+        "status": "deprecated",
+        "deprecated_at": "2026-11-10",
+        "retired_at": "2027-02-10",
+        "replacement_id": "gpt-image-2.6-sunburst",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Named as the GPT Image replacement on the page fetched 2026-09-17; the page "
-        "fetched 2026-10-04 names gpt-image-2.5-sunburst or gpt-image-2.5-flare instead. "
-        "Its own model page was not fetched. An image model.",
+        "fetched_at": "2026-11-22",
+        "notes": "OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now lists one "
+        "table instead of dated sections): shutdown Feb 10, 2027, 'gpt-image-2, "
+        "gpt-image-2-2026-04-21', Deprecated, recommended replacement "
+        "'gpt-image-2.6-sunburst or gpt-image-2.6-flare' (the first is carried), notice "
+        "date Nov 10, 2026. Until 2026-11-22 this entry was active. An image model.",
         "modality": "image",
     },
     {
@@ -420,7 +454,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "retired_at": "2026-08-05",
         "replacement_id": "claude-opus-4-8",
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Section '2026-06-05: Claude Opus 4.1 model'; note on the page: 'This model was "
         "retired August 5, 2026.'",
     },
@@ -433,7 +467,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "retired_at": "2026-06-15",
         "replacement_id": "claude-sonnet-5-5",
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Section '2026-04-14: Claude Sonnet 4 and Claude Opus 4 models'; 'These models were "
         "retired June 15, 2026.' The row's recommended replacement read 2026-11-05 is "
         "claude-sonnet-5-5 (claude-sonnet-4-6 when read 2026-09-17).",
@@ -447,7 +481,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "retired_at": "2026-06-15",
         "replacement_id": "claude-opus-4-8",
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Section '2026-04-14: Claude Sonnet 4 and Claude Opus 4 models'; 'These models were "
         "retired June 15, 2026.'",
     },
@@ -456,67 +490,67 @@ SEED_MODELS: list[dict[str, Any]] = [
         "provider": "anthropic",
         "family": "claude-opus-4",
         "status": "active",
+        "aliases": [],
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than May 28, 2027'. A "
         "floor the vendor publishes, not an announced date. Per "
         "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
         "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
         "Listed under the docs sidebar's 'Legacy models' group.",
-        "aliases": [],
     },
     {
         "id": "claude-opus-4-7",
         "provider": "anthropic",
         "family": "claude-opus-4",
         "status": "active",
+        "aliases": [],
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than April 16, 2027'. "
         "Per https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
         "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
         "Listed under the docs sidebar's 'Legacy models' group.",
-        "aliases": [],
     },
     {
         "id": "claude-opus-4-6",
         "provider": "anthropic",
         "family": "claude-opus-4",
         "status": "active",
+        "aliases": [],
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than February 5, "
         "2027'. Per "
         "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
         "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
         "Listed under the docs sidebar's 'Legacy models' group.",
-        "aliases": [],
     },
     {
         "id": "claude-opus-4-5-20251101",
         "provider": "anthropic",
         "family": "claude-opus-4",
         "status": "active",
+        "aliases": ["claude-opus-4-5"],
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than November 24, "
         "2026'. Alias per https://platform.claude.com/docs/en/models/opus-4-5/overview "
         "(fetched 2026-09-18); the docs sidebar lists it under its 'Legacy models' group.",
-        "aliases": ["claude-opus-4-5"],
     },
     {
         "id": "claude-sonnet-4-6",
         "provider": "anthropic",
         "family": "claude-sonnet-4",
         "status": "active",
+        "aliases": [],
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than February 17, "
         "2027'. Per "
         "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions "
         "(fetched 2026-09-18) a 4.6-generation id is not an alias: it is the snapshot. "
         "Listed under the docs sidebar's 'Legacy models' group.",
-        "aliases": [],
     },
     {
         "id": "claude-sonnet-5-5",
@@ -524,7 +558,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "family": "claude-sonnet-5",
         "status": "active",
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table: Active; tentative retirement 'Not sooner than September 28, "
         "2027'. Named on the same page as the recommended replacement for "
         "claude-sonnet-4-5-20250929 and claude-sonnet-4-20250514. Its own model page was "
@@ -540,7 +574,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "replacement_id": "claude-sonnet-5-5",
         "aliases": ["claude-sonnet-4-5"],
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table: Deprecated, deprecated September 30, 2026, tentative "
         "retirement date November 30, 2026. Section '2026-09-30: Claude Sonnet 4.5 model': "
         "'On September 30, 2026, Anthropic notified developers using Claude Sonnet 4.5 of "
@@ -561,7 +595,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "active",
         "aliases": ["claude-haiku-4-5-20251001"],
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Model status table row 'claude-haiku-4-5-20251001': Active; tentative retirement "
         "'Not sooner than October 15, 2026'. The vendor's policy is at least 60 days' "
         "notice before retirement. The haiku page (fetched 2026-09-18): 'claude-haiku-4-5 "
@@ -574,15 +608,14 @@ SEED_MODELS: list[dict[str, Any]] = [
         "family": "gemini-omni",
         "status": "retired",
         "retired_at": "2026-10-22",
-        "replacement_id": "gemini-omni-1.1-flash",
+        "replacement_id": "gemini-omni-1.2-flash",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Gemini API deprecations page (source_url, which now redirects to "
-        "https://aistudio.google.com/docs/deprecations; read there), Gemini Omni Flash "
+        "fetched_at": "2026-11-22",
+        "notes": "Gemini API deprecations page (source_url, which redirects to "
+        "https://aistudio.google.com/docs/deprecations; read 2026-11-22), Gemini Omni Flash "
         "deprecated models: release date June 30, 2026, shutdown October 22, 2026, "
-        "replacement gemini-omni-1.1-flash. Until 2026-11-05 this entry carried September "
-        "30, 2026, which that page no longer shows. No row on the Vertex AI lifecycle "
-        "page.",
+        "replacement gemini-omni-1.2-flash (gemini-omni-1.1-flash when read 2026-11-05; "
+        "that model now retires December 3, 2026). No row on the Vertex AI lifecycle page.",
     },
     {
         "id": "gemini-2.5-flash-image",
@@ -592,7 +625,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "retired_at": "2027-03-15",
         "replacement_id": "gemini-3.1-flash-lite-image",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Gemini API deprecations page (source_url, which now redirects to "
         "https://aistudio.google.com/docs/deprecations; read there), Nano Banana models "
         "table: shutdown March 15, 2027, replacement gemini-3.1-flash-lite-image. The "
@@ -683,10 +716,11 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "retired_at": "2026-12-13",
         "source_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions",
-        "fetched_at": "2026-11-05",
-        "notes": "Vertex AI lifecycle table: December 13, 2026; replacement cell blank; release date "
-        "December 12, 2025. The Gemini API page has no row with this id. A live audio "
-        "model.",
+        "fetched_at": "2026-11-22",
+        "notes": "Vertex AI lifecycle table (read 2026-11-22): December 13, 2026, replacement "
+        "gemini-3.8-live (blank when read 2026-09-17; gemini-3.8-live is a live audio id "
+        "and is not transcribed), release date December 12, 2025. The Gemini API page has "
+        "no row with this id. A live audio model.",
         "modality": "audio",
     },
     {
@@ -706,40 +740,45 @@ SEED_MODELS: list[dict[str, Any]] = [
         "provider": "google",
         "family": "gemini-3.7",
         "status": "deprecated",
+        "retired_at": "2027-01-28",
+        "replacement_id": "gemini-3.8-flash",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Gemini API deprecations page (source_url, which now redirects to "
-        "https://aistudio.google.com/docs/deprecations; read there), Gemini 3 models: "
+        "fetched_at": "2026-11-22",
+        "notes": "Gemini API deprecations page (source_url, which redirects to "
+        "https://aistudio.google.com/docs/deprecations; read 2026-11-22), Gemini 3 models: "
         "shutdown 'N/A', replacement gemini-3.8-flash ('gemini-3.7-flash is no longer "
         "available in Google AI Studio; the endpoint is not shutting down and automatically "
         "routes API requests to gemini-3.8-flash'). On the Gemini API the id already "
-        "answers from gemini-3.8-flash. The Vertex AI lifecycle table "
-        "(https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions) "
-        "lists it released August 13, 2026, retirement January 28, 2027, replacement "
-        "gemini-3.8-flash; that date is carried. Until 2026-11-05 this entry was active, "
-        "read from the Gemini API models page on 2026-09-17.",
-        "retired_at": "2027-01-28",
-        "replacement_id": "gemini-3.8-flash",
+        "answers from gemini-3.8-flash, which is carried as the replacement. The Vertex AI "
+        "lifecycle table "
+        "(https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions, "
+        "'Last updated 2026-11-20 UTC') lists it released August 13, 2026, retirement "
+        "January 28, 2027, replacement gemini-4-hydrogen (gemini-3.8-flash when read "
+        "2026-11-05); that date is carried.",
     },
     {
         "id": "gemini-3.6-flash",
         "provider": "google",
         "family": "gemini-3.6",
         "status": "active",
-        "source_url": "https://ai.google.dev/gemini-api/docs/models",
-        "fetched_at": "2026-09-17",
-        "notes": "Gemini API models page: 'Stable'. Vertex AI lists it under 'Models available for "
-        "shorter availability periods' ('Short-term availability models retire 45 days "
-        "after a replacement model is released'), released July 21, 2026, 'No retirement "
-        "date announced'.",
+        "retired_at": "2027-01-28",
+        "replacement_id": "gemini-4-hydrogen",
+        "source_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions",
+        "fetched_at": "2026-11-22",
+        "notes": "Vertex AI lifecycle table ('Last updated 2026-11-20 UTC'): released July 21, 2026, "
+        "retirement January 28, 2027, replacement gemini-4-hydrogen ('No retirement date "
+        "announced' when read 2026-09-17). The Gemini API deprecations page (read "
+        "2026-11-22): 'No shutdown date announced'. The earlier date, Vertex's, is carried "
+        "(see _note); `watch` counts it inside its notice window.",
     },
     {
         "id": "gemini-3.5-flash",
         "provider": "google",
         "family": "gemini-3.5",
         "status": "deprecated",
+        "replacement_id": "gemini-3.6-flash",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Gemini API deprecations page (source_url, which now redirects to "
         "https://aistudio.google.com/docs/deprecations; read there), Gemini 3 models: "
         "shutdown 'N/A', replacement gemini-3.6-flash ('gemini-3.5-flash is no longer "
@@ -751,7 +790,6 @@ SEED_MODELS: list[dict[str, Any]] = [
         "lists it released May 19, 2026, retirement 'May 19, 2027 or later', which is not "
         "carried. Until 2026-11-05 this entry was active, read from the Gemini API models "
         "page on 2026-09-17.",
-        "replacement_id": "gemini-3.6-flash",
     },
     {
         "id": "gemini-3.5-flash-lite",
@@ -771,16 +809,16 @@ SEED_MODELS: list[dict[str, Any]] = [
         "provider": "google",
         "family": "gemini-3.1",
         "status": "active",
+        "retired_at": "2027-05-07",
+        "replacement_id": "gemini-3.5-flash-lite",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Gemini API deprecations table: released May 7, 2026, shutdown May 7, 2027 ('the "
         "earliest possible dates on which a model might be retired'), replacement "
         "gemini-3.5-flash-lite. Vertex AI lifecycle table "
         "(https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions): "
         "'May 7, 2027 or later'. Gemini API models page: 'Stable'. Named on the Vertex "
         "table as a replacement for gemini-2.5-flash and gemini-2.5-flash-lite.",
-        "retired_at": "2027-05-07",
-        "replacement_id": "gemini-3.5-flash-lite",
     },
     {
         "id": "gemini-3.1-flash-lite-image",
@@ -799,12 +837,17 @@ SEED_MODELS: list[dict[str, Any]] = [
         "id": "gemini-omni-1.1-flash",
         "provider": "google",
         "family": "gemini-omni",
-        "status": "active",
-        "source_url": "https://ai.google.dev/gemini-api/docs/models",
-        "fetched_at": "2026-09-17",
-        "notes": "Gemini API models page: 'New'. Named on "
-        "https://ai.google.dev/gemini-api/docs/deprecations as the replacement for "
-        "gemini-omni-flash-preview.",
+        "status": "deprecated",
+        "retired_at": "2026-12-03",
+        "replacement_id": "gemini-omni-1.2-flash",
+        "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Gemini API deprecations page (source_url, which redirects to "
+        "https://aistudio.google.com/docs/deprecations; read 2026-11-22), Gemini Omni Flash "
+        "models: released August 27, 2026, shutdown December 3, 2026, replacement "
+        "gemini-omni-1.2-flash ('Effective December 3, 2026, the endpoint is automatically "
+        "routing API requests to gemini-omni-1.2-flash'). Until 2026-11-22 this entry was "
+        "active, read from the Gemini API models page on 2026-09-17.",
     },
     {
         "id": "gpt-4o-2024-08-06",
@@ -908,6 +951,9 @@ SEED_MODELS: list[dict[str, Any]] = [
         "provider": "openai",
         "family": "gpt-5.1",
         "status": "deprecated",
+        "deprecated_at": "2026-10-01",
+        "retired_at": "2027-04-01",
+        "replacement_id": "gpt-6-sol",
         "aliases": ["gpt-5.1"],
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-11-05",
@@ -915,9 +961,6 @@ SEED_MODELS: list[dict[str, Any]] = [
         "are deprecated and will be removed from the API on April 1, 2027, with six months’ "
         "notice.' Row: gpt-5.1 -> gpt-6-sol. The page names the alias; this snapshot is "
         "that alias's default per its model page fetched 2026-09-18.",
-        "deprecated_at": "2026-10-01",
-        "retired_at": "2027-04-01",
-        "replacement_id": "gpt-6-sol",
     },
     {
         "id": "gpt-5.2-2025-12-11",
@@ -970,6 +1013,9 @@ SEED_MODELS: list[dict[str, Any]] = [
         "provider": "openai",
         "family": "gpt-5.4",
         "status": "deprecated",
+        "deprecated_at": "2026-10-01",
+        "retired_at": "2027-04-01",
+        "replacement_id": "gpt-6-luna",
         "aliases": ["gpt-5.4-nano"],
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-11-05",
@@ -977,9 +1023,6 @@ SEED_MODELS: list[dict[str, Any]] = [
         "are deprecated and will be removed from the API on April 1, 2027, with six months’ "
         "notice.' Row: gpt-5.4-nano -> gpt-6-luna. The page names the alias; this snapshot "
         "is that alias's default per its model page fetched 2026-09-18.",
-        "deprecated_at": "2026-10-01",
-        "retired_at": "2027-04-01",
-        "replacement_id": "gpt-6-luna",
     },
     {
         "id": "gpt-5.4-pro-2026-03-05",
@@ -1162,11 +1205,11 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2025-09-26",
         "retired_at": "2026-09-28",
+        "replacement_id": "gpt-5.6-terra",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-11-05",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
         "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
-        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "gpt-3.5-turbo-1106",
@@ -1175,11 +1218,11 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2025-09-26",
         "retired_at": "2026-09-28",
+        "replacement_id": "gpt-5.6-terra",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-11-05",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
         "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
-        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "babbage-002",
@@ -1188,11 +1231,11 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2025-09-26",
         "retired_at": "2026-09-28",
+        "replacement_id": "gpt-5.6-terra",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-11-05",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
         "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
-        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "davinci-002",
@@ -1201,11 +1244,11 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "deprecated",
         "deprecated_at": "2025-09-26",
         "retired_at": "2026-09-28",
+        "replacement_id": "gpt-5.6-terra",
         "source_url": "https://developers.openai.com/api/docs/deprecations",
         "fetched_at": "2026-11-05",
         "notes": "Section '2025-09-26: Legacy GPT model snapshots' under Upcoming deprecations: "
         "shutdown September 28, 2026. Replacement cell: gpt-5.6-terra.",
-        "replacement_id": "gpt-5.6-terra",
     },
     {
         "id": "gemini-2.0-flash",
@@ -1214,7 +1257,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "status": "retired",
         "retired_at": "2026-06-01",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Gemini API deprecations table and the Vertex AI lifecycle table both give June 1, "
         "2026. They name different successors -- Gemini API: gemini-3.6-flash; Vertex "
         "retired-models table: gemini-3.1-flash-lite -- so no single successor is carried.",
@@ -1225,23 +1268,24 @@ SEED_MODELS: list[dict[str, Any]] = [
         "family": "gemini-2.0",
         "status": "retired",
         "retired_at": "2026-06-01",
+        "replacement_id": "gemini-3.1-flash-lite",
         "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Gemini API deprecations table and the Vertex AI lifecycle table both give June 1, "
         "2026 and both name gemini-3.1-flash-lite.",
-        "replacement_id": "gemini-3.1-flash-lite",
     },
     {
         "id": "claude-mythos-preview",
         "provider": "anthropic",
         "family": "claude-mythos",
         "status": "deprecated",
+        "deprecated_at": "2026-06-09",
         "replacement_id": "claude-mythos-5",
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
-        "notes": "Page note: claude-mythos-preview 'is deprecated', with migration to "
-        "claude-mythos-5; no deprecation or retirement date appears in any table on the "
-        "page.",
+        "fetched_at": "2026-11-22",
+        "notes": "Model status table (read 2026-11-22): Deprecated, deprecated June 9, 2026, "
+        "tentative retirement date 'To be announced'. Migration to claude-mythos-5 per the "
+        "page note read 2026-09-17.",
     },
     {
         "id": "claude-mythos-5",
@@ -1249,7 +1293,7 @@ SEED_MODELS: list[dict[str, Any]] = [
         "family": "claude-mythos",
         "status": "active",
         "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-        "fetched_at": "2026-11-05",
+        "fetched_at": "2026-11-22",
         "notes": "Named on the deprecations page as the migration target for claude-mythos-preview; "
         "not listed on the models overview fetched 2026-09-18.",
     },
@@ -1294,6 +1338,96 @@ SEED_MODELS: list[dict[str, Any]] = [
         "notes": "Named on the deprecations page fetched 2026-10-04 as a replacement for the GPT "
         "Image retirements; its own model page was not fetched. An image model.",
         "modality": "image",
+    },
+    {
+        "id": "gpt-6.1-sol",
+        "provider": "openai",
+        "family": "gpt-6.1",
+        "status": "active",
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Named in the OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now "
+        "lists one table instead of dated sections) as the recommended replacement for "
+        "gpt-5, gpt-5-pro, o3 and o3-pro (shutdown Dec 11, 2026). Its own model page was "
+        "not fetched.",
+    },
+    {
+        "id": "gpt-6.1-terra",
+        "provider": "openai",
+        "family": "gpt-6.1",
+        "status": "active",
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Named in the OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now "
+        "lists one table instead of dated sections) as the recommended replacement for "
+        "gpt-5-mini (shutdown Dec 11, 2026). Its own model page was not fetched.",
+    },
+    {
+        "id": "gpt-image-2.6-sunburst",
+        "provider": "openai",
+        "family": "gpt-image",
+        "status": "active",
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Named in the OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now "
+        "lists one table instead of dated sections) as a replacement for the GPT Image "
+        "retirements ('gpt-image-2.6-sunburst or gpt-image-2.6-flare'). Its own model page "
+        "was not fetched. An image model.",
+        "modality": "image",
+    },
+    {
+        "id": "gpt-image-2.6-flare",
+        "provider": "openai",
+        "family": "gpt-image",
+        "status": "active",
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Named in the OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now "
+        "lists one table instead of dated sections) as a replacement for the GPT Image "
+        "retirements ('gpt-image-2.6-sunburst or gpt-image-2.6-flare'). Its own model page "
+        "was not fetched. An image model.",
+        "modality": "image",
+    },
+    {
+        "id": "gpt-5.5-cyber-preview",
+        "provider": "openai",
+        "family": "gpt-5.5",
+        "status": "deprecated",
+        "deprecated_at": "2026-11-05",
+        "retired_at": "2027-02-01",
+        "source_url": "https://developers.openai.com/api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "OpenAI 'Upcoming deprecations' table (read 2026-11-22; the page now lists one "
+        "table instead of dated sections): shutdown Feb 1, 2027, Deprecated, the "
+        "replacement cell names no model, notice date Nov 5, 2026.",
+    },
+    {
+        "id": "gemini-omni-1.2-flash",
+        "provider": "google",
+        "family": "gemini-omni",
+        "status": "active",
+        "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Gemini API deprecations page (source_url, which redirects to "
+        "https://aistudio.google.com/docs/deprecations; read 2026-11-22), Gemini Omni Flash "
+        "models: released November 5, 2026, 'No shutdown date announced'. Named on the same "
+        "page as the replacement for gemini-omni-1.1-flash, gemini-omni-flash-preview and "
+        "the 8 deprecated Veo models.",
+    },
+    {
+        "id": "gemini-4-hydrogen",
+        "provider": "google",
+        "family": "gemini-4",
+        "status": "active",
+        "source_url": "https://ai.google.dev/gemini-api/docs/deprecations",
+        "fetched_at": "2026-11-22",
+        "notes": "Gemini API deprecations page (source_url, which redirects to "
+        "https://aistudio.google.com/docs/deprecations; read 2026-11-22): released November "
+        "12, 2026, 'No shutdown date announced'. The Vertex AI lifecycle table "
+        "(https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions, "
+        "'Last updated 2026-11-20 UTC'): released November 12, 2026, 'No retirement date "
+        "announced'; named there as the replacement for gemini-3.7-flash and "
+        "gemini-3.6-flash.",
     },
 ]
 # --- END SEED ---

@@ -29,7 +29,9 @@ Fully offline (ADR-0006): every response is synthesised by a mock transport.
 
 from __future__ import annotations
 
-import httpx
+# `[M] 2026-11-22` The provider SDKs talk to httpx2, and their current releases no longer pull
+# in httpx at all: a bare `import httpx` stopped this module from being collected in CI.
+import httpx2 as httpx
 import pytest
 
 from modelpin.providers.openai import (

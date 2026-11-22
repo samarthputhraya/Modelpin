@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.5.4] - 2026-11-22
+
+### Changed
+
+- **The registry was re-read against the vendors' deprecation pages on 22 November 2026.**
+  `modelpin watch` now reports:
+  - `gpt-5`, `gpt-5-pro`, `o3` and `o3-pro` (shutting down 11 December 2026): OpenAI now names
+    `gpt-6.1-sol` as the replacement (for `gpt-5-pro` and `o3-pro`, with `reasoning.mode: pro` in
+    the Responses API), so `watch` suggests checking against it rather than `gpt-5.6-sol`. `gpt-5-mini` now points to `gpt-6.1-terra` and `gpt-5-nano` to `gpt-6-luna`.
+    `gpt-6.1-sol` and `gpt-6.1-terra` are now in the registry.
+  - `gemini-omni-1.1-flash`: the Gemini API lists 3 December 2026 as its shutdown date and routes
+    its requests to `gemini-omni-1.2-flash` from that day. It was listed as active.
+  - `gemini-3.6-flash`: Vertex AI now lists a retirement date of 28 January 2027, replacement
+    `gemini-4-hydrogen` (the Gemini API announces no date). It was listed with no date.
+  - `gpt-image-2` (an image model): deprecated on 10 November 2026, shutting down on 10 February
+    2027. The GPT Image retirements now name `gpt-image-2.6-sunburst`.
+  - `gemini-3.7-flash`: Vertex AI now names `gemini-4-hydrogen` as its replacement; the Gemini API
+    still routes it to `gemini-3.8-flash`, which `watch` keeps suggesting.
+  - New entries: `gemini-4-hydrogen`, `gemini-omni-1.2-flash`, `gpt-6.1-sol`, `gpt-6.1-terra`,
+    `gpt-image-2.6-sunburst`, `gpt-image-2.6-flare`, and `gpt-5.5-cyber-preview` (deprecated,
+    shutting down 1 February 2027).
+
+  Claude Sonnet 4.5 (30 November 2026) and the Gemini 2.5 Pro and Flash re-routing (1 December
+  2026) are unchanged on the vendors' pages. 16 entries changed and 7 were added; 17 other
+  entries were re-read and still match, so their `fetched_at` moved to 2026-11-22. The other 55
+  keep their earlier dates.
+
 ## [0.5.3] - 2026-11-05
 
 ### Changed
@@ -1625,7 +1652,8 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/samarthputhraya/modelpin/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/samarthputhraya/modelpin/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/samarthputhraya/modelpin/compare/v0.5.0...v0.5.1
