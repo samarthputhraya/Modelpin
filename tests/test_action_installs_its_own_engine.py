@@ -2,7 +2,7 @@
 
 MP-305. `action.yml`'s `modelpin-spec` defaulted to the unpinned `modelpin[providers]`, so a
 workflow that pinned the Action by tag or commit still ran whatever engine was newest on PyPI.
-`[M] 2026-11-23` (bug-reproducer): the install step copied out of `git show v0.5.3:action.yml`,
+`[M] 2026-11-23`: the install step copied out of `git show v0.5.3:action.yml`,
 run with its default input in a fresh venv, installed `modelpin 0.5.5`, while
 `git show v0.5.3:pyproject.toml` says `0.5.3`. Pinning the ref did not pin the code that runs.
 
