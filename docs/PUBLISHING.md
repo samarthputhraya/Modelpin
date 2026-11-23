@@ -40,8 +40,9 @@ release (keep them in sync), tag it (`git tag v0.1.0 && git push --tags`), then 
 
 `action.yml` is at the **repo root** (so it's Marketplace-eligible); detailed docs are in
 [`actions/README.md`](../actions/README.md). Consumers reference it as
-`samarthputhraya/modelpin@v1`. `modelpin` is on PyPI, so the action's default
-`modelpin-spec: modelpin[providers]` works out of the box.
+`samarthputhraya/modelpin@v1`. With no `modelpin-spec`, the action installs
+`modelpin[providers]==` the version in its own `pyproject.toml`, so a release must be on PyPI for
+`@v1` to install the published wheel; until it is, the action builds its own checkout instead.
 
 To publish to the **GitHub Marketplace**: push a tag (e.g. `v1`), open the release for that tag
 on GitHub, and check "**Publish this Action to the GitHub Marketplace**" (needs the root

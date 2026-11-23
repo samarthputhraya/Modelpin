@@ -65,9 +65,9 @@ inputs:
     required: false
     default: ${{ github.token }}
   modelpin-spec:
-    description: "pip install spec for Modelpin. Override to pin a version or install from git pre-PyPI (e.g. 'modelpin[providers]==0.1.0' or 'modelpin[providers] @ git+https://github.com/OWNER/REPO@TAG')."
+    description: "pip install spec for Modelpin. Leave empty (the default) to install the release this Action's commit belongs to, modelpin[providers]==<the version in its pyproject.toml>, so pinning the Action by tag pins Modelpin (not its dependencies). Set it to choose another version or a git ref (e.g. 'modelpin[providers]==0.5.5' or 'modelpin[providers] @ git+https://github.com/OWNER/REPO@TAG'). Trusted input: it goes straight to pip install."
     required: false
-    default: "modelpin[providers]"
+    default: ""
   python-version:
     description: "Python version to set up."
     required: false
@@ -104,9 +104,31 @@ runs:
       shell: bash
       env:
         MP_SPEC: ${{ inputs.modelpin-spec }}
+      # MP-305. The default used to be the unpinned `modelpin[providers]`, so a workflow that
+      # pinned this Action by tag or commit still ran whatever engine was newest on PyPI:
+      # `[M] 2026-11-23` `@v0.5.3` installed 0.5.5. With no input, install this commit's own
+      # version. If PyPI does not have it yet (`release.yml` requires `v1` to move BEFORE the
+      # upload, which waits on a human approval), build this Action's own copy of the same
+      # version rather than fail every `@v1` user in that window. An explicit spec is used as
+      # given, with no fallback.
       run: |
         python -m pip install --upgrade pip
-        python -m pip install "$MP_SPEC"
+        if [ -n "$MP_SPEC" ]; then
+          python -m pip install "$MP_SPEC"
+        else
+          # write(), not print(): on Windows print() ends the line with \r\n. `[M] 2026-11-23`
+          # Git Bash's $(...) drops that \r, but a bash that keeps it would hand pip "X.Y.Z\r".
+          MP_VERSION="$(python -c 'import sys, tomllib; sys.stdout.write(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "$GITHUB_ACTION_PATH/pyproject.toml")" || MP_VERSION=""
+          if [ -z "$MP_VERSION" ]; then
+            echo "::error::Could not read this Action's own version from $GITHUB_ACTION_PATH/pyproject.toml. Set modelpin-spec to choose one."
+            exit 1
+          fi
+          echo "Installing modelpin[providers]==$MP_VERSION, the version of this Action's commit."
+          if ! python -m pip install "modelpin[providers]==$MP_VERSION"; then
+            echo "::warning::pip could not install modelpin $MP_VERSION from the package index (a release can be tagged before its upload is approved). Installing this Action's own copy of $MP_VERSION instead."
+            python -m pip install "$GITHUB_ACTION_PATH[providers]"
+          fi
+        fi
 
     - name: Record baseline (optional)
       if: ${{ inputs.baseline == 'true' }}

@@ -44,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Pinning the GitHub Action now pins the Modelpin version it runs.** The Action's
+  `modelpin-spec` input defaulted to `modelpin[providers]` with no version, so a workflow that
+  referenced the Action by tag or commit still installed whatever Modelpin was newest on PyPI:
+  `uses: samarthputhraya/modelpin@v0.5.3` installed 0.5.5, the newest on PyPI on 23 November
+  2026. With no `modelpin-spec`, the Action now installs the version in its own
+  `pyproject.toml`. `@v1` still gets each new release when `v1` moves. If pip cannot install that
+  version from PyPI (for example, a release tagged before its upload is approved), the Action
+  installs its own copy of that version and prints a warning. Modelpin's dependencies, including
+  the provider SDKs, are still not pinned. A `modelpin-spec` you set is used exactly as before.
+  This only applies to Action refs that include this fix: older tags such as `v0.5.3` keep
+  installing the newest Modelpin unless you set `modelpin-spec`.
 - **`modelpin init`'s Next list fits what it just configured.** With no model in the code it
   now says to set `models:` before `modelpin baseline`, which would otherwise record the
   placeholder. For a model that no longer answers it says to point `models:` at the model
