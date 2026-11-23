@@ -36,8 +36,8 @@ OK 6 scenario(s) unchanged
 - **Sees what text diffs miss.** Changed tool-call plans, new refusals, and answers that mean
   something different — even when the final text looks identical.
 - **Works with what you use.** OpenAI, Google Gemini (AI Studio or Vertex AI), OpenAI-compatible
-  hosts (Groq, OpenRouter, Together, Cerebras), and Anthropic (API or Vertex AI; new in 0.4.0 and
-  not yet validated by a live run). Cross-vendor comparisons work too.
+  hosts (Groq, OpenRouter, Together, Cerebras), and Anthropic (API or Vertex AI; checked live on the Claude API on 23 Nov 2026 with
+  Sonnet 4.5, 4 scenarios x 5 runs; not yet on Vertex AI). Cross-vendor comparisons work too.
 - **Your key, your data.** Runs locally or in your CI with your own API key. Nothing is sent to
   Modelpin or any third party other than the model providers you configure (and, in CI, your own
   pull request).
@@ -86,7 +86,7 @@ Python 3.11 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.5.4
+modelpin version                        # -> modelpin 0.5.5
 ```
 
 The `providers` extra installs the OpenAI, Anthropic and Google SDKs. Plain `pip install modelpin`
@@ -309,7 +309,7 @@ key, is not recognised.
 | Provider (`providers:` / `--provider`) | Credentials | Notes |
 |---|---|---|
 | `openai` | `OPENAI_API_KEY` | Chat Completions, multi-turn tool calls. Reasoning models (`o1`/`o3`/`o4`/`gpt-5*`/`gpt-6*`) get `max_completion_tokens` and no temperature |
-| `anthropic` | `ANTHROPIC_API_KEY`, **or** Claude on Vertex AI: `ANTHROPIC_VERTEX_PROJECT_ID` + `gcloud auth application-default login` (`CLOUD_ML_REGION` defaults to `global`) | Messages API, multi-turn tool calls. Newer Claude models accept only default sampling, so a scenario's `temperature` is not sent to them. Verified offline against the SDK's request shapes; not yet validated by a live run |
+| `anthropic` | `ANTHROPIC_API_KEY`, **or** Claude on Vertex AI: `ANTHROPIC_VERTEX_PROJECT_ID` + `gcloud auth application-default login` (`CLOUD_ML_REGION` defaults to `global`) | Messages API, multi-turn tool calls. Newer Claude models, and every model on the API version current SDKs send (2026-10-21), accept only default sampling, so a scenario's `temperature` is not sent to them. Checked live on the Claude API on 23 Nov 2026 (Claude Sonnet 4.5 against itself and against Sonnet 5.5, 4 scenarios x 5 runs, [docs/live-validation.md](https://github.com/samarthputhraya/modelpin/blob/main/docs/live-validation.md)); not yet on Vertex AI |
 | `google` | `GEMINI_API_KEY` (AI Studio), **or** Vertex AI: `GOOGLE_GENAI_USE_VERTEXAI=true` + `GOOGLE_CLOUD_PROJECT` + application-default login | Multi-turn tool calls. On Vertex, `GOOGLE_CLOUD_LOCATION` defaults to `global`; in the project's testing `gemini-3.x` ids were not served on `us-central1`, so set it only if you need a specific region |
 | `groq`, `openrouter`, `together`, `cerebras` | `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, `CEREBRAS_API_KEY` | OpenAI-compatible endpoints. Groq has a free tier |
 

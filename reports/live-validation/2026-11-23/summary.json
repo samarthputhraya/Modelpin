@@ -1,0 +1,100 @@
+{
+  "about": "Live checks of the modelpin CLI on the Claude API and the OpenAI API, 2026-11-23. null = baseline and check on the SAME model, so any regression is a false alarm; migration = baseline on `from`, check on `to`. runs=5, --match strict, confirmation on, judge gpt-4.1-mini (neither side). 4 scenarios from examples/suite, temperature 0. Latest SDKs at the time (anthropic 2.12.0, openai 3.57.0). The Claude jobs ran on the adapter fix that ships in 0.5.5; on 0.5.4 every Claude Sonnet 4.5 call returned 400 'temperature: Extra inputs are not permitted'.",
+  "null_jobs": [
+    {
+      "kind": "null",
+      "suite": "suite (4 of 8: refund_request, decline_pii, extract_total, summarize_ticket)",
+      "from": "claude-sonnet-4-5",
+      "to": "claude-sonnet-4-5",
+      "judge": "gpt-4.1-mini",
+      "name": "null-claude-sonnet-4-5-to-claude-sonnet-4-5",
+      "baseline_exit": 0,
+      "check_exit": 0,
+      "verdicts": {
+        "unchanged": 4
+      },
+      "rejected": {},
+      "explanations": {
+        "decline_pii": "no statistically significant behavior change",
+        "extract_total": "no statistically significant behavior change",
+        "refund_request": "no statistically significant behavior change",
+        "summarize_ticket": "no statistically significant behavior change"
+      },
+      "verdicts_source": "run record (.modelpin/runs/*.json)",
+      "build": "0.5.4 + PR fix/provider-gates-0.5.5",
+      "sdk": "anthropic 2.12.0"
+    },
+    {
+      "kind": "null",
+      "suite": "suite (4 of 8: refund_request, decline_pii, extract_total, summarize_ticket)",
+      "from": "o3",
+      "to": "o3",
+      "judge": "gpt-4.1-mini",
+      "name": "null-o3-to-o3",
+      "baseline_exit": 0,
+      "check_exit": 0,
+      "verdicts": {
+        "unchanged": 4
+      },
+      "rejected": {},
+      "explanations": {
+        "decline_pii": "no statistically significant behavior change",
+        "extract_total": "no statistically significant behavior change",
+        "refund_request": "no statistically significant behavior change",
+        "summarize_ticket": "no statistically significant behavior change"
+      },
+      "verdicts_source": "run record (.modelpin/runs/*.json)",
+      "build": "0.5.4",
+      "sdk": "openai 3.57.0"
+    }
+  ],
+  "migration_jobs": [
+    {
+      "kind": "migration",
+      "suite": "suite (4 of 8: refund_request, decline_pii, extract_total, summarize_ticket)",
+      "from": "claude-sonnet-4-5",
+      "to": "claude-sonnet-5-5",
+      "judge": "gpt-4.1-mini",
+      "name": "migration-claude-sonnet-4-5-to-claude-sonnet-5-5",
+      "baseline_exit": 0,
+      "check_exit": 0,
+      "verdicts": {
+        "unchanged": 4
+      },
+      "rejected": {},
+      "explanations": {
+        "decline_pii": "no statistically significant behavior change",
+        "extract_total": "no statistically significant behavior change",
+        "refund_request": "no statistically significant behavior change",
+        "summarize_ticket": "no statistically significant behavior change"
+      },
+      "verdicts_source": "run record (.modelpin/runs/*.json)",
+      "build": "0.5.4 + PR fix/provider-gates-0.5.5",
+      "sdk": "anthropic 2.12.0"
+    },
+    {
+      "kind": "migration",
+      "suite": "suite (4 of 8: refund_request, decline_pii, extract_total, summarize_ticket)",
+      "from": "o3",
+      "to": "gpt-6.1-sol",
+      "judge": "gpt-4.1-mini",
+      "name": "migration-o3-to-gpt-6.1-sol",
+      "baseline_exit": 0,
+      "check_exit": 3,
+      "verdicts": {
+        "unchanged": 3
+      },
+      "rejected": {
+        "refund_request": "OpenAI call for model 'gpt-6.1-sol' failed: the request was rejected (often an unsupported param for this model) [BadRequestError: Error code: 400 - Function tools with reasoning_effort are not supported for gpt-6.1-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.]"
+      },
+      "explanations": {
+        "decline_pii": "no statistically significant behavior change",
+        "extract_total": "no statistically significant behavior change",
+        "summarize_ticket": "no statistically significant behavior change"
+      },
+      "verdicts_source": "run record (.modelpin/runs/*.json)",
+      "build": "0.5.4",
+      "sdk": "openai 3.57.0"
+    }
+  ]
+}

@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.5.5] - 2026-11-23
+
+### Fixed
+
+- **Claude Sonnet 4.5, Haiku 4.5 and the other Claude models up to Opus 4.6 can be checked again
+  with today's `anthropic` SDK.** `anthropic` 2.x (measured on 2.12.0) sends API version
+  2026-10-21, on which the API
+  rejects `temperature` and `top_p` on every model. Modelpin still sent a scenario's `temperature`
+  to those models, so every scenario that set one came back "could not replay": live on 23
+  November, `claude-sonnet-4-5` answered `temperature: 0` with a 400, "temperature: Extra inputs
+  are not permitted". Modelpin now reads the API version the SDK sends and, from 2026-10-21 on,
+  sends no sampling parameters to any Claude model; the Claude judge does the same. With
+  `anthropic` 1.x nothing changes. A Claude baseline recorded through `anthropic` 1.x ran at the
+  scenario's temperature; re-record it so both sides run at the same sampling.
+- **Tool scenarios replay on `gpt-6.1-terra`**, the model OpenAI names as `gpt-5-mini`'s
+  replacement. Like the gpt-5.6 models, it accepts function tools on Chat Completions only with
+  `reasoning_effort: none`, which Modelpin now sends (one 2-run live probe on 23 November; its
+  record was not kept).
+  `gpt-6.1-sol` still takes no tools on Chat Completions at any effort (it rejects `none`), so
+  tool scenarios against it come back "could not replay" until Modelpin supports the Responses
+  API.
+
 ## [0.5.4] - 2026-11-22
 
 ### Changed
@@ -1652,7 +1674,8 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/samarthputhraya/modelpin/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/samarthputhraya/modelpin/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/samarthputhraya/modelpin/compare/v0.5.1...v0.5.2
