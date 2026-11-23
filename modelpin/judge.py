@@ -26,7 +26,7 @@ import re
 from typing import Any, Optional, Protocol
 
 from modelpin.providers.anthropic import _explain_api_error as _explain_anthropic_error
-from modelpin.providers.anthropic import accepts_sampling, build_anthropic_client
+from modelpin.providers.anthropic import accepts_sampling, api_version, build_anthropic_client
 from modelpin.providers.base import ProviderError
 from modelpin.providers.google import AFC_DISABLED, build_google_client
 from modelpin.providers.google import _explain_api_error as _explain_google_error
@@ -282,7 +282,7 @@ class AnthropicJudge:
             "system": _SYSTEM,
             "messages": [{"role": "user", "content": _judge_prompt(reference, candidate, task)}],
         }
-        if accepts_sampling(self._model):
+        if accepts_sampling(self._model, api_version(client)):
             request["extra_body"] = {"temperature": 0}  # deterministic judging
         try:
             response = client.messages.create(**request)

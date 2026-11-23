@@ -67,7 +67,15 @@ def _scenario(**extra) -> Scenario:
 
 
 TOOLS = {"tools": ["lookup_order"]}
-GATED = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6", "gpt-6-sol", "gpt-6-luna"]
+GATED = [
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.6",
+    "gpt-6-sol",
+    "gpt-6-luna",
+    "gpt-6.1-terra",
+]
 UNTOUCHED = [
     "gpt-4-turbo",
     "gpt-4-0613",
