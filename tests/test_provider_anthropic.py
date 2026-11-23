@@ -30,6 +30,7 @@ from modelpin.providers.anthropic import (
     AnthropicAdapter,
     _explain_api_error,
     accepts_sampling,
+    api_version,
     build_anthropic_client,
 )
 
@@ -201,6 +202,55 @@ def test_only_temperature_is_sent_when_a_scenario_sets_both():
     top_p_only = FakeClient(_response([_text("ok")]))
     AnthropicAdapter(client=top_p_only).run(_scenario(top_p=0.9), "claude-haiku-4-5")
     assert top_p_only.requests[0]["extra_body"] == {"top_p": 0.9}
+
+
+def test_no_sampling_is_sent_on_api_version_2026_10_21_whatever_the_model():
+    """`[M] 2026-11-23` anthropic 2.12.0 sends 2026-10-21, and claude-sonnet-4-5 answered a
+    `temperature: 0` with 400 "temperature: Extra inputs are not permitted"."""
+    client = FakeClient(_response([_text("ok")]))
+    client.default_headers = {"anthropic-version": "2026-10-21"}
+    AnthropicAdapter(client=client).run(_scenario(temperature=0), "claude-sonnet-4-5")
+    assert "extra_body" not in client.requests[0]
+
+
+def test_sampling_is_kept_on_an_older_api_version_for_a_model_that_accepts_it():
+    client = FakeClient(_response([_text("ok")]))
+    client.default_headers = {"anthropic-version": "2023-06-01"}
+    AnthropicAdapter(client=client).run(_scenario(temperature=0), "claude-sonnet-4-5")
+    assert client.requests[0]["extra_body"] == {"temperature": 0}
+
+
+def test_the_judge_drops_temperature_on_api_version_2026_10_21():
+    client = FakeJudgeClient()
+    client.default_headers = {"anthropic-version": "2026-10-21"}
+    AnthropicJudge("claude-haiku-4-5", client=client).equivalent("a", "b")
+    assert "extra_body" not in client.request
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [("2026-10-21", False), ("2027-01-01", False), ("2023-06-01", True), (None, True)],
+)
+def test_accepts_sampling_reads_the_api_version(version, expected):
+    assert accepts_sampling("claude-sonnet-4-5", version) is expected
+
+
+def test_api_version_reads_what_the_installed_sdk_sends():
+    anthropic = pytest.importorskip("anthropic")
+    from anthropic import _constants
+
+    first_party = anthropic.Anthropic(api_key="offline-test")
+    assert api_version(first_party) == first_party.default_headers["anthropic-version"]
+    vertex = anthropic.AnthropicVertex(project_id="p", region="global", access_token="offline")
+    assert api_version(vertex) == getattr(_constants, "ANTHROPIC_API_VERSION", None)
+    assert api_version(FakeClient(_response([_text("ok")]))) is None
+    undated = SimpleNamespace(default_headers={"anthropic-version": "vertex-2023-10-16"})
+    assert api_version(undated) is None
+    # ANTHROPIC_CUSTOM_HEADERS can add a differently cased header; the last one is what is sent.
+    overridden = SimpleNamespace(
+        default_headers={"anthropic-version": "2023-06-01", "Anthropic-Version": "2026-10-21"}
+    )
+    assert api_version(overridden) == "2026-10-21"
 
 
 # --- tools ------------------------------------------------------------------------------
@@ -541,7 +591,10 @@ def test_the_wire_request_carries_the_shapes_the_api_documents(monkeypatch):
     assert trace.tool_calls[0].arguments == {"q": 1}
     first, second = bodies
     assert first["system"] == "Be brief."
-    assert first["temperature"] == 0  # extra_body merged into the top-level JSON
+    if accepts_sampling("claude-haiku-4-5", api_version(client)):
+        assert first["temperature"] == 0  # extra_body merged into the top-level JSON
+    else:
+        assert "temperature" not in first  # 2026-10-21+: the API rejects it on every model
     assert first["max_tokens"] == DEFAULT_MAX_TOKENS
     assert first["tools"] == [
         {"name": "lookup", "input_schema": {"type": "object", "properties": {}}}

@@ -1,11 +1,11 @@
-# Live validation on Gemini (2026-09-15/16)
+# Live validation: Gemini (2026-09-15/16), Claude and OpenAI (2026-11-23)
 
 This page records what happened when the shipped CLI was run against real models, at scale, and
 what it found. It is the complement to [docs/fp-measurement.md](fp-measurement.md): that page
 measures the diff engine through a harness, this one measures **`modelpin check` as a user runs
 it** — the same command, the same defaults, confirmation on.
 
-Everything below is re-derivable from
+Sections 1 to 4 are re-derivable from
 [`reports/live-validation/2026-09-15/summary.json`](../reports/live-validation/2026-09-15/summary.json)
 (every job, its exit code and its verdicts) and is re-checked by
 `tests/test_live_validation.py`.
@@ -103,3 +103,47 @@ billed to the maintainer's own Google Cloud credit. Every job directory kept its
 its run record; the committed `summary.json` holds every verdict and explanation (traces
 excluded, to keep the artifact small). The harness that drove it is not part of the package: it
 is 120 lines that shell out to the CLI, one job per directory.
+
+## 5. Claude API and OpenAI API, 23 November 2026
+
+A small check, not a campaign. Four scenarios from `examples/suite`: `refund_request` (a two-step
+tool trajectory), `decline_pii` (a refusal), `extract_total` (an exact extraction) and
+`summarize_ticket` (meaning, read by the judge). The scenarios set temperature 0, but no tested
+model received it, so every side ran at default sampling. `runs: 5`, `--match strict`,
+confirmation on, judge `gpt-4.1-mini` (neither side). Installed SDKs: `anthropic` 2.12.0 and
+`openai` 3.57.0. The OpenAI rows ran on the released 0.5.4; both migration rows reused the
+baseline recorded for the same-model row above them. Every row below is re-derived from
+[`reports/live-validation/2026-11-23/summary.json`](../reports/live-validation/2026-11-23/summary.json)
+by `tests/test_live_validation.py`.
+
+| baseline | candidate | kind | scenarios compared | `regression` | `changed_minor` | not replayed |
+|---|---|---|---|---|---|---|
+| `claude-sonnet-4-5` | `claude-sonnet-4-5` | same model | 4 | 0 | 0 | 0 |
+| `o3` | `o3` | same model | 4 | 0 | 0 | 0 |
+| `claude-sonnet-4-5` | `claude-sonnet-5-5` | migration | 4 | 0 | 0 | 0 |
+| `o3` | `gpt-6.1-sol` | migration | 3 | 0 | 0 | 1 |
+
+`[M]` What it shows:
+
+- **The Anthropic path works end to end on the Claude API**: baseline, check (multi-turn tool
+  calls included) and a report judged by `gpt-4.1-mini`. Confirmation and the Claude judge were
+  not exercised, since nothing was flagged and the judge ran on OpenAI. It had to be fixed first. On 0.5.4, every `claude-sonnet-4-5` call carrying a
+  temperature came back 400, "temperature: Extra inputs are not permitted", because
+  `anthropic` 2.x sends API version 2026-10-21. The Claude rows ran on that fix, which ships in
+  0.5.5.
+- **Same model against itself: 0 false alarms in 8 scenario-checks**, a one-sided 95% upper
+  bound of 31.2% over these 8. Eight is a smoke test, not the product's false-alarm rate, which
+  is measured on [fp-measurement.md](fp-measurement.md).
+- **Claude Sonnet 4.5 to Sonnet 5.5: on these four scenarios, no behavior change reached
+  significance.** That is a statement about four scenarios at five runs each, not a clearance of
+  Sonnet 5.5 for any app.
+- **o3 to gpt-6.1-sol: three scenarios unchanged, and the tool scenario was never replayed.**
+  `gpt-6.1-sol` takes function tools on Chat Completions at no reasoning effort (it rejects
+  `none` and rejects tools at its default), and Modelpin does not use the Responses API yet. The
+  check said so and exited 3 rather than calling the migration cleared.
+
+What it does not show: Claude on Vertex AI (not run); the other four `examples/suite`
+scenarios; anything about detection, since no migration here was flagged. `[M]` Replay tokens
+from the run records: Claude Sonnet 4.5 22,744 in and 3,915 out (baseline and same-model
+check), Sonnet 5.5 8,982 and 3,029, o3 5,570 and 5,206, `gpt-6.1-sol` 645 and 315. Judge
+calls are not recorded.

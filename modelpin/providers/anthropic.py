@@ -81,8 +81,47 @@ _SAMPLING_RE = re.compile(r"^claude-(?:3[-.@]|(?:opus|sonnet|haiku)-4(?:-(\d+))?
 _SAMPLING_KEYS: tuple[str, ...] = ("temperature", "top_p")
 
 
-def accepts_sampling(model_id: str) -> bool:
-    """True when this Claude model still accepts a non-default ``temperature``/``top_p``."""
+#: The API version decides too, not only the model. `[M] 2026-11-23`, live: anthropic 2.12.0
+#: sends ``anthropic-version: 2026-10-21``, and a ``claude-sonnet-4-5`` call with
+#: ``temperature: 0`` came back 400 *"temperature: Extra inputs are not permitted"* -- every
+#: run of every scenario that sets a temperature, on the model retiring 2026-11-30. anthropic
+#: 1.0.0 sends 2023-06-01, where the models matched above still take it. `[S]` claude-api
+#: reference (cached 2026-11-03): *"On 2026-10-21, a Messages request sending temperature,
+#: top_p or top_k returns a 400 on every model."*
+_SAMPLING_FREE_API_VERSION = "2026-10-21"
+_API_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def api_version(client: Any) -> str | None:
+    """The dated API version ``client`` sends, or None when it cannot be read.
+
+    The first-party client sends it as the ``anthropic-version`` header. The Vertex client writes
+    the SDK's ``ANTHROPIC_API_VERSION`` into the body instead (2.x; 1.x writes
+    ``vertex-2023-10-16``, which predates the change and has no such constant), and a header
+    does not change the body, so Vertex reads the constant first. The header is matched without
+    case and the last one wins: ``ANTHROPIC_CUSTOM_HEADERS`` can add ``Anthropic-Version``, and
+    the SDK sends the value it merged last.
+    """
+    version: Any = None
+    if type(client).__name__ == "AnthropicVertex":
+        try:
+            from anthropic import _constants
+        except ImportError:
+            return None
+        version = getattr(_constants, "ANTHROPIC_API_VERSION", None)
+    else:
+        headers = getattr(client, "default_headers", None)
+        for key, value in headers.items() if isinstance(headers, dict) else ():
+            if isinstance(key, str) and key.lower() == "anthropic-version":
+                version = value
+    return version if isinstance(version, str) and _API_DATE.fullmatch(version) else None
+
+
+def accepts_sampling(model_id: str, version: str | None = None) -> bool:
+    """True when this Claude model, on this API ``version``, accepts a non-default
+    ``temperature``/``top_p``. ``version`` None means unknown, and only the model decides."""
+    if version is not None and version >= _SAMPLING_FREE_API_VERSION:
+        return False
     match = _SAMPLING_RE.match(model_id.strip().lower())
     if not match:
         return False
@@ -304,15 +343,18 @@ def _max_tokens(scenario_input: dict[str, Any]) -> int:
     return int(value) if value is not None else DEFAULT_MAX_TOKENS
 
 
-def _sampling_body(model_id: str, scenario_input: dict[str, Any]) -> dict[str, Any]:
-    """The sampling params to send through ``extra_body``, or {} when the model rejects them.
+def _sampling_body(
+    model_id: str, scenario_input: dict[str, Any], version: str | None = None
+) -> dict[str, Any]:
+    """The sampling params to send through ``extra_body``, or {} when the model, on this API
+    ``version``, rejects them.
 
     Only ONE of temperature/top_p is sent. `[S] 2026-09-15`
     platform.claude.com/docs/en/models/haiku-4-5/migration-guide: "Use only `temperature` OR
     `top_p`, not both. Setting both returns a 400 error on Claude Haiku 4.5." Temperature wins
     because it is the knob our scenarios set.
     """
-    if not accepts_sampling(model_id):
+    if not accepts_sampling(model_id, version):
         return {}
     for key in _SAMPLING_KEYS:
         if key in scenario_input:
@@ -458,10 +500,10 @@ class AnthropicAdapter(ProviderAdapter):
             base["system"] = system
         if tools:
             base["tools"] = tools
-        if sampling := _sampling_body(model_id, scenario.input):
+        client = self._get_client()
+        if sampling := _sampling_body(model_id, scenario.input, api_version(client)):
             base["extra_body"] = sampling
 
-        client = self._get_client()
         # The record keeps the scenario's own messages (system prompt included, strings intact
         # for the baseline secret scan) followed by the turns this replay added.
         record: list[dict[str, Any]] = list(original)

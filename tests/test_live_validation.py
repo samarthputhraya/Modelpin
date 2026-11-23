@@ -104,3 +104,24 @@ def test_every_job_ran_and_the_exit_codes_are_the_documented_ones(summary):
             assert not regressed, job["name"]
         if regressed:
             assert job["check_exit"] == 1, job["name"]
+
+
+SUMMARY_2026_11_23 = REPO / "reports" / "live-validation" / "2026-11-23" / "summary.json"
+
+
+def test_the_claude_and_openai_table_is_the_artifact(doc):
+    """Section 5 (2026-11-23): every row is re-derived from its own summary.json."""
+    if not SUMMARY_2026_11_23.is_file():
+        pytest.skip("live artifact pruned from the sdist")
+    small = json.loads(SUMMARY_2026_11_23.read_text(encoding="utf-8"))
+    for job in small["null_jobs"] + small["migration_jobs"]:
+        kind = "same model" if job["kind"] == "null" else "migration"
+        compared = sum(job["verdicts"].values())
+        row = (
+            f"| `{job['from']}` | `{job['to']}` | {kind} | {compared} | "
+            f"{job['verdicts'].get('regression', 0)} | {job['verdicts'].get('changed_minor', 0)} | "
+            f"{len(job['rejected'])} |"
+        )
+        assert row in doc, row
+        assert job["baseline_exit"] == 0, job["name"]
+        assert job["check_exit"] == (3 if job["rejected"] else 0), job["name"]

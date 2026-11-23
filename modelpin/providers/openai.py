@@ -78,14 +78,22 @@ _REASONING_PREFIXES: tuple[str, ...] = ("o1", "o3", "o4", "gpt-5", "gpt-6")
 #: strongest channel this product has, so without this every tool scenario on exactly those
 #: checks came back "could not replay".
 #:
+#: `[M] 2026-11-23`, live, openai 3.57.0: gpt-6.1-terra (OpenAI's named successor for
+#: gpt-5-mini) with tools and no effort -> 400 *"Function tools with reasoning_effort are not
+#: supported for gpt-6.1-terra in /v1/chat/completions ... set reasoning_effort to 'none'."*;
+#: with `none` it recorded 2 tool calls per run on `examples/suite/refund_request`.
+#:
 #: NOT gpt-5.1..5.5: the same pages attach no such rule to them. On 5.1/5.2/5.4 `none` is
 #: already the default, and 5.5 defaults to `medium` with tools allowed, so forcing `none`
 #: there would change the configuration being measured for no reason. Not the original
 #: `gpt-5` (takes `minimal`, not `none`), not the o-series (reject `none`; they are the
 #: BASELINE side of these migrations), not gpt-6-astra / gpt-6.1-sol (no tools on Chat
-#: Completions at any effort: the Responses API, MP-289, not built).
+#: Completions at any effort: the Responses API, MP-289, not built). `[M] 2026-11-23`
+#: gpt-6.1-sol rejects tools at its default effort with the same message, and rejects `none`:
+#: *"Supported values are: 'low', 'medium', 'high', and 'xhigh'."*
 _TOOLS_ONLY_WITH_REASONING_OFF = re.compile(
-    r"(?:gpt-5[.]6(?:-(?:sol|terra|luna))?|gpt-6-(?:sol|luna))(?:-\d{4}-\d{2}-\d{2})?"
+    r"(?:gpt-5[.]6(?:-(?:sol|terra|luna))?|gpt-6-(?:sol|luna)|gpt-6[.]1-terra)"
+    r"(?:-\d{4}-\d{2}-\d{2})?"
 )
 
 
