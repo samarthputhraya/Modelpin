@@ -44,6 +44,18 @@ Nothing yet.
   snapshot.** For example, it judged an app on `gpt-4.1-mini-2025-04-14` with `gpt-4.1-mini`,
   which is the same model. The note `check` prints when the judge is one of the two models being
   compared now catches that case too.
+- **`init` now says when the model it configured is retiring.** It used to print "Configured
+  claude-sonnet-4-5 ..." and nothing about the date, though a baseline can only be recorded while
+  the model still answers. It now prints the shutdown date, the days left and the replacement the
+  vendor names, read from the same registry as `modelpin watch`, or says the model is already
+  shut down. `modelpin watch` is now one of the next steps `init` lists.
+
+### Changed
+
+- The GitHub Action's README and `examples/github-workflow.yml` use `gpt-6-luna`, not
+  `gpt-4.1-mini`, as the example model to test. `examples/voicerag-suite/modelpin.yaml` keeps
+  its `gpt-4o-mini` judge, because the published VoiceRAG run used it, and now says that model
+  shuts down on 14 January 2027.
 
 ## [0.5.5] - 2026-11-23
 

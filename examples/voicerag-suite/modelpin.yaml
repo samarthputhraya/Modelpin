@@ -4,4 +4,7 @@ models:
 providers:
   - groq
 runs: 5
+# The published run was judged by gpt-4o-mini, so this file keeps it. OpenAI shuts gpt-4o-mini
+# down on 2027-01-14; after that, set another judge here, and expect verdicts that can differ
+# from the published ones.
 judge_model: gpt-4o-mini

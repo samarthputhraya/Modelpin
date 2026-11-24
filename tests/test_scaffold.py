@@ -217,3 +217,40 @@ def test_the_openai_and_anthropic_defaults_are_ones_the_registry_tracks():
     for provider in ("openai", "anthropic"):
         for model in (DEFAULT_MODEL[provider], *JUDGE_MODEL[provider]):
             assert get_model(model) is not None, f"{model!r} is not in the registry"
+
+
+def _init_output(tmp_path, monkeypatch, model: str) -> str:
+    import datetime as dt
+
+    import modelpin.watcher as watcher
+
+    monkeypatch.setattr(watcher, "_today", lambda: dt.date(2026, 11, 24))
+    for var in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / "app.py").write_text(f'client.create(model="{model}")' + chr(10), encoding="utf-8")
+    result = runner.invoke(app, ["init", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    return " ".join(result.output.split())
+
+
+def test_init_says_when_the_configured_model_is_retiring(tmp_path, monkeypatch):
+    """MP-313. `[M] 2026-11-24` first-run audit: `init` configured `claude-sonnet-4-5`, six
+    days from retirement, and said nothing about it; the date was only in `modelpin watch`."""
+    out = _init_output(tmp_path, monkeypatch, "claude-sonnet-4-5")
+    assert "claude-sonnet-4-5 is due to retire on 2026-11-30, in 6 days" in out, out
+    assert "Record its baseline before then" in out
+    assert "The replacement its vendor names is claude-sonnet-5-5" in out
+    assert "modelpin watch" in out.split("Next:")[1], "watch must be one of the next steps"
+
+
+def test_init_says_when_the_configured_model_is_already_gone(tmp_path, monkeypatch):
+    out = _init_output(tmp_path, monkeypatch, "gpt-4-turbo")
+    assert "gpt-4-turbo was shut down on 2026-10-23" in out, out
+    assert "can no longer be recorded" in out
+
+
+def test_init_says_nothing_about_retirement_for_a_current_model(tmp_path, monkeypatch):
+    """Control: no note on a model with no announced retirement; `watch` is still a next step."""
+    out = _init_output(tmp_path, monkeypatch, "claude-sonnet-5-5")
+    assert "retire" not in out.split("Next:")[0] and "shut down" not in out, out
+    assert "modelpin watch" in out.split("Next:")[1]

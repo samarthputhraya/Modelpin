@@ -1503,6 +1503,47 @@ def watch(
         raise typer.Exit(code)
 
 
+def _retirement_note(model_id: str) -> Optional[str]:
+    """MP-313. One line when the model `init` just configured is retiring, or already gone.
+
+    `[M] 2026-11-24` first-run audit: a repo calling `claude-sonnet-4-5` (retiring 2026-11-30)
+    was told "Configured claude-sonnet-4-5 ... Edit modelpin.yaml if that is wrong" and nothing
+    else, so the one fact that makes a baseline urgent -- it can only be recorded while the
+    model still answers -- reached only users who already knew to run `modelpin watch`. Reads
+    the same registry `watch` does, so the two never disagree; None for a model it doesn't know.
+    """
+    from modelpin.models import ModelStatus
+    from modelpin.watcher import days_remaining, effective_status, get_model
+
+    try:
+        entry = get_model(model_id)
+    except RegistryError:
+        return None  # `watch` reports a broken registry; `init`'s advice must not break on it
+    if entry is None:
+        return None
+    status = effective_status(entry)
+    if status is ModelStatus.active:
+        return None
+    if status is ModelStatus.retired:
+        when = f" on {entry.retired_at}" if entry.retired_at else ""
+        head = f"{model_id} was shut down{when}, so a baseline can no longer be recorded on it."
+    elif entry.retired_at is not None:
+        days = days_remaining(entry)
+        in_days = "today" if days == 0 else f"in {days} day{'' if days == 1 else 's'}"
+        head = (
+            f"{model_id} is due to retire on {entry.retired_at}, {in_days}. Record its "
+            "baseline before then: after that date nobody can."
+        )
+    else:
+        head = f"{model_id} is deprecated; no shutdown date is announced yet."
+    successor = (
+        f" The replacement its vendor names is {entry.replacement_id}."
+        if entry.replacement_id
+        else ""
+    )
+    return f"{head}{successor} `modelpin watch` shows the date and the vendor's page."
+
+
 @app.command()
 def init(
     directory: str = typer.Argument(".", help="Repo to scaffold."),
@@ -1625,6 +1666,9 @@ def init(
                 f"[bold]{setup.provider}[/] ({_rich_escape(setup.model_source)}), judged by "
                 f"[bold]{_rich_escape(setup.judge_model)}[/]. Edit modelpin.yaml if that is wrong."
             )
+            retiring = _retirement_note(setup.model)
+            if retiring:
+                console.print(f"[yellow]note:[/] {_rich_escape(retiring)}")
         steps = [
             "Put a few real cases from your app in scenarios/ "
             "(copy the starter file; one JSON file per case)."
@@ -1646,6 +1690,9 @@ def init(
                 if has_credentials(setup.provider, os.environ)
                 else f"Set {CREDENTIAL_HINT[setup.provider]} in your environment."
             )
+        steps.append(
+            "[bold]modelpin watch[/]               # which of your models are retiring, and when"
+        )
         steps.append(
             "[bold]modelpin baseline[/]            # record how your current model behaves"
         )
