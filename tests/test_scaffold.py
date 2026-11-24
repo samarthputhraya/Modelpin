@@ -16,8 +16,9 @@ from typer.testing import CliRunner
 from modelpin.cli import _SAMPLE_CONFIG, _SAMPLE_SCENARIO, app
 from modelpin.config import load_config
 from modelpin.judge import infer_judge_provider
-from modelpin.models import Scenario
-from modelpin.scaffold import JUDGE_MODEL, _same_model, infer_setup, render_config
+from modelpin.models import ModelStatus, Scenario
+from modelpin.scaffold import DEFAULT_MODEL, JUDGE_MODEL, _same_model, infer_setup, render_config
+from modelpin.watcher import effective_status, get_model
 
 runner = CliRunner()
 
@@ -76,7 +77,7 @@ def test_an_empty_credential_does_not_count():
 def test_claude_on_vertex_uses_the_dated_vertex_id():
     setup = infer_setup([], env={"ANTHROPIC_VERTEX_PROJECT_ID": "p"})
     assert setup.model == "claude-haiku-4-5@20251001"
-    assert setup.judge_model == "claude-sonnet-4-5"
+    assert setup.judge_model == "claude-sonnet-5-5"
 
 
 @pytest.mark.parametrize("provider", sorted(JUDGE_MODEL))
@@ -168,3 +169,51 @@ def test_a_dead_regression_threshold_setting_is_called_out(tmp_path):
     cfg.write_text("models: [m]\nregression_threshold: 0.5\n", encoding="utf-8")
     result = runner.invoke(app, ["baseline", "--config", str(cfg), "--provider", "fake"])
     assert "regression_threshold" in " ".join(result.output.split()), result.output
+
+
+def test_an_openai_dated_snapshot_is_the_same_model_as_its_alias():
+    """MP-311. `[M] 2026-11-24` OpenAI dates snapshots `-YYYY-MM-DD`; only Anthropic's
+    `-YYYYMMDD` / `@YYYYMMDD` were stripped, so `init` judged `gpt-4.1-mini-2025-04-14` with
+    `gpt-4.1-mini` -- the same model."""
+    assert _same_model("gpt-4.1-mini-2025-04-14", "gpt-4.1-mini")
+    assert _same_model("gpt-4o-2024-08-06", "gpt-4o")
+    assert not _same_model("gpt-4.1-mini-2025-04-14", "gpt-4.1")
+    first, fallback = JUDGE_MODEL["openai"]
+    setup = infer_setup([_hit(f"{first}-2026-06-02")], env={})
+    assert setup.judge_model == fallback, "the app's own snapshot was picked as its judge"
+
+
+def _defaults() -> list[str]:
+    return sorted(
+        {*DEFAULT_MODEL.values(), *(model for pair in JUDGE_MODEL.values() for model in pair)}
+    )
+
+
+#: Defaults the registry marks deprecated that are kept on purpose, each with its reason.
+_KEPT_DEPRECATED = {
+    # Google: "the endpoint is not shutting down" and requests re-route to gemini-3.6-flash
+    # (registry note). No Gemini key was available to check a replacement judge live (MP-310).
+    "gemini-3.5-flash",
+}
+
+
+@pytest.mark.parametrize("model", _defaults())
+def test_no_default_is_inside_its_notice_window(model):
+    """MP-310. `[M] 2026-11-24` `gpt-4o-mini` and `gpt-4.1-mini` (shutdown 2027-01-14) and
+    `claude-sonnet-4-5` (2026-11-30) were defaults, so `init` was writing configs that stop
+    working on a known date. This reads the shipped registry the way `modelpin watch` does:
+    it goes red the day a default enters its notice window, not the day it stops answering."""
+    entry = get_model(model.removeprefix("openai/"))
+    if entry is None or model in _KEPT_DEPRECATED:
+        return  # an open-weight host's id the registry does not track, or kept on purpose
+    assert effective_status(entry) is ModelStatus.active, (
+        f"`init` default {model!r} is {effective_status(entry).value} in the registry "
+        f"(retires {entry.retired_at}); pick a current model"
+    )
+
+
+def test_the_openai_and_anthropic_defaults_are_ones_the_registry_tracks():
+    """Control: the check above must not pass by knowing nothing."""
+    for provider in ("openai", "anthropic"):
+        for model in (DEFAULT_MODEL[provider], *JUDGE_MODEL[provider]):
+            assert get_model(model) is not None, f"{model!r} is not in the registry"

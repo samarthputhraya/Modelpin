@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.5.6] - 2026-11-25
+
+### Fixed
+
+- **`modelpin init` no longer sets you up with models that are about to stop answering.**
+  - **OpenAI:** `init` set up OpenAI apps with `gpt-4o-mini` as the placeholder model and
+    `gpt-4.1-mini` (or `gpt-4o-mini`) as the semantic judge. OpenAI shuts both down on 14 January
+    2027. Its models endpoint lists that date for the plain names and for their dated snapshots.
+  - **Claude:** a Claude setup on `claude-haiku-4-5` got `claude-sonnet-4-5` as its judge.
+    Anthropic retires that model on 30 November 2026 (its tentative date).
+  - **What `init` writes now:**
+    - OpenAI: `gpt-6-luna` as the placeholder (the replacement OpenAI names for `gpt-4o-mini`),
+      and `gpt-5.6-terra` as the judge, or `gpt-5.6-luna` when your app is on `gpt-5.6-terra`.
+      `gpt-6-luna` is never the default judge, because it is the model most of the 14 January
+      migrations move to, and a judge should not be one of the two sides it compares.
+    - Claude: `claude-sonnet-5-5` as the fallback judge.
+    - OpenRouter: the same OpenAI models.
+    - Google, Groq, Together and Cerebras: unchanged.
+  - **A config written by an earlier `init` keeps its old judge.** If yours says
+    `judge_model: gpt-4.1-mini`, `gpt-4o-mini` or `claude-sonnet-4-5`, change it before those
+    dates.
+  - **Calibration:** the semantic threshold was calibrated with `gpt-4o-mini` and `gpt-4.1-mini`
+    as judges, and the new default judges have not been through that measurement.
+- **`init` no longer picks your app's own model as its judge when your code pins an OpenAI dated
+  snapshot.** For example, it judged an app on `gpt-4.1-mini-2025-04-14` with `gpt-4.1-mini`,
+  which is the same model. The note `check` prints when the judge is one of the two models being
+  compared now catches that case too.
+
 ## [0.5.5] - 2026-11-23
 
 ### Fixed

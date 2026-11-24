@@ -101,6 +101,7 @@ from modelpin.scenarios import _RESERVED_FILES as _RESERVED_IN_DIR
 from modelpin.scenarios import ScenarioError, load_scenarios, unrecognised_assertion_keys
 from modelpin.scaffold import (
     CREDENTIAL_HINT,
+    _same_model,
     has_credentials,
     infer_setup,
     render_config,
@@ -597,11 +598,17 @@ def _build_judge(
     # The baseline side is not the milder case. A judge grading its own output as the
     # REFERENCE biases toward calling the pair equivalent, which is a false NEGATIVE -- the
     # failure the semantic channel exists to prevent, in the run where the user trusts it most.
-    if cfg.judge_model in {m for m in (to_model, from_model) if m}:
+    # MP-311: compared as models, not strings, so `gpt-4.1-mini` judging a baseline recorded on
+    # `gpt-4.1-mini-2025-04-14` (the same snapshot) is caught too.
+    if any(m and _same_model(cfg.judge_model, m) for m in (to_model, from_model)):
         # Not an error -- it can be a deliberate, cheap choice -- but a model judging its own
         # output is not an independent reading of it, and the north-star metric is the FP
         # RATE of what we publish. Say so once, at the point of choosing.
-        side = "being checked" if cfg.judge_model == to_model else "it is compared against"
+        side = (
+            "being checked"
+            if to_model and _same_model(cfg.judge_model, to_model)
+            else "it is compared against"
+        )
         console.print(
             f"[yellow]note:[/] the judge model is the model {side}, so the semantic "
             "channel is not an independent reading. Prefer a different judge model."

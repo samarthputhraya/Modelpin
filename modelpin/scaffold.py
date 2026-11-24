@@ -39,23 +39,37 @@ PROVIDER_CREDENTIALS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 #: A sensible current model per provider when the repo names none.
+#:
+#: MP-310. `[M] 2026-11-24` OpenAI's models endpoint (`GET /v1/models/{id}`, `shutdown_date`)
+#: returns 2027-01-14 for `gpt-4o-mini` and `gpt-4.1-mini` and their dated snapshots, and
+#: Anthropic's deprecations page retires `claude-sonnet-4-5` on 2026-11-30. All three were
+#: defaults here, so a config `init` wrote this year would name a model that no longer answers.
+#: The OpenAI placeholder is the replacement OpenAI names for `gpt-4o-mini`. No default may be
+#: inside its notice window: `tests/test_scaffold.py` checks every one against the registry.
 DEFAULT_MODEL: dict[str, str] = {
-    "openai": "gpt-4o-mini",
+    "openai": "gpt-6-luna",
     "anthropic": "claude-haiku-4-5",
     "google": "gemini-3.1-flash-lite",
     "groq": "openai/gpt-oss-20b",
-    "openrouter": "openai/gpt-4o-mini",
+    "openrouter": "openai/gpt-6-luna",
     "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     "cerebras": "llama-3.3-70b",
 }
 
 #: Judge per provider: first choice, and the fallback when the first choice IS the app's model.
+#:
+#: MP-310. The OpenAI judges are deliberately NOT `gpt-6-luna`: it is the replacement OpenAI
+#: names for everything shutting down on 2027-01-14, so it is the candidate of the migrations
+#: users run next, and a judge must not be a side. `[M] 2026-11-24` live, through this
+#: package's own judge, `gpt-5.6-terra`, `gpt-5.6-luna` and `claude-sonnet-5-5` each called an
+#: equivalent pair equivalent and a changed pair not equivalent; OpenAI lists no shutdown date
+#: for either gpt-5.6 model.
 JUDGE_MODEL: dict[str, tuple[str, str]] = {
-    "openai": ("gpt-4.1-mini", "gpt-4o-mini"),
-    "anthropic": ("claude-haiku-4-5", "claude-sonnet-4-5"),
+    "openai": ("gpt-5.6-terra", "gpt-5.6-luna"),
+    "anthropic": ("claude-haiku-4-5", "claude-sonnet-5-5"),
     "google": ("gemini-3.5-flash", "gemini-3.1-flash-lite"),
     "groq": ("openai/gpt-oss-120b", "openai/gpt-oss-20b"),
-    "openrouter": ("openai/gpt-4.1-mini", "openai/gpt-4o-mini"),
+    "openrouter": ("openai/gpt-5.6-terra", "openai/gpt-5.6-luna"),
     "together": ("openai/gpt-oss-120b", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
     "cerebras": ("gpt-oss-120b", "llama-3.3-70b"),
 }
@@ -158,8 +172,13 @@ def _vertex_claude_id(model: str, env: Mapping[str, str]) -> str:
 
 
 def _same_model(a: str, b: str) -> bool:
-    """`claude-haiku-4-5`, `claude-haiku-4-5-20251001` and `claude-haiku-4-5@20251001` are one model."""
-    strip = lambda m: re.sub(r"(@\d{8}|-\d{8})$", "", m.lower())  # noqa: E731
+    """`claude-haiku-4-5`, `claude-haiku-4-5-20251001` and `claude-haiku-4-5@20251001` are one model.
+
+    So are `gpt-4.1-mini` and `gpt-4.1-mini-2025-04-14`: MP-311, `[M] 2026-11-24` OpenAI's
+    dated suffix is `-YYYY-MM-DD`, which this used not to strip, so `init` picked `gpt-4.1-mini`
+    to judge an app pinned to `gpt-4.1-mini-2025-04-14` -- the model judging itself.
+    """
+    strip = lambda m: re.sub(r"(@\d{8}|-\d{8}|-\d{4}-\d{2}-\d{2})$", "", m.lower())  # noqa: E731
     return strip(a) == strip(b)
 
 
