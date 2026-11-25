@@ -104,5 +104,14 @@ def test_the_scaffold_still_loads(tmp_path) -> None:
     p = tmp_path / "modelpin.yaml"
     p.write_text(cli._SAMPLE_CONFIG, encoding="utf-8")
     loaded = load_config(p)
-    assert loaded.judge_model == "gpt-4.1-mini"
-    assert loaded.models == ["gpt-4o-mini"]
+    assert loaded.judge_model == "gpt-5.6-terra"
+    assert loaded.models == ["gpt-6-luna"]
+
+
+def test_a_judge_that_is_the_baselines_own_snapshot_is_flagged(built) -> None:
+    """MP-311. `[M] 2026-11-24` the note compared exact strings, so `gpt-4.1-mini` judging a
+    baseline recorded on `gpt-4.1-mini-2025-04-14` -- one model, two names -- said nothing."""
+    out = built("gpt-4.1-mini", to_model="gpt-6-luna", from_model="gpt-4.1-mini-2025-04-14")
+    assert _NOTE in out and "compared against" in out, out
+    out = built("gpt-6-luna-2026-11-01", to_model="gpt-6-luna", from_model="gpt-4.1-mini")
+    assert _NOTE in out and "being checked" in out, out

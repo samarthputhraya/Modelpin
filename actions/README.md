@@ -51,7 +51,7 @@ see the project's `docs/`). Modelpin never ships or stores keys.
          - uses: actions/checkout@v7
          - uses: samarthputhraya/modelpin@v1     # this action (pin to a tag)
            with:
-             to: gpt-4.1-mini               # the new model to test
+             to: gpt-6-luna                 # the new model to test
              # from / provider default to modelpin.yaml
            env:
              OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

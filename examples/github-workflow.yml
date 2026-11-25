@@ -62,7 +62,7 @@ jobs:
       - name: Modelpin check
         uses: samarthputhraya/modelpin@v1     # pin to a release tag
         with:
-          to: gpt-4.1-mini               # the new model to test before adopting
+          to: gpt-6-luna                 # the new model to test before adopting
           # from, provider and runs default to modelpin.yaml
         env:
           # BYO-key from repo secrets — never inline a key. Use the one(s) your providers need:

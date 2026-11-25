@@ -8,6 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.5.6] - 2026-11-25
+
+### Fixed
+
+- **`modelpin init` no longer sets you up with models that are about to stop answering.**
+  - **OpenAI:** `init` set up OpenAI apps with `gpt-4o-mini` as the placeholder model and
+    `gpt-4.1-mini` (or `gpt-4o-mini`) as the semantic judge. OpenAI shuts both down on 14 January
+    2027. Its models endpoint lists that date for the plain names and for their dated snapshots.
+  - **Claude:** a Claude setup on `claude-haiku-4-5` got `claude-sonnet-4-5` as its judge.
+    Anthropic retires that model on 30 November 2026 (its tentative date).
+  - **What `init` writes now:**
+    - OpenAI: `gpt-6-luna` as the placeholder (the replacement OpenAI names for `gpt-4o-mini`),
+      and `gpt-5.6-terra` as the judge, or `gpt-5.6-luna` when your app is on `gpt-5.6-terra`.
+      `gpt-6-luna` is never the default judge: OpenAI names it as the replacement for every model
+      it shuts down on 14 January, so it is likely to be the candidate in the checks those apps
+      run next, and a judge should not be one of the two sides it compares.
+    - Claude: `claude-sonnet-5-5` as the fallback judge.
+    - OpenRouter: the same OpenAI models.
+    - Google, Groq, Together and Cerebras: unchanged. The Google judge, `gemini-3.5-flash`, is
+      deprecated: Google is not shutting it down, but its requests are answered by
+      `gemini-3.6-flash`, so `modelpin watch` flags a new Google config. It stays until a
+      replacement judge has been checked live.
+  - **A config written by an earlier `init` keeps its old models.** If it names `gpt-4.1-mini`,
+    `gpt-4o-mini` or `claude-sonnet-4-5` (as `judge_model:` or under `models:`), change it
+    before those dates; `modelpin watch` flags these. On OpenRouter (`openai/gpt-4.1-mini`,
+    `openai/gpt-4o-mini`) it cannot, because it reports OpenRouter ids as unknown.
+  - **Calibration:** the semantic threshold was calibrated with `gpt-4o-mini` as the judge, at
+    temperature 0, and the run of record's false-alarm measurements were judged by
+    `gpt-4o-mini` and `gpt-4.1-mini`. The new default judges have been through neither. They
+    also run at the model's default sampling: `gpt-5.6-terra` and `gpt-5.6-luna` are reasoning
+    models and `claude-sonnet-5-5` accepts no temperature, so the judge does not send them
+    `temperature: 0`.
+- **`init` no longer picks your app's own model as its judge when your code pins an OpenAI dated
+  snapshot.** For example, it judged an app on `gpt-4.1-mini-2025-04-14` with `gpt-4.1-mini`,
+  which is the same model. The note `check` prints when the judge is one of the two models being
+  compared now catches that case too.
+- **`init` now says when the model it configured is retiring.** It used to print "Configured
+  claude-sonnet-4-5 ..." and nothing about the date, though a baseline can only be recorded while
+  the model still answers. It now prints the shutdown date, the days left and the replacement the
+  vendor names, read from the same registry as `modelpin watch`, or says the model is already
+  shut down. `modelpin watch` is now one of the next steps `init` lists.
+
+### Changed
+
+- The GitHub Action's README and `examples/github-workflow.yml` use `gpt-6-luna`, not
+  `gpt-4.1-mini`, as the example model to test. `examples/voicerag-suite/modelpin.yaml` keeps
+  its `gpt-4o-mini` judge, because the published VoiceRAG run used it, and now says that model
+  shuts down on 14 January 2027.
+
 ## [0.5.5] - 2026-11-23
 
 ### Fixed

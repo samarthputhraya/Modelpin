@@ -86,7 +86,7 @@ Python 3.11 or newer.
 
 ```bash
 pip install "modelpin[providers]"      # or: pipx install "modelpin[providers]"
-modelpin version                        # -> modelpin 0.5.5
+modelpin version                        # -> modelpin 0.5.6
 ```
 
 The `providers` extra installs the OpenAI, Anthropic and Google SDKs. Plain `pip install modelpin`
@@ -439,7 +439,9 @@ borderline change rather than raise a false alarm. Know the trade-offs:
 - **The judge is a model too.** Its sensitivity depends on the model you pick. The project's
   semantic threshold was calibrated with an OpenAI judge; re-scoring the published measurements
   with a Gemini judge changed no alarm decision on 732 paired trials, but other judges are
-  unmeasured.
+  unmeasured. The judges `init` now writes for OpenAI and OpenRouter (`gpt-5.6-terra`, or
+  `gpt-5.6-luna`) and Claude's fallback (`claude-sonnet-5-5`) are among them, and they run
+  without `temperature: 0`.
 - **It measures change, not quality.** It never says one model is better.
 
 **What happened when it was run at scale, live:** 972 same-model scenario-checks across six
