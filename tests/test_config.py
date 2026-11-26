@@ -168,3 +168,36 @@ def test_invalid_setting_type_raises_config_error(tmp_path):
     p.write_text("runs: not-a-number\n")
     with pytest.raises(ConfigError, match="invalid settings"):
         load_config(p)
+
+
+def _alias_bomb(depth: int) -> str:
+    """`models:` as a list whose items are lists nested up to `depth` levels, 10 wide, built
+    from YAML aliases: a few hundred bytes standing for 10**depth strings, under a KNOWN key."""
+    items = ['  - &a0 ["x","x","x","x","x","x","x","x","x","x"]']
+    for i in range(1, depth):
+        items.append(f"  - &a{i} [" + ",".join([f"*a{i - 1}"] * 10) + "]")
+    return "models:\n" + "\n".join(items) + "\n"
+
+
+def test_an_alias_bomb_config_fails_fast_with_a_short_message(tmp_path):
+    """MP-334. `[M] 2026-11-26` audit: the old message rendered the expanded input whole, so a
+    417-byte config took 10.6 s to fail, about ten times longer per extra alias level, before
+    any check or key preflight ran. Depth 8 took the old code about 10 s; the budget is 2 s."""
+    import time
+
+    cfg = tmp_path / "modelpin.yaml"
+    cfg.write_text(_alias_bomb(8), encoding="utf-8")
+    t0 = time.perf_counter()
+    with pytest.raises(ConfigError) as info:
+        load_config(cfg)
+    elapsed = time.perf_counter() - t0
+    assert elapsed < 2.0, f"a {cfg.stat().st_size}-byte config took {elapsed:.1f} s to fail"
+    message = str(info.value)
+    assert len(message) < 2000 and "models.0" in message and "(got a list)" in message, message
+
+
+def test_an_invalid_scalar_is_still_named_in_the_message(tmp_path):
+    cfg = tmp_path / "modelpin.yaml"
+    cfg.write_text("runs: one\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match=r"runs: .*integer.*\(got 'one'\)"):
+        load_config(cfg)

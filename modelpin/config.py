@@ -116,7 +116,35 @@ def load_config(path: str | Path = DEFAULT_CONFIG_FILE) -> ModelpinConfig:
         ]
         if unknown:
             raise ConfigError(f"{p}: {_unknown_key_message(unknown)}") from exc
-        raise ConfigError(f"{p} has invalid settings: {exc}") from exc
+        raise ConfigError(f"{p} has invalid settings: {_settings_errors(exc)}") from exc
+
+
+#: How many validation errors the message lists before it summarises the rest.
+_MAX_ERRORS_SHOWN = 10
+
+
+def _settings_errors(exc: ValidationError) -> str:
+    """The validation errors, one clause each, without rendering the offending input whole.
+
+    MP-334. `[M] 2026-11-26` `str(exc)` reprs every invalid input in full, and YAML aliases let
+    a few hundred bytes of config stand for a nested list of a billion items: a 417-byte file
+    spent 10.6 s, and each extra alias level about ten times that, building this one message,
+    before any check or key preflight ran. A scalar is still quoted (shortened); a container is
+    named by its type.
+    """
+    parts = []
+    for err in exc.errors(include_url=False):
+        loc = ".".join(str(x) for x in err["loc"]) or "(top level)"
+        value = err.get("input")
+        if value is None or isinstance(value, (str, int, float, bool)):
+            got = repr(value)
+            got = got if len(got) <= 60 else got[:57] + "..."
+        else:
+            got = f"a {type(value).__name__}"
+        parts.append(f"{loc}: {err['msg']} (got {got})")
+    more = len(parts) - _MAX_ERRORS_SHOWN
+    shown = "; ".join(parts[:_MAX_ERRORS_SHOWN])
+    return shown + (f"; and {more} more" if more > 0 else "")
 
 
 def _unknown_key_message(unknown: list[str]) -> str:

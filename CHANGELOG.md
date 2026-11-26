@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The scan behind both warnings now reads every string at any depth:** nested tool
   arguments, tool names and Gemini-style message parts.
 
+### Fixed
+
+- **`modelpin scan` is linear on long lines of Claude-shaped text.** The pattern for Vertex's
+  `claude-...@YYYYMMDD` spelling backtracked across a whole line. A 200 KB one-line file took
+  27 seconds to scan; it is now found with the same results in linear time.
+- **An invalid `modelpin.yaml` fails at once, even when YAML aliases make its values large.**
+  The error message used to render the expanded input whole: 417 bytes of config took 12.9
+  seconds to report. It now names each invalid setting and the type it got.
+
 ## [0.5.7] - 2026-11-26
 
 ### Changed
