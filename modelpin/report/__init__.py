@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Optional
 
-from rich.markup import escape
+from rich.markup import escape as _markup_escape
 
 from modelpin.config import DEFAULT_RUNS
 from modelpin.models import DiffResult, DiffVerdict
@@ -41,6 +41,23 @@ _MD_MARK = {
     # Deliberately not the minor-change glyph: an abstention is not a small change.
     DiffVerdict.insufficient_evidence: "❔",
 }
+
+
+#: MP-330. C0 and C1 control characters, ESC included, except tab and newline. `[M] 2026-11-26`
+#: model output, tool names, scenario ids and registry strings reached the terminal with CSI,
+#: OSC 8 (hyperlink) and OSC 52 (clipboard) sequences intact: Rich escapes markup and strips
+#: BEL and CR, nothing else.
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def visible_controls(text: str) -> str:
+    """``text`` with each control character written out as ``\\xNN``, so it is shown, not run."""
+    return _CONTROL_CHARS.sub(lambda m: f"\\x{ord(m.group()):02x}", text)
+
+
+def escape(text: str) -> str:
+    """Rich markup escape for untrusted text on the console, with control characters shown."""
+    return _markup_escape(visible_controls(text))
 
 
 #: Every character that can OPEN an inline Markdown construct, plus `\\` itself -- which
