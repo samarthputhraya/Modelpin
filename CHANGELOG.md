@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`judge_model` is printed as text, not markup.**
 - **`modelpin watch` quotes a model id in a suggested command** when the id has characters a
   shell would read. Real model ids print unchanged.
+- **`modelpin check` names baselined scenarios that are missing from the run.** A scenario
+  that is in the baseline but not in this run's scenarios, because it was deleted, renamed or
+  moved, was never checked, and nothing said so. The console and the PR comment now name those
+  scenarios, and the PR comment withholds "looks safe to adopt" for them. The exit code is
+  unchanged.
 
 ### Fixed
 

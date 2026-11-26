@@ -2502,6 +2502,8 @@ def check(
             fmt=fmt,
         )
 
+    # MP-333. In the baseline, not in this run: never checked, so named on both surfaces.
+    dropped = sorted(set(base) - {s.id for s in scenarios})
     reasoning = _reasoning(_md_code)
     _console_reasoning = _reasoning(str)
     if _console_reasoning is not None:
@@ -2521,6 +2523,7 @@ def check(
         # so here or the PR reviewer cannot see it at all. Read off `compared`, so a scenario
         # that declared a mode but was never diffed does not claim to have been.
         match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
+        dropped=dropped,
         examples=examples,
         reasoning_note=reasoning.note if reasoning is not None else None,
         judge_gaps=judge_gaps,
@@ -2607,6 +2610,14 @@ def check(
                 "[dim]   Comparing them would measure your edit, not the model. Re-run "
                 "`modelpin baseline` to re-record them.[/]"
             )
+
+    if dropped:
+        console.print(
+            f"[yellow]note:[/] {len(dropped)} scenario(s) in the baseline for "
+            f"{_rich_escape(from_model)} are not in this run and were NOT checked: "
+            f"{_rich_escape(', '.join(dropped))}. If they were removed on purpose, re-record "
+            "the baseline."
+        )
 
     if has_regression:
         raise typer.Exit(code=1)  # fail CI on a real regression
