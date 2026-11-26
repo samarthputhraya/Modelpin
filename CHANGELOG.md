@@ -44,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`modelpin init` writes starter scenarios only inside the current directory.** If an
   existing `modelpin.yaml` sets `scenarios_dir` to a path outside it, `init` now stops with an
   error instead.
+- **`python -m modelpin` imports the same modules as the `modelpin` command.** `python -m`
+  puts the current directory first on Python's import path, which the console scripts never
+  did, so a file in your repository named like one of Modelpin's dependencies was imported in
+  its place. That entry is now dropped before the CLI loads.
 
 ## [0.5.7] - 2026-11-26
 
