@@ -202,8 +202,53 @@ def test_the_workflow_runs_only_here_on_a_schedule_or_by_hand() -> None:
     for trigger in ("pull_request", "pull_request_target", "push:"):
         assert trigger not in text, trigger
     assert "github.repository == 'samarthputhraya/Modelpin'" in text
-    assert re.search(r"(?m)^permissions:\s*\n\s+contents: write\s*(#.*)?$", text)
     assert "GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}" in text
     # The key reaches the script through env only, never interpolated into a command.
     run_lines = [ln for ln in text.splitlines() if "run:" in ln or ln.startswith("          ")]
     assert not any("secrets." in ln and "run:" in ln for ln in run_lines)
+
+
+def _jobs() -> dict[str, Any]:
+    import yaml
+
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+
+
+def _runs(job: dict[str, Any]) -> str:
+    return "\n".join(str(s.get("run", "")) for s in job["steps"])
+
+
+def test_no_job_that_runs_installed_code_can_write_to_the_repo() -> None:
+    """The canary installs the unpinned `modelpin[providers]` closure from PyPI and runs it with
+    a key in its environment, so any package in that closure runs code in that job. A write
+    token there could move the floating `v1` tag every consumer runs (`v1` is not covered by
+    the immutable-tags ruleset). So the job that installs and runs holds `contents: read` and
+    keeps no credentials, and the one job that can write installs and runs nothing of ours."""
+    import yaml
+
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    assert workflow["permissions"] == {}, "every job must declare its own permissions"
+    jobs = workflow["jobs"]
+    writers = [n for n, j in jobs.items() if j.get("permissions", {}).get("contents") == "write"]
+    assert writers == ["publish"], writers
+    for name, job in jobs.items():
+        runs = _runs(job)
+        executes = "pip install" in runs or re.search(r"\bpython\b", runs)
+        if executes:
+            assert job["permissions"] == {"contents": "read"}, name
+            for step in job["steps"]:
+                if str(step.get("uses", "")).startswith("actions/checkout@"):
+                    assert step.get("with", {}).get("persist-credentials") is False, (name, step)
+    publish = jobs["publish"]
+    assert not re.search(r"\bpip\b|\bpython\b", _runs(publish)), _runs(publish)
+    assert "secrets." not in yaml.safe_dump(publish)
+
+
+def test_the_publish_job_takes_only_the_canary_paths_and_refuses_symlinks() -> None:
+    """The artifact is data from a job that ran third-party code: the publish job copies only
+    what `canary.py` writes (`canary/`, `index.html`, `.nojekyll`) and stops on a symlink."""
+    runs = _runs(_jobs()["publish"])
+    assert "find incoming -type l" in runs and "exit 1" in runs
+    assert "cp -R incoming/canary site/canary" in runs
+    assert re.search(r"for f in index\.html \.nojekyll", runs)
+    assert "cp -R incoming/ " not in runs and "cp -R incoming/* " not in runs

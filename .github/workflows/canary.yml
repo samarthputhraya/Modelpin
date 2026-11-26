@@ -10,6 +10,13 @@
 # sees the key. Spend: free tiers only. `[M] 2026-10-04` Groq allows 1,000 requests a day per
 # model; a day's check uses about 50, plus about 50 more on the day a model is first recorded.
 # The run installs the released package from PyPI, so the page measures what users install.
+#
+# Two jobs, so the job that runs third-party code never holds a write token. `measure` installs
+# the whole `modelpin[providers]` closure from PyPI and runs it with GROQ_API_KEY, so every
+# package in that closure runs code there; it gets `contents: read`, keeps no credentials, and
+# hands the rebuilt page over as an artifact. `publish` installs nothing and runs no project
+# code; it alone holds `contents: write`, and it copies in only the paths the canary writes.
+# The same split as release.yml's build and publish jobs.
 
 name: Canary
 
@@ -18,18 +25,19 @@ on:
     - cron: "23 5 * * *"   # daily 05:23 UTC; off the hour, when scheduled runs queue
   workflow_dispatch:
 
-permissions:
-  contents: write          # pushes the results to gh-pages, nothing else
+permissions: {}
 
 concurrency:
   group: canary
   cancel-in-progress: false
 
 jobs:
-  canary:
+  measure:
     if: github.repository == 'samarthputhraya/Modelpin'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -40,6 +48,7 @@ jobs:
         with:
           ref: gh-pages
           path: site
+          persist-credentials: false
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
@@ -55,8 +64,55 @@ jobs:
 
       # Also after a failed run: a day on which nothing could be measured is published as
       # "could not run", never left looking like the previous day's result.
-      - name: Publish the results
+      - name: Hand the page to the publish job
         if: success() || failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: canary-site
+          path: |
+            site/canary/
+            site/index.html
+            site/.nojekyll
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    needs: measure
+    if: ${{ !cancelled() && needs.measure.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write          # pushes the results to gh-pages, nothing else
+    steps:
+      - name: Check out the results branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: gh-pages
+          path: site
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: canary-site
+          path: incoming
+
+      # The artifact was written by a job that ran third-party code, so it is data: take only
+      # the three paths the canary writes, and refuse a symlink anywhere in it.
+      - name: Take only the canary's own files
+        run: |
+          set -euo pipefail
+          if [ -n "$(find incoming -type l)" ]; then
+            echo "::error::the canary artifact holds a symlink; nothing was published"
+            exit 1
+          fi
+          test -d incoming/canary
+          rm -rf site/canary
+          cp -R incoming/canary site/canary
+          for f in index.html .nojekyll; do
+            if [ -f "incoming/$f" ]; then cp "incoming/$f" "site/$f"; fi
+          done
+
+      - name: Publish the results
         working-directory: site
         run: |
           git config user.name "github-actions[bot]"
