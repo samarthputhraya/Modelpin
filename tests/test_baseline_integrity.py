@@ -109,11 +109,10 @@ def test_recording_an_all_degenerate_baseline_does_not_pass_silently(tmp_path):
 
 # --------------------------------------------------------------------------- MP-08/09
 def test_a_key_shaped_token_in_model_output_is_flagged_before_it_is_written(tmp_path):
-    """SECURITY.md promises redaction 'before anything is printed, logged, or written'.
+    """SECURITY.md says `modelpin baseline` warns when a run's final output holds a key-shaped string.
 
-    `[M]` The baseline is none of those three by the letter of the sentence, and is the one
-    file the docs tell users to commit. We do NOT silently rewrite recorded evidence --
-    we refuse to let it pass unnoticed.
+    The baseline is the one file the docs tell users to commit. We do NOT silently rewrite
+    recorded evidence -- we refuse to let it pass unnoticed.
     """
     from modelpin.storage import secret_bearing_scenarios
 
