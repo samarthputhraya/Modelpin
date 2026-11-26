@@ -1257,7 +1257,7 @@ def _watch_check_command(row: WatchRow) -> Optional[str]:
     # command to copy. Real ids use only shell-safe characters, so they print unchanged.
     cmd = f"modelpin check --from {shlex.quote(row.id)} --to {shlex.quote(row.replacement_id)}"
     if row.model is not None and row.replacement_provider not in (None, row.model.provider):
-        cmd += f" --provider {row.replacement_provider}"
+        cmd += f" --provider {shlex.quote(row.replacement_provider)}"
     return cmd
 
 
