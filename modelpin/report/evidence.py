@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 from modelpin.diff.argkey import canonical_arguments
 from modelpin.models import Trace
+from modelpin.providers._common import scrub_secrets
 
 #: Characters of model output shown per side. Enough to recognise an answer, short enough that
 #: a PR comment stays readable and a long output cannot swamp it.
@@ -78,10 +79,14 @@ def _shorten(text: str, limit: int) -> str:
 
 
 def _call(name: str, arguments: dict | None) -> str:
+    # MP-327. Redacted BEFORE shortening: a key cut at the length limit could otherwise keep
+    # a recognisable prefix and lose the rest of what the pattern needs to match.
+    name = scrub_secrets(name)
     if not arguments:
         return name
     shown = ", ".join(
-        f"{key}={_shorten(json.dumps(value, ensure_ascii=False), ARG_CHARS)}"
+        f"{scrub_secrets(key)}="
+        f"{_shorten(scrub_secrets(json.dumps(value, ensure_ascii=False)), ARG_CHARS)}"
         for key, value in sorted(arguments.items())
     )
     return f"{name}({shown})"
@@ -101,7 +106,9 @@ class Example:
     def of(cls, trace: Trace) -> "Example":
         return cls(
             tuple(_call(call.name, call.arguments) for call in trace.tool_calls),
-            _shorten(" ".join((trace.final_output or "").split()), EXAMPLE_CHARS),
+            # MP-327. An example is what the console, the reports and the PR comment quote, so
+            # key-shaped strings are redacted here; the recorded run itself is never rewritten.
+            _shorten(scrub_secrets(" ".join((trace.final_output or "").split())), EXAMPLE_CHARS),
             trace.refused,
             (
                 _ENDED.get(trace.incomplete_reason.value, trace.incomplete_reason.value)

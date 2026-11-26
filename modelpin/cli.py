@@ -2419,6 +2419,19 @@ def check(
     # cannot see because it is not a function of N.
     census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
+    # MP-327. `baseline` has always warned when a recorded run holds a key-shaped string;
+    # `check` records candidate runs too, so it says the same. Reports and the PR comment
+    # quote examples with such strings redacted; the run file keeps them verbatim.
+    leaky = secret_bearing_scenarios(candidate_runs)
+    if leaky:
+        named = ", ".join(f"{sid} ({n_hits} run(s))" for sid, n_hits in sorted(leaky.items()))
+        console.print(
+            f"[yellow]warning:[/] a key-shaped string appears in {_rich_escape(to)}'s runs for: "
+            f"{_rich_escape(named)}. Reports and the PR comment redact it in the example runs "
+            "they quote; the run file under the store keeps it verbatim. Find where it came from "
+            "(a prompt, a tool result, the model) and rotate the credential if it is real."
+        )
+
     judge_gaps = _judge_gaps(judge_tally, results)
     _summary = render_cli(
         results,

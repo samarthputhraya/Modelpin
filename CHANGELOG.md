@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The PR comment no longer prints "looks safe to adopt" over such a run. It, the console, the
   migration report and the published Report now name the scenarios and count the judge's
   unclear replies, and say the new model is not cleared on meaning there.
+- **Example runs quoted in reports redact key-shaped strings.** The console, the PR comment,
+  the migration report and the published Report quote one run per side for each flagged
+  scenario. Those quotes now redact the same key shapes as provider error messages, and the
+  recorded runs are left as they were.
+- **`modelpin check` warns when a candidate run holds a key-shaped string**, as `baseline`
+  already did for recorded runs.
+- **The scan behind both warnings now reads every string at any depth:** nested tool
+  arguments, tool names and Gemini-style message parts.
 
 ## [0.5.7] - 2026-11-26
 
