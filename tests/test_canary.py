@@ -220,10 +220,10 @@ def _runs(job: dict[str, Any]) -> str:
 
 def test_no_job_that_runs_installed_code_can_write_to_the_repo() -> None:
     """The canary installs the unpinned `modelpin[providers]` closure from PyPI and runs it with
-    a key in its environment, so any package in that closure runs code in that job. A write
-    token there could move the floating `v1` tag every consumer runs (`v1` is not covered by
-    the immutable-tags ruleset). So the job that installs and runs holds `contents: read` and
-    keeps no credentials, and the one job that can write installs and runs nothing of ours."""
+    a key in its environment, so any package in that closure runs code in that job, and a
+    write token there would be far more than that code needs. So the job that installs and
+    runs holds `contents: read` and keeps no credentials, and the one job that can write
+    installs and runs nothing of ours."""
     import yaml
 
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
