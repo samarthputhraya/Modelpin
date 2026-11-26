@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already did for recorded runs.
 - **The scan behind both warnings now reads every string at any depth:** nested tool
   arguments, tool names and Gemini-style message parts.
+- **The console shows control characters as text.** This covers model output, tool names,
+  scenario ids, registry text and `judge_model`. A control character in any of them (ESC
+  sequences included) now prints as `\xNN` instead of reaching the terminal.
+- **`judge_model` is printed as text, not markup.**
+- **`modelpin watch` quotes a model id in a suggested command** when the id has characters a
+  shell would read. Real model ids print unchanged.
 
 ### Fixed
 

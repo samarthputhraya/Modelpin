@@ -26,7 +26,6 @@ import typer
 from pydantic import ValidationError
 from rich.box import ASCII as ASCII_BOX
 from rich.console import Console
-from rich.markup import escape as _rich_escape
 from rich.table import Column, Table
 from rich.text import Text
 
@@ -76,6 +75,8 @@ from modelpin.providers.openai import (
     _tools_need_reasoning_off,
 )
 from modelpin.replay import replay
+from modelpin.report import escape as _rich_escape
+from modelpin.report import visible_controls
 from modelpin.report import (
     ChannelCensus,
     ReportMeta,
@@ -162,6 +163,12 @@ RECOMMENDED_RUNS = DEFAULT_RUNS
 #: (`Scenario.match`), and three hand-maintained copies of one list is exactly the drift MP-03
 #: and MP-204 each cost a session to unpick.
 VALID_MATCH_MODES = MATCH_MODES
+
+
+def _text(value: str) -> Text:
+    """A rich ``Text`` (never parsed as markup) with control characters shown (MP-330)."""
+    return Text(visible_controls(value))
+
 
 app = typer.Typer(
     help=(
@@ -617,7 +624,9 @@ def _build_judge(
         judge.preflight()
     except (ProviderError, ImportError) as exc:
         _fail(f"semantic judge ({cfg.judge_model!r}): {exc}")
-    console.print(f"[dim]semantic judge: {cfg.judge_model} on {host}[/]")
+    console.print(
+        f"[dim]semantic judge: {_rich_escape(cfg.judge_model)} on {_rich_escape(host)}[/]"
+    )
     # MP-196. BOTH sides, not just the candidate. `[M] 2026-09-06` this compared against
     # `to_model` alone, so a judge equal to the BASELINE never triggered it -- and that is
     # precisely the state `mp init` shipped, since the scaffold wrote `models: [gpt-4o-mini]`
@@ -1189,14 +1198,14 @@ def scan(path: str = typer.Argument(".", help="Repo root, or a single file, to s
     def _rows(rows: list[dict], title: str) -> Table:
         table = Table("model", "file", "line", title=title, box=ASCII_BOX)
         for h in sorted(rows, key=lambda x: (x["model"], x["file"], x["line"])):
-            # `Text(...)`, not raw strings: a rich Table parses cell content as MARKUP, and
+            # `_text(...)`, not raw strings: a rich Table parses cell content as MARKUP, and
             # these cells are paths discovered in someone else's repo. `[M] 2026-09-02` a
             # folder named `src [experimental]` rendered as `src ` -- `scan` reporting a file
             # path that does not exist, on one of the first commands a stranger runs. A
             # Next.js repo, whose route folders are literally `[slug]`, would have every such
             # row corrupted. `Text` is used rather than `_rich_escape` because it cannot be
             # re-parsed downstream.
-            table.add_row(Text(h["model"]), Text(h["file"]), Text(str(h["line"])))
+            table.add_row(_text(h["model"]), _text(h["file"]), _text(str(h["line"])))
         return table
 
     if called:
@@ -1244,7 +1253,9 @@ def _watch_check_command(row: WatchRow) -> Optional[str]:
         return None
     if row.role == "judge":
         return f"set judge_model: {row.replacement_id} in modelpin.yaml"
-    cmd = f"modelpin check --from {row.id} --to {row.replacement_id}"
+    # MP-330. Quoted: a registry is user-supplied (`--registry`), and an id is printed as a
+    # command to copy. Real ids use only shell-safe characters, so they print unchanged.
+    cmd = f"modelpin check --from {shlex.quote(row.id)} --to {shlex.quote(row.replacement_id)}"
     if row.model is not None and row.replacement_provider not in (None, row.model.provider):
         cmd += f" --provider {row.replacement_provider}"
     return cmd
@@ -1431,12 +1442,12 @@ def watch(
         days = str(r.days_remaining) if r.days_remaining is not None else "-"
         # `Text`, never raw strings: ids and paths are not ours to trust as markup (MP-236).
         table.add_row(
-            Text(r.id),
-            Text(seen),
-            Text(status),
-            Text(retires),
-            Text(days),
-            Text(r.replacement_id or "-"),
+            _text(r.id),
+            _text(seen),
+            _text(status),
+            _text(retires),
+            _text(days),
+            _text(r.replacement_id or "-"),
         )
     out.print(table)
 
@@ -1455,35 +1466,35 @@ def watch(
         else:
             when = "deprecated; no shutdown date announced"
         arrow = f" -> {r.replacement_id}" if r.replacement_id else ""
-        out.print(Text(f"  {r.id}{arrow}: {when}"))
-        out.print(Text(f"     {_watch_source_line(r)}"))
+        out.print(_text(f"  {r.id}{arrow}: {when}"))
+        out.print(_text(f"     {_watch_source_line(r)}"))
         if m.notes:
-            out.print(Text(f"     note: {m.notes}"))
+            out.print(_text(f"     note: {m.notes}"))
         cmd = _watch_check_command(r)
         if not _watch_is_chat(r):
             out.print(
-                Text(
+                _text(
                     f"     Modelpin compares chat behaviour; {r.id} is an {m.modality} model, "
                     "so no check is suggested."
                 )
             )
         elif cmd is None:
             out.print(
-                Text(
+                _text(
                     "     this registry entry carries no successor: choose one and run "
                     f"modelpin check --from {r.id} --to <model>"
                 )
             )
         else:
             # The command on its own line: it is copied (first-run audit, H2). The hint below.
-            out.print(Text(f"     {cmd}"))
+            out.print(_text(f"     {cmd}"))
             if r.role == "app":
                 hint = (
                     f"baseline recorded: {r.baseline_path}"
                     if r.has_baseline
                     else f"no baseline yet: run modelpin baseline --model {r.id} first"
                 )
-                out.print(Text(f"       ({hint})"))
+                out.print(_text(f"       ({hint})"))
     unknown = [r for r in rows if not r.known and r.decides_exit]
     if unknown:
         ids = ", ".join(r.id for r in unknown)
@@ -1502,7 +1513,7 @@ def watch(
                 "the Modelpin repository); an entry needs the vendor page it comes from."
             )
         out.print(
-            Text(
+            _text(
                 f"  unknown to the registry: {ids}. This does not mean these models are "
                 "retiring, and it does not affect baseline or check; it means this command "
                 f"cannot vouch for them, and unknown is not a clearance. {remedy}"
@@ -1512,10 +1523,10 @@ def watch(
     if advisory:
         ids = ", ".join(r.id for r in advisory)
         out.print(
-            Text(f"  baseline-only, not in the registry (store keys can be fictional): {ids}")
+            _text(f"  baseline-only, not in the registry (store keys can be fictional): {ids}")
         )
     for note in notes:
-        out.print(Text(f"  note: {note}"))
+        out.print(_text(f"  note: {note}"))
     origin = (
         f"{registry_path}"
         if registry_path
@@ -1523,7 +1534,7 @@ def watch(
     )
     fresh = f"; newest entry fetched {newest.isoformat()}" if newest else ""
     out.print(
-        Text(
+        _text(
             f"registry: {origin}, {len(registry)} entries{fresh}. Pass --registry <path> to use a "
             "newer data/models.json."
         )
