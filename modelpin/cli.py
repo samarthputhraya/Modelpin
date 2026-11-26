@@ -64,6 +64,7 @@ from modelpin.diff.stats import (
     min_achievable_pvalue_distribution,
     min_achievable_pvalue_mean,
 )
+from modelpin.judge import JudgeTally
 from modelpin.models import MATCH_MODES, Assertion, DiffResult, DiffVerdict, Scenario, Trace
 from modelpin.providers import ProviderAdapter, ProviderError, get_adapter, provider_help
 from modelpin.providers.fake import FakeProvider
@@ -497,6 +498,29 @@ class _CountingJudge:
         return getattr(self._inner, name)
 
 
+def _attach_tally(judge: Any) -> Optional[JudgeTally]:
+    """Give a live judge a `JudgeTally` (SA-01), on the judge itself, before any wrapping.
+
+    `_CountingJudge` reads attributes through but would keep an attribute SET on it, so the
+    tally goes on the inner judge, where `judge._verdict` records each reply.
+    """
+    if judge is None:
+        return None
+    tally = JudgeTally()
+    judge.tally = tally
+    return tally
+
+
+def _judge_gaps(
+    tally: Optional[JudgeTally], results: Sequence[DiffResult]
+) -> dict[str, tuple[int, int]]:
+    """SA-01: the compared scenarios whose judge replies were read as equivalent unclearly."""
+    if tally is None:
+        return {}
+    compared = {r.scenario_id for r in results}
+    return {sid: gap for sid, gap in tally.gaps().items() if sid in compared}
+
+
 def _write_migration_report(
     results: list[DiffResult],
     *,
@@ -551,6 +575,7 @@ def _write_migration_report(
         rejected=rejected,
         skipped=skipped,
         examples=examples,
+        judge_gaps=_judge_gaps(getattr(judge, "tally", None), results),
     )
     path = Path(store_dir) / MIGRATION_REPORT_FILENAME
     try:
@@ -2143,6 +2168,7 @@ def check(
         )
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to, from_model=from_model)
+    judge_tally = _attach_tally(judge)
     # Counted for the migration report's "calls made" line; delegates every call unchanged.
     judge = _CountingJudge(judge) if judge is not None else None
 
@@ -2234,6 +2260,8 @@ def check(
                 )
 
             stage = "the semantic judge failed"
+            if judge_tally is not None:
+                judge_tally.scope = s.id
             try:
                 result = _diff(cand)
                 if confirm and result.verdict == DiffVerdict.regression:
@@ -2387,8 +2415,18 @@ def check(
     # cannot see because it is not a function of N.
     census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
+    judge_gaps = _judge_gaps(judge_tally, results)
     _summary = render_cli(
-        results, from_model, to, n, underpowered, census, rejected, skipped, examples=examples
+        results,
+        from_model,
+        to,
+        n,
+        underpowered,
+        census,
+        rejected,
+        skipped,
+        examples=examples,
+        judge_gaps=judge_gaps,
     )
 
     # Decide the CI exit code BEFORE any side effect, so a report-write failure
@@ -2447,6 +2485,7 @@ def check(
         match_overrides={s.id: s.match for s in compared if s.match and s.match != mode},
         examples=examples,
         reasoning_note=reasoning.note if reasoning is not None else None,
+        judge_gaps=judge_gaps,
     )
     _exit_code = 1 if has_regression else EXIT_UNMEASURED if (unmeasured or rejected) else 0
     _publish_notes = _publish_report(
@@ -2659,6 +2698,7 @@ def report(
         console.print(f"[dim]{_rich_escape(_note)}[/]")
     _preflight_or_fail(adapter, prov)
     judge = _build_judge(prov, cfg, to_model=to, from_model=from_)
+    judge_tally = _attach_tally(judge)
 
     results: list[DiffResult] = []
     skipped: list[str] = []
@@ -2686,6 +2726,8 @@ def report(
             continue
         if _exercised_tools(base_traces, cand_traces):
             tool_active.add(s.id)
+        if judge_tally is not None:
+            judge_tally.scope = s.id
         results.append(
             _report_result := diff_scenario(
                 s.id,
@@ -2723,7 +2765,19 @@ def report(
     underpowered = [s.id for s in compared if _cannot_reach_alpha(n, n, _effective_match(s, mode))]
     census = _channel_census(compared, judge, prov, tool_active=tool_active)
 
-    console.print(render_cli(results, from_, to, n, underpowered, census, examples=report_examples))
+    judge_gaps = _judge_gaps(judge_tally, results)
+    console.print(
+        render_cli(
+            results,
+            from_,
+            to,
+            n,
+            underpowered,
+            census,
+            examples=report_examples,
+            judge_gaps=judge_gaps,
+        )
+    )
 
     suite_id, suite_version = read_manifest(suite_dir)
     date_iso = datetime.now(timezone.utc).date().isoformat()
@@ -2772,6 +2826,7 @@ def report(
         # published Report did not.
         census=census,
         underpowered=underpowered,
+        judge_gaps=judge_gaps,
     )
 
     out = Path(output_dir)

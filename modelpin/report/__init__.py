@@ -465,6 +465,34 @@ def _rejected_clearance(
     )
 
 
+def _judge_clearance(
+    judge_gaps: Optional[Mapping[str, tuple[int, int]]],
+    to_model: str,
+    arrow: str = "→",
+    fmt: Callable[[str], str] = _md_code,
+) -> str | None:
+    """SA-01. The judge gave no clear verdict on some comparisons, and those count as equivalent.
+
+    The judge fails open by design (an empty, filtered or unreadable reply is read as "same
+    meaning"), so without this line a judge that never answered left the run looking cleared
+    on meaning. `[M] 2026-11-26` a judge whose provider filtered the candidate's text turned a
+    real refuse-to-comply regression into `unchanged`, exit 0, "looks safe to adopt". The
+    verdict and exit code are unchanged; the clearance is withheld and the gap named.
+    """
+    if not judge_gaps:
+        return None
+    unclear = sum(n for n, _ in judge_gaps.values())
+    calls = sum(c for _, c in judge_gaps.values())
+    named = _named_blind(sorted(judge_gaps), fmt)
+    return (
+        f"{arrow} The semantic judge gave no clear verdict on {unclear} of {calls} "
+        f"comparison(s) in {len(judge_gaps)} scenario(s) (an empty, filtered, unreadable or "
+        f"self-contradicting reply). Modelpin counts such a reply as the same meaning, so a "
+        f"change in meaning there would not be flagged, and {fmt(to_model)} is NOT cleared on "
+        f"meaning for: {named}. Re-run, or set a different `judge_model`."
+    )
+
+
 def _skipped_clearance(
     skipped: Sequence[str],
     from_model: str,
@@ -549,6 +577,7 @@ def render_pr_comment(
     match_overrides: Optional[Mapping[str, str]] = None,
     examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
     reasoning_note: Optional[str] = None,
+    judge_gaps: Optional[Mapping[str, tuple[int, int]]] = None,
 ) -> str:
     """The Markdown PR comment (spec section 7). The header reflects the actual outcome —
     only a real regression leads with 🚨, so an all-unchanged result reads calm/green and
@@ -793,6 +822,7 @@ def render_pr_comment(
                 _census_clearance(census, to_model),
                 _rejected_clearance(rejected, to_model),
                 _skipped_clearance(skipped, from_model, to_model),
+                _judge_clearance(judge_gaps, to_model),
             )
             if x
         ]
@@ -829,6 +859,7 @@ def render_cli(
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
     examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
+    judge_gaps: Optional[Mapping[str, tuple[int, int]]] = None,
 ) -> str:
     """The CLI summary — ASCII text + rich color markup (safe on any console)."""
     _b = _bucket(results)
@@ -964,6 +995,7 @@ def render_cli(
                 _skipped_clearance(
                     skipped, from_model, to_model, arrow="->", fmt=lambda sid: f"{_md_code(sid)}"
                 ),
+                _judge_clearance(judge_gaps, to_model, arrow="->"),
             )
             if x
         ]
@@ -1051,6 +1083,10 @@ class ReportMeta:
     #: baseline (see that function), which means two runs differing only in a declaration
     #: share a hash. This field is what keeps the Report reproducible across that exclusion.
     match_overrides: dict[str, str] = field(default_factory=dict)
+    #: SA-01. ``{scenario: (unclear judge replies, judge calls)}`` for every scenario where the
+    #: judge's reply was read as equivalent without a clear verdict. Empty when the judge
+    #: answered every time or did not run. On the meta for the reason ``census`` is.
+    judge_gaps: dict[str, tuple[int, int]] = field(default_factory=dict)
 
 
 def _fmt(value: Optional[float], spec: str, *, none: str = "—") -> str:
@@ -1163,6 +1199,7 @@ def _report_header(meta: ReportMeta, results: list[DiffResult]) -> list[str]:
                 # `findings="below"`: on this surface the per-scenario table is under the
                 # headline, not over it.
                 _census_clearance(meta.census, meta.candidate_model, findings="below"),
+                _judge_clearance(meta.judge_gaps, meta.candidate_model),
             )
             if x
         ]
