@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+from collections import Counter
 from typing import Any, Optional, Protocol
 
 from modelpin.providers.anthropic import _explain_api_error as _explain_anthropic_error
@@ -62,9 +64,22 @@ def _parse_equivalent(content: str) -> bool:
     thinking out loud and then answered `{"equivalent": true}` produced a false alarm. Visible
     `<think>` blocks are dropped first, and the prose fallback reads only the final line.
     """
+    return _read_verdict(content)[0]
+
+
+def _read_verdict(content: str) -> tuple[bool, bool]:
+    """``(equivalent, unclear)``: `_parse_equivalent`'s verdict, unchanged, and whether it was
+    read as EQUIVALENT without one clean verdict saying so.
+
+    ``unclear`` is True for a reply with no verdict at all (empty, filtered, refused, prose),
+    which takes the FP-safe default, and for a reply holding both verdicts whose last one is
+    `true`. The second is what candidate text that forges a verdict produces when the judge
+    echoes it. Neither changes the verdict (ADR-0004 keeps the judge fail-open); `unclear`
+    only lets the report say that the semantic channel did not actually answer (SA-01).
+    """
     text = _THINK_BLOCK.sub(" ", content or "").strip()
     decoder = json.JSONDecoder()
-    verdict: bool | None = None
+    verdicts: list[bool] = []
     for i, ch in enumerate(text):
         if ch != "{":
             continue
@@ -73,14 +88,53 @@ def _parse_equivalent(content: str) -> bool:
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict) and isinstance(obj.get("equivalent"), bool):
-            verdict = obj["equivalent"]
-    if verdict is not None:
-        return verdict
+            verdicts.append(obj["equivalent"])
+    if verdicts:
+        verdict = verdicts[-1]
+        return verdict, verdict and False in verdicts
     lines = [ln for ln in text.splitlines() if ln.strip()]
     last = re.sub(r"\s+", " ", lines[-1].lower()) if lines else ""
     if '"equivalent": false' in last or '"equivalent":false' in last or "not equivalent" in last:
-        return False
-    return True  # FP-safe default
+        return False, False
+    return True, True  # FP-safe default
+
+
+class JudgeTally:
+    """Per-scenario count of judge replies read as equivalent without a clear verdict.
+
+    MP-322. The judge fails open by design (ADR-0004): a reply with no clear verdict counts
+    as "same meaning", so a judge outage cannot fail every build. The verdict stays fail-open;
+    this count is what lets the report say when the semantic channel did not actually answer.
+
+    The CLI sets ``scope`` to the scenario being diffed before each diff. Scenarios are diffed
+    one at a time, while one scenario's runs may be judged on several threads, hence the lock.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.scope = ""
+        self.calls: Counter[str] = Counter()
+        self.unclear: Counter[str] = Counter()
+
+    def record(self, unclear: bool) -> None:
+        with self._lock:
+            self.calls[self.scope] += 1
+            if unclear:
+                self.unclear[self.scope] += 1
+
+    def gaps(self) -> dict[str, tuple[int, int]]:
+        """``{scenario: (unclear replies, judge calls)}`` for every scenario with a gap."""
+        with self._lock:
+            return {s: (n, self.calls[s]) for s, n in self.unclear.items() if n}
+
+
+def _verdict(judge: Any, content: str) -> bool:
+    """Read one reply, count it in the judge's tally when it has one, return the verdict."""
+    equivalent, unclear = _read_verdict(content)
+    tally = getattr(judge, "tally", None)
+    if tally is not None:
+        tally.record(unclear)
+    return equivalent
 
 
 def _judge_prompt(reference: str, candidate: str, task: Optional[str]) -> str:
@@ -113,6 +167,8 @@ class OpenAIJudge:
 
     #: The SDK client is thread-safe, so separate runs may be judged at the same time.
     parallel_safe = True
+    #: Set by the CLI to count replies with no clear verdict (SA-01); None outside a run.
+    tally: Optional[JudgeTally] = None
 
     def __init__(
         self,
@@ -178,7 +234,7 @@ class OpenAIJudge:
             ) from exc
         choices = getattr(response, "choices", None) or []
         content = (choices[0].message.content or "") if choices else ""
-        return _parse_equivalent(content)
+        return _verdict(self, content)
 
 
 class GoogleJudge:
@@ -193,6 +249,8 @@ class GoogleJudge:
 
     #: The SDK client is thread-safe, so separate runs may be judged at the same time.
     parallel_safe = True
+    #: Set by the CLI to count replies with no clear verdict (SA-01); None outside a run.
+    tally: Optional[JudgeTally] = None
 
     def __init__(self, model: str, client: Any | None = None, label: str = "Google") -> None:
         self._model = model
@@ -231,11 +289,11 @@ class GoogleJudge:
         candidates = getattr(response, "candidates", None) or []
         if not candidates:
             # FP-safe, like `_parse_equivalent`'s default: a judge that said nothing must
-            # never be read as having said "not equivalent".
-            return True
+            # never be read as having said "not equivalent". It is counted as unclear.
+            return _verdict(self, "")
         content = getattr(candidates[0], "content", None)
         parts = getattr(content, "parts", None) or []
-        return _parse_equivalent("".join(getattr(p, "text", None) or "" for p in parts))
+        return _verdict(self, "".join(getattr(p, "text", None) or "" for p in parts))
 
 
 class AnthropicJudge:
@@ -258,6 +316,8 @@ class AnthropicJudge:
 
     #: The SDK client is thread-safe, so separate runs may be judged at the same time.
     parallel_safe = True
+    #: Set by the CLI to count replies with no clear verdict (SA-01); None outside a run.
+    tally: Optional[JudgeTally] = None
 
     def __init__(self, model: str, client: Any | None = None, label: str = "Anthropic") -> None:
         self._model = model
@@ -293,12 +353,13 @@ class AnthropicJudge:
                 _explain_anthropic_error(exc, self._model, self.label, self._credential_hint)
             ) from exc
         content = getattr(response, "content", None) or []
-        return _parse_equivalent(
+        return _verdict(
+            self,
             "".join(
                 getattr(b, "text", None) or ""
                 for b in content
                 if getattr(b, "type", "text") == "text"
-            )
+            ),
         )
 
 

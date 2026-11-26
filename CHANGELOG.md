@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **The report now says when the semantic judge gave no clear verdict.** The judge reads a reply
+  with no verdict as "same meaning", so a judge outage cannot fail every build. That covers an
+  empty or filtered reply, a refusal, unreadable text, or a reply whose verdicts contradict
+  each other and end on "same". That rule is unchanged, and so are the verdicts and exit codes.
+  The PR comment no longer prints "looks safe to adopt" over such a run. It, the console, the
+  migration report and the published Report now name the scenarios and count the judge's
+  unclear replies, and say the new model is not cleared on meaning there.
 
 ## [0.5.7] - 2026-11-26
 

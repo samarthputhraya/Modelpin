@@ -22,6 +22,7 @@ from modelpin.report import (
     ChannelCensus,
     _bucket,
     _census_note,
+    _judge_clearance,
     _md_code,
     _md_inline,
     _rejected_clearance,
@@ -234,6 +235,7 @@ def render_migration_report(
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
     examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
+    judge_gaps: Optional[Mapping[str, tuple[int, int]]] = None,
 ) -> str:
     """The migration report as Markdown (pure: the same inputs give the same document)."""
     cur, new = _md_code(facts.from_model), _md_code(facts.to_model)
@@ -242,6 +244,7 @@ def render_migration_report(
         _underpowered_clearance(underpowered, len(results), facts.to_model, arrow="-"),
         _rejected_clearance(rejected, facts.to_model, arrow="-"),
         _skipped_clearance(skipped, facts.from_model, facts.to_model, arrow="-"),
+        _judge_clearance(judge_gaps, facts.to_model, arrow="-"),
     ):
         if line:
             not_covered.append(line)
