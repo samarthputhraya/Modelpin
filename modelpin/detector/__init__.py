@@ -7,7 +7,7 @@ import bisect
 import re
 import stat
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Protocol
 
 from modelpin.config import DEFAULT_CONFIG_FILE
 from modelpin.storage import STORE_DIRNAME
@@ -25,8 +25,49 @@ _O_SERIES_DIGITS = "134"
 # the bare alternative and no `-` for the suffixed one. `[M] 2026-08-31` that token is
 # not hypothetical -- it is in this repo, in `.modelpin/drift_cache_drift-suite.json`.
 _O_SERIES = re.compile(rf"\bo[{_O_SERIES_DIGITS}](?:-[\w.\-]*)?\b")
+
+
+class _LinearClaudeAtDate:
+    r"""`\bclaude-[\w.\-]+@[0-9]{8}\b`, the Vertex spelling, matched in linear time (MP-334).
+
+    `[M] 2026-11-26` the plain regex is quadratic: on a run with no `@`, it restarts at every
+    `claude-` and re-reads the rest of the run from each one (`"claude-" * N` at 112 KB took
+    7.6 s, and a 200 KB line made `modelpin scan` take 27 s). It came in with `b91d2df`, three days
+    after MP-242's linearity test, which used only gpt/o-series inputs. Here the id run is found
+    once with the plain `claude-` pattern, and the full regex is tried only where that run
+    starts: an anchored match there reads the run once. `finditer` yields exactly the matches
+    the plain regex's `finditer` does (a test holds that on random inputs).
+    """
+
+    pattern = r"\bclaude-[\w.\-]+@[0-9]{8}\b"
+
+    def __init__(self) -> None:
+        self._full = re.compile(self.pattern)
+        self._run = re.compile(r"\bclaude-[\w.\-]+")
+
+    def finditer(self, string: str) -> Iterable[re.Match[str]]:
+        for run in self._run.finditer(string):
+            full = self._full.match(string, run.start())
+            if full:
+                yield full
+
+    def match(self, string: str, pos: int = 0) -> re.Match[str] | None:
+        return self._full.match(string, pos)
+
+
 # Conservative patterns; extend as providers add families.
-MODEL_PATTERNS = [
+class _Pattern(Protocol):
+    """What the scan needs of a pattern: a compiled regex, or `_LinearClaudeAtDate`."""
+
+    @property
+    def pattern(self) -> str: ...
+
+    def finditer(self, string: str) -> Iterable[re.Match[str]]: ...
+
+    def match(self, string: str, pos: int = 0) -> re.Match[str] | None: ...
+
+
+MODEL_PATTERNS: list[_Pattern] = [
     re.compile(r"\bgpt-[0-9][\w.\-]*\b"),
     _O_SERIES,
     re.compile(r"\bclaude-[\w.\-]+\b"),
@@ -34,7 +75,7 @@ MODEL_PATTERNS = [
     # The hosted-platform spellings of Claude, which the pattern above truncates: Vertex's
     # `claude-haiku-4-5@20251001` and Bedrock's `us.anthropic.claude-sonnet-4-5-20250929-v1:0`.
     # The truncated string is not an id either platform accepts, so `--to` needs the full one.
-    re.compile(r"\bclaude-[\w.\-]+@[0-9]{8}\b"),
+    _LinearClaudeAtDate(),
     re.compile(
         r"\b(?:(?:us|eu|apac|au|ca|jp|global|us-gov)\.)?anthropic\.claude-[\w.\-]+\b(?::[0-9]+)?"
     ),

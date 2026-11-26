@@ -174,3 +174,36 @@ def test_a_file_at_the_cap_is_still_scanned(tmp_path) -> None:
     hits = scan_repo(tmp_path, skipped=skipped)
     assert skipped == [], skipped
     assert {h["model"] for h in hits} == {"gpt-4o-mini"}
+
+
+# ------------------------------------------------- MP-334: every pattern, the Claude ones too
+
+
+def test_the_vertex_claude_pattern_finds_exactly_what_the_plain_regex_finds() -> None:
+    """`_LinearClaudeAtDate` replaced a quadratic regex. Its whole safety argument is that it
+    yields the same matches, so that is tested on random lines built from the pieces a real
+    id is made of, rather than asserted."""
+    import re
+
+    from modelpin.detector import _LinearClaudeAtDate
+
+    fast = _LinearClaudeAtDate()
+    slow = re.compile(fast.pattern)
+    pieces = ["claude-", "haiku", "4-5", "@", "20251001", "2025100", ".", "-", "x", " ", '"', "/"]
+    rng = random.Random(334)
+    for _ in range(20_000):
+        line = "".join(rng.choice(pieces) for _ in range(rng.randint(0, 12)))
+        got = [(m.start(), m.end()) for m in fast.finditer(line)]
+        want = [(m.start(), m.end()) for m in slow.finditer(line)]
+        assert got == want, (line, got, want)
+
+
+def test_a_long_run_of_claude_prefixes_scans_in_linear_time() -> None:
+    """`[M] 2026-11-26` audit: `"claude-" * N` took 0.11 s at 14 KB and 7.6 s at 112 KB with
+    the plain `@date` regex (quadratic), and a 200 KB one-line file made `modelpin scan` take 27 s.
+    Generous budget, for the reason given above."""
+    for line in ("claude-" * (112 * 1024 // 7), "anthropic.claude-." * (112 * 1024 // 18)):
+        t0 = time.perf_counter()
+        _models_in(line)
+        elapsed = time.perf_counter() - t0
+        assert elapsed < 2.0, f"a 112 KB line of Claude-shaped text took {elapsed:.2f} s"
