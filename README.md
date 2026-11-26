@@ -182,7 +182,10 @@ modelpin baseline
 ```
 
 Each scenario runs 5 times; the results are saved to `.modelpin/baseline-<model>.json`. Commit
-that file if you want CI to compare against it (it holds model outputs, not your API key).
+that file if you want CI to compare against it. It holds each run's output, tool-call names and
+arguments, token counts and latency. It does not store your prompts, tool results or API key, but
+a model can repeat them in its output, so on a public repository committing it publishes those
+outputs.
 
 **4. Check a candidate model.**
 
@@ -257,7 +260,8 @@ bill of health.
 
 ## Run it in CI (GitHub Action)
 
-Commit `modelpin.yaml`, `scenarios/` and `.modelpin/baseline-<model>.json`, then add
+Commit `modelpin.yaml`, `scenarios/` and `.modelpin/baseline-<model>.json`. On a public
+repository this publishes your scenarios and the outputs the baseline records. Then add
 `.github/workflows/modelpin.yml`:
 
 ```yaml
@@ -277,7 +281,7 @@ jobs:
   model-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: samarthputhraya/modelpin@v1
         with:
           to: gpt-4.1             # the candidate model to vet
@@ -303,9 +307,11 @@ baseline model to still be available if you record baselines in CI.
 ## Providers and credentials
 
 Modelpin always uses **your** credentials, read from the environment. It never stores, logs or
-ships a key. Error messages are scrubbed of key-shaped strings with a recognisable prefix (`sk-`,
-`gsk_`, `AIza`, `ya29.`, AWS, GitHub, PEM); a key with no distinctive prefix, such as a bare hex
-key, is not recognised.
+ships a key. Provider error messages, and the example runs that reports and the PR comment
+quote, are scrubbed of key-shaped strings with a recognisable prefix (`sk-`, `gsk_`, `AIza`,
+`ya29.`, AWS, GitHub, PEM and others); a key with no distinctive prefix, such as a bare hex
+key, is not recognised. Baselines and run files keep model output as recorded, so keep
+secrets out of scenario prompts and tool results.
 
 | Provider (`providers:` / `--provider`) | Credentials | Notes |
 |---|---|---|
