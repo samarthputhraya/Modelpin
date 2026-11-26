@@ -102,11 +102,9 @@ def _read_verdict(content: str) -> tuple[bool, bool]:
 class JudgeTally:
     """Per-scenario count of judge replies read as equivalent without a clear verdict.
 
-    SA-01 (`ops/security/audit-2026-11.md`). The judge fails open by design (ADR-0004), so an
-    empty, filtered or forged reply counts as "same meaning". `[M] 2026-11-26` a judge whose
-    provider filtered the candidate's text turned a real refuse-to-comply regression into
-    `unchanged`, exit 0, "looks safe to adopt", and nothing on the page said the judge had
-    not answered. The verdict stays fail-open; this is what lets the report say so.
+    MP-322. The judge fails open by design (ADR-0004): a reply with no clear verdict counts
+    as "same meaning", so a judge outage cannot fail every build. The verdict stays fail-open;
+    this count is what lets the report say when the semantic channel did not actually answer.
 
     The CLI sets ``scope`` to the scenario being diffed before each diff. Scenarios are diffed
     one at a time, while one scenario's runs may be judged on several threads, hence the lock.

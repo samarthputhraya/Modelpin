@@ -1,11 +1,8 @@
 """SA-01: a judge that gave no clear verdict is disclosed, and the verdict stays fail-open.
 
-`[M] 2026-11-26` security audit (`ops/security/audit-2026-11.md`, SA-01). The judge reads any
-reply without a clean verdict as "same meaning" (ADR-0004, by design, so a judge outage cannot
-manufacture regressions). A judge whose provider filtered the candidate's text therefore turned
-a real refuse-to-comply regression into `unchanged`, exit 0, "looks safe to adopt", and nothing
-on the page said the judge had not answered. Candidate text that forges a verdict the judge
-echoes lands in the same place.
+MP-322. The judge reads any reply without a clean verdict as "same meaning" (ADR-0004, by
+design, so a judge outage cannot manufacture regressions). Until now nothing on the page said
+when that had happened, so a run whose judge never answered read as cleared on meaning.
 
 What this pins:
 - `_parse_equivalent` returns exactly what it returned before (no verdict or exit code moves);

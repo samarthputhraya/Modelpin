@@ -475,9 +475,8 @@ def _judge_clearance(
 
     The judge fails open by design (an empty, filtered or unreadable reply is read as "same
     meaning"), so without this line a judge that never answered left the run looking cleared
-    on meaning. `[M] 2026-11-26` a judge whose provider filtered the candidate's text turned a
-    real refuse-to-comply regression into `unchanged`, exit 0, "looks safe to adopt". The
-    verdict and exit code are unchanged; the clearance is withheld and the gap named.
+    on meaning. The verdict and exit code are unchanged; the clearance is withheld and the
+    gap named (MP-322).
     """
     if not judge_gaps:
         return None
