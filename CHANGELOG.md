@@ -38,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An invalid `modelpin.yaml` fails at once, even when YAML aliases make its values large.**
   The error message used to render the expanded input whole: 417 bytes of config took 12.9
   seconds to report. It now names each invalid setting and the type it got.
+- **Scenarios are read only from inside the scenarios directory.** A directory link (a
+  symlink, or an NTFS junction on Windows) that leads out of it is no longer followed, and a
+  link back to a parent no longer makes loading walk forever.
+- **`modelpin init` writes starter scenarios only inside the current directory.** If an
+  existing `modelpin.yaml` sets `scenarios_dir` to a path outside it, `init` now stops with an
+  error instead.
 
 ## [0.5.7] - 2026-11-26
 
