@@ -6,6 +6,7 @@ A scenario is a JSON file: {id, name, kind, input:{messages,tools?}, assertions?
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -112,6 +113,38 @@ _RESERVED_FILES = {"manifest.json", "roles.json", "labels.json"}
 _RESERVED_DIRS = {"results", "__pycache__"}
 
 
+def _scenario_files(root: Path) -> list[Path]:
+    """Every `*.json` under ``root`` whose real path is inside ``root``, each directory once.
+
+    MP-335. `[M] 2026-11-26` audit: `rglob` followed an NTFS junction (which is not a symlink
+    to Python) out of the scenarios directory and loaded the files it found there, and two
+    junctions pointing back at their parent made it walk forever. This is the boundary
+    MP-241 gave `scan`: a directory or file whose real path leaves ``root`` is not read, and
+    a directory already walked is not walked again. Sorted like `sorted(rglob(...))` was.
+    """
+    root_real = os.path.normcase(os.path.realpath(root))
+
+    def inside(p: str) -> bool:
+        real = os.path.normcase(os.path.realpath(p))
+        return real == root_real or real.startswith(root_real.rstrip(os.sep) + os.sep)
+
+    seen: set[str] = set()
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        here = os.path.normcase(os.path.realpath(dirpath))
+        if here in seen or not inside(dirpath):
+            dirnames[:] = []
+            continue
+        seen.add(here)
+        dirnames[:] = [d for d in dirnames if inside(os.path.join(dirpath, d))]
+        found.extend(
+            Path(dirpath, name)
+            for name in filenames
+            if name.endswith(".json") and inside(os.path.join(dirpath, name))
+        )
+    return sorted(found)
+
+
 def _is_scenario_file(f: Path, root: Path) -> bool:
     """Should ``f`` be loaded as a scenario? Reserved filenames, output dirs and dot-dirs out.
 
@@ -146,7 +179,7 @@ def unrecognised_assertion_keys(scenarios_dir: str | Path) -> dict[str, list[str
     # MP-199. `rglob`, matching `load_scenarios`. These two globs must stay identical: an
     # advisory that reads fewer files than the loader would quietly stop advising about the
     # nested ones, which is the same silence one directory deeper.
-    for f in sorted(d.rglob("*.json")):
+    for f in _scenario_files(d):
         if not _is_scenario_file(f, d):
             continue
         try:
@@ -189,7 +222,7 @@ def load_scenarios(scenarios_dir: str | Path = "scenarios") -> list[Scenario]:
     #: id -> the file that claimed it, so the error can name BOTH paths. Without them the
     #: user is told an id is duplicated and left to find where, which is most of the work.
     seen: dict[str, Path] = {}
-    for f in sorted(d.rglob("*.json")):
+    for f in _scenario_files(d):
         if not _is_scenario_file(f, d):
             continue
         try:

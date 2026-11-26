@@ -1652,6 +1652,16 @@ def init(
         except ConfigError as exc:
             _fail(str(exc))
     scenarios_dir = root / sub
+    # MP-335. `init` writes starter scenarios, so it writes them only inside this directory:
+    # a `scenarios_dir` in a modelpin.yaml that someone else wrote can point anywhere.
+    root_real = os.path.normcase(os.path.realpath(root))
+    dir_real = os.path.normcase(os.path.realpath(scenarios_dir))
+    if dir_real != root_real and not dir_real.startswith(root_real.rstrip(os.sep) + os.sep):
+        _fail(
+            f"scenarios_dir {sub!r} in {cfg_path} is outside this directory, and `modelpin "
+            "init` writes only inside it. Point scenarios_dir at a directory here, or create "
+            "the scenarios there yourself."
+        )
 
     created: list[str] = []
     setup = None
