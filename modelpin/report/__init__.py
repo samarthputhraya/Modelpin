@@ -509,6 +509,25 @@ def _judge_clearance(
     )
 
 
+def _dropped_clearance(
+    dropped: Sequence[str], from_model: str, to_model: str, arrow: str = "→"
+) -> str | None:
+    """MP-333. Scenarios the baseline holds that this run did not include, so never checked.
+
+    `[M] 2026-11-26` audit: moving, renaming or deleting a baselined scenario's file took a run
+    from two regressions, exit 1, to "looks safe to adopt", exit 0, and nothing on the page
+    named what had gone. Often that is a deliberate edit; either way the reader is told, and
+    the clearance is withheld for those scenarios. The exit code is unchanged.
+    """
+    if not dropped:
+        return None
+    return (
+        f"{arrow} {len(dropped)} scenario(s) recorded in the {_md_code(from_model)} baseline are "
+        f"not in this run, so {_md_code(to_model)} was NOT checked on them: "
+        f"{_named_blind(list(dropped))}. If they were removed on purpose, re-record the baseline."
+    )
+
+
 def _skipped_clearance(
     skipped: Sequence[str],
     from_model: str,
@@ -590,6 +609,7 @@ def render_pr_comment(
     census: Optional[ChannelCensus] = None,
     rejected: Sequence[tuple[str, str]] = (),
     skipped: Sequence[str] = (),
+    dropped: Sequence[str] = (),
     match_overrides: Optional[Mapping[str, str]] = None,
     examples: Optional[Mapping[str, tuple[Example, Example]]] = None,
     reasoning_note: Optional[str] = None,
@@ -834,6 +854,7 @@ def render_pr_comment(
         weak = [
             x
             for x in (
+                _dropped_clearance(dropped, from_model, to_model),
                 _underpowered_clearance(underpowered, len(results), to_model),
                 _census_clearance(census, to_model),
                 _rejected_clearance(rejected, to_model),
