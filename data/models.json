@@ -425,13 +425,25 @@
       "id": "claude-opus-4-5-20251101",
       "provider": "anthropic",
       "family": "claude-opus-4",
-      "status": "active",
+      "status": "deprecated",
+      "deprecated_at": "2026-11-23",
+      "retired_at": "2027-01-22",
+      "replacement_id": "claude-opus-5-5",
       "aliases": [
         "claude-opus-4-5"
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-      "fetched_at": "2026-11-22",
-      "notes": "Model status table: Active; tentative retirement 'Not sooner than November 24, 2026'. Alias per https://platform.claude.com/docs/en/models/opus-4-5/overview (fetched 2026-09-18); the docs sidebar lists it under its 'Legacy models' group."
+      "fetched_at": "2026-11-26",
+      "notes": "Model status table (read 2026-11-26): Deprecated, deprecated November 23, 2026, tentative retirement date January 22, 2027. Section '2026-11-23: Claude Opus 4.5 model': retirement date January 22, 2027, recommended replacement claude-opus-5-5; 'This retirement includes claude-opus-4-5, the same model's ID without a date.' Vertex AI (https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deprecations/partner-models, 'Last updated 2026-11-24 UTC', read 2026-11-26): 'Claude Opus 4.5 on Google Cloud is deprecated as of November 23, 2026 and will be shut down on January 22, 2027', the same date. Until 2026-11-23 the page listed it as Active (tentative retirement 'Not sooner than November 24, 2026', read 2026-11-22). Alias per https://platform.claude.com/docs/en/models/opus-4-5/overview (fetched 2026-09-18)."
+    },
+    {
+      "id": "claude-opus-5-5",
+      "provider": "anthropic",
+      "family": "claude-opus-5",
+      "status": "active",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "fetched_at": "2026-11-26",
+      "notes": "Model status table (read 2026-11-26): Active; tentative retirement 'Not sooner than September 22, 2027'. A floor the vendor publishes, not an announced date. Named on the same page as the recommended replacement for claude-opus-4-5-20251101. The models overview (read 2026-11-26) gives claude-opus-5-5 as its Claude API ID and alias."
     },
     {
       "id": "claude-sonnet-4-6",
@@ -478,6 +490,15 @@
       "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "fetched_at": "2026-11-22",
       "notes": "Model status table row 'claude-haiku-4-5-20251001': Active; tentative retirement 'Not sooner than October 15, 2026'. The vendor's policy is at least 60 days' notice before retirement. The haiku page (fetched 2026-09-18): 'claude-haiku-4-5 is a convenience alias that resolves to the pinned snapshot claude-haiku-4-5-20251001'; status 'Active (latest)'."
+    },
+    {
+      "id": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "family": "claude-haiku-5",
+      "status": "active",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "fetched_at": "2026-11-26",
+      "notes": "Model status table (read 2026-11-26): Active; tentative retirement 'Not sooner than October 7, 2027'. A floor the vendor publishes, not an announced date. The models overview (read 2026-11-26) gives claude-haiku-5-5 as its Claude API ID."
     },
     {
       "id": "gemini-omni-flash-preview",
@@ -901,6 +922,15 @@
       "notes": "Deprecations page status: Active. Per https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions (fetched 2026-09-18), 'Dateless IDs are pinned snapshots' -- 'the dateless ID is the canonical model ID for that release. It maps to a single, fixed model snapshot' -- so this id is not an alias. The overview's model table lists it as the Claude API ID."
     },
     {
+      "id": "claude-fable-5-2",
+      "provider": "anthropic",
+      "family": "claude-fable-5",
+      "status": "active",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "fetched_at": "2026-11-26",
+      "notes": "Model status table (read 2026-11-26): Active; tentative retirement 'Not sooner than November 9, 2027'. A floor the vendor publishes, not an announced date. The models overview (read 2026-11-26) gives claude-fable-5-2 as its Claude API ID."
+    },
+    {
       "id": "claude-opus-5",
       "provider": "anthropic",
       "family": "claude-opus-5",
@@ -1013,8 +1043,26 @@
       "family": "claude-mythos",
       "status": "active",
       "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
-      "fetched_at": "2026-11-22",
-      "notes": "Named on the deprecations page as the migration target for claude-mythos-preview; not listed on the models overview fetched 2026-09-18."
+      "fetched_at": "2026-11-26",
+      "notes": "Model status table (read 2026-11-26): Active; tentative retirement 'Not sooner than June 9, 2027'. A floor the vendor publishes, not an announced date. Named as the migration target for claude-mythos-preview in a deprecations-page note read 2026-09-17; the page read 2026-11-26 names no replacement for it. Not listed on the models overview fetched 2026-09-18."
+    },
+    {
+      "id": "claude-mythos-5-1",
+      "provider": "anthropic",
+      "family": "claude-mythos",
+      "status": "active",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "fetched_at": "2026-11-26",
+      "notes": "Model status table (read 2026-11-26), API model name claude-mythos-5-1: Active; tentative retirement 'Not sooner than September 1, 2027'. A floor the vendor publishes, not an announced date. The models overview (read 2026-11-26) names Claude Mythos 5.1 but gives no API ID for it."
+    },
+    {
+      "id": "claude-mythos-5-2",
+      "provider": "anthropic",
+      "family": "claude-mythos",
+      "status": "active",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "fetched_at": "2026-11-26",
+      "notes": "Model status table (read 2026-11-26), API model name claude-mythos-5-2: Active; tentative retirement 'Not sooner than November 9, 2027'. A floor the vendor publishes, not an announced date. The models overview (read 2026-11-26) names Claude Mythos 5.2 but gives no API ID for it."
     },
     {
       "id": "gpt-6-sol",

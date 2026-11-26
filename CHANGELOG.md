@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.5.7] - 2026-11-26
+
+### Changed
+
+- **`modelpin watch` now reports that Claude Opus 4.5 is retiring.** Anthropic deprecated
+  `claude-opus-4-5-20251101` on 23 November 2026, with 22 January 2027 as its tentative retirement
+  date and `claude-opus-5-5` as the recommended replacement. The retirement includes the undated
+  `claude-opus-4-5`. Vertex AI gives the same shutdown date for Claude Opus 4.5 on Google Cloud;
+  Amazon Bedrock's date was not checked. 0.5.6 and earlier list the model as active, so their
+  `watch` shows it as active and does not flag it. `modelpin init` now also prints the retirement
+  date when it configures either id.
+- **Five Claude models are added, all active:** `claude-opus-5-5`, `claude-haiku-5-5`,
+  `claude-fable-5-2`, `claude-mythos-5-1` and `claude-mythos-5-2`, from Anthropic's model status
+  table. `watch` used to report them as unknown.
+- **What was re-read on 26 November 2026:**
+  - Anthropic's deprecations page and models overview. The status and dates of the registry's
+    other Claude entries still match the page's model status table. The page no longer names a
+    replacement for `claude-mythos-preview`; the registry keeps `claude-mythos-5`, which the page
+    named on 17 September 2026, and that entry's note now says so. The other Claude entries keep
+    their `fetched_at` dates.
+  - Vertex AI's partner-models page.
+  - OpenAI's deprecations page. It lists no model shutdown announced since the 22 November re-read.
+
+  The registry's Gemini entries were not re-read in full for this release and keep their earlier
+  `fetched_at` dates. The registry now has 100 entries.
+
 ## [0.5.6] - 2026-11-25
 
 ### Fixed
@@ -1723,7 +1749,9 @@ not the exit code.
   opinion-framed Markdown + JSON report.
 - BYO-key throughout, with key-shaped-secret scrubbing on all output.
 
-[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/samarthputhraya/modelpin/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/samarthputhraya/modelpin/compare/v0.5.6...v0.5.7
+[0.5.6]: https://github.com/samarthputhraya/modelpin/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/samarthputhraya/modelpin/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/samarthputhraya/modelpin/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/samarthputhraya/modelpin/compare/v0.5.2...v0.5.3
