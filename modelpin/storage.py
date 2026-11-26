@@ -147,16 +147,30 @@ def _trace_texts(trace: Trace) -> list[str]:
     because the user typed it themselves.
     """
     texts = [trace.final_output or ""]
-    for message in trace.messages or []:
-        if isinstance(message, dict):
-            content = message.get("content")
-            if isinstance(content, str):
-                texts.append(content)
+    # MP-327: every string at any depth. Reading only top-level strings missed a key nested in
+    # a tool argument, and every message in Gemini's `parts` shape.
+    texts.extend(_strings(trace.messages or []))
     for call in trace.tool_calls or []:
-        for value in (call.arguments or {}).values():
-            if isinstance(value, str):
-                texts.append(value)
+        texts.append(call.name)
+        texts.extend(_strings(call.arguments or {}))
     return texts
+
+
+def _strings(value: object) -> list[str]:
+    """Every string inside nested dicts and lists, keys included. Iterative, so no depth of
+    nesting a model can produce raises ``RecursionError`` here."""
+    out: list[str] = []
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            out.append(item)
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return out
 
 
 def fabricated_scenarios(baseline: dict[str, list[Trace]]) -> dict[str, int]:
