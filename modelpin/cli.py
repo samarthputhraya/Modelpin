@@ -170,6 +170,10 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     rich_markup_mode=None,  # plain Click help: ASCII-only, never crashes on cp1252
+    # MP-328. Never print local variables in a traceback: a frame's locals can hold
+    # credentials and prompts. Typer's default for this differs between the versions
+    # `typer>=0.12` allows, so it is set here rather than inherited.
+    pretty_exceptions_show_locals=False,
 )
 
 
