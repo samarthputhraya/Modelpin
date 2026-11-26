@@ -35,11 +35,15 @@ def _third_party_uses(path: Path) -> list[str]:
     return [r for r in refs if not r.startswith(("./", "docker://"))]
 
 
-@pytest.mark.parametrize(
-    "rel",
-    ["action.yml", ".github/workflows/release.yml", ".github/workflows/canary.yml"],
-    ids=["consumer-action", "release-workflow", "canary-workflow"],
+#: MP-339. Every workflow, not a hand-kept list: three workflows here still used floating
+#: `@v7`/`@v6` tags after the list above was written, and one of them runs with a repository
+#: secret. With all of them pinned, the repository setting that requires SHA pins can go on.
+_PINNED_FILES = ["action.yml"] + sorted(
+    p.relative_to(_ROOT).as_posix() for p in (_ROOT / ".github" / "workflows").glob("*.yml")
 )
+
+
+@pytest.mark.parametrize("rel", _PINNED_FILES)
 def test_every_third_party_action_is_pinned_to_a_commit_sha(rel: str) -> None:
     path = _ROOT / rel
     refs = _third_party_uses(path)
