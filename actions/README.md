@@ -98,7 +98,7 @@ names — that is what the second key above is for. Omit `judge_model` to skip j
 | `comment` | `true` | Post/update a sticky PR comment. |
 | `fail-on-regression` | `true` | Fail the job on a regression (the migration gate). |
 | `github-token` | `${{ github.token }}` | Token used to post the comment. |
-| `modelpin-spec` | `modelpin[providers]` | `pip install` spec — pin a version or install from git pre-PyPI. |
+| `modelpin-spec` | *(empty)* | `pip install` spec. Empty installs the Modelpin release this Action's commit belongs to. Set it to choose another version or a git ref. |
 | `python-version` | `3.12` | Python to set up. |
 | `working-directory` | `.` | Where to run Modelpin. |
 
@@ -120,9 +120,16 @@ names — that is what the second key above is for. Omit `judge_model` to skip j
 - **Baseline strategy:** committing the baseline (recorded while the old model still worked)
   is the migration-true flow — the new model is diffed against known-good behavior. Use
   `baseline: true` only when the old model is still callable in CI.
-- **Version pinning:** `modelpin` is on PyPI, so the default `modelpin-spec: modelpin[providers]`
-  works. Pin a release with `modelpin-spec: "modelpin[providers]==0.4.0"`, or install an unreleased
-  commit with `"modelpin[providers] @ git+https://github.com/samarthputhraya/modelpin@TAG"`.
+- **Version pinning:** the Action installs the Modelpin version of the commit you reference, so
+  `@v1` runs the latest release, a release tag keeps running that Modelpin release, and a commit
+  SHA runs the release named in that commit's `pyproject.toml`. Modelpin's dependencies,
+  including the provider SDKs, are not pinned. (Tags released before this change install the
+  newest Modelpin on PyPI whatever you pinned; see the CHANGELOG.) If pip cannot install that
+  version from PyPI (for example, a release tagged before its upload is approved), the Action
+  installs its own copy of the same version and says so in a warning. To choose a different
+  version, set `modelpin-spec: "modelpin[providers]==0.5.5"`,
+  or install an unreleased commit with
+  `"modelpin[providers] @ git+https://github.com/samarthputhraya/modelpin@TAG"`.
 - **`modelpin-spec` is trusted input.** It is passed straight to `pip install`, so it can
   name any package, index or git URL, and that package's install code runs in your job with
   your secrets in the environment. Set it only in the workflow file, never from PR titles,
