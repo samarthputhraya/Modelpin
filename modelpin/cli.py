@@ -35,6 +35,7 @@ from modelpin.config import (
     DEFAULT_CONFIG_FILE,
     DEFAULT_PROVIDER,
     DEFAULT_RUNS,
+    MAX_RUNS,
     REASONING_EFFORTS,
     ConfigError,
     ModelpinConfig,
@@ -859,6 +860,13 @@ def _resolve_runs(
         _fail(
             f"--runs must be >= {MIN_RUNS}: the diff compares run *distributions*, and "
             f"a single run can't form one (got {n})."
+        )
+    if n > MAX_RUNS:
+        # MP-334. Checked before anything is priced or planned: see `MAX_RUNS`.
+        _fail(
+            f"--runs must be <= {MAX_RUNS} (got {n}): every run is a paid call on your key, "
+            f"and {MAX_RUNS} runs per scenario already detect far smaller changes than the "
+            f"default {DEFAULT_RUNS}."
         )
     # ADR-0019 discloses the run SIZE before a command spends. A size that cannot reach
     # ALPHA is the same disclosure one level up: the user is about to pay for a run that is

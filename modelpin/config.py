@@ -50,6 +50,13 @@ DEFAULT_PROVIDER = "openai"
 #: Lowering this below 4 re-opens MP-03. ``tests/test_config.py`` pins the invariant.
 DEFAULT_RUNS = 5
 
+#: The most replays per scenario per side a run may plan. MP-334: `[M] 2026-11-26` audit:
+#: `runs:` had no ceiling, so a config (one a pull request can edit) planned 6,000 paid
+#: replays on the user's key with no refusal, and `runs: 1000000` spent minutes computing
+#: permutation floors before printing anything. Every run is a paid call on the user's key,
+#: and 100 is twenty times the default.
+MAX_RUNS = 100
+
 
 class ConfigError(Exception):
     """modelpin.yaml is malformed or fails validation. Carries a user-facing message."""
@@ -67,7 +74,7 @@ class ModelpinConfig(BaseModel):
     models: list[str] = Field(default_factory=list)
     scenarios_dir: str = "scenarios"
     providers: list[str] = Field(default_factory=lambda: [DEFAULT_PROVIDER])
-    runs: int = Field(default=DEFAULT_RUNS, ge=1)
+    runs: int = Field(default=DEFAULT_RUNS, ge=1, le=MAX_RUNS)
     judge_model: Optional[str] = None
     #: Which HOST runs the judge. Optional, because `gpt-*` and `gemini-*` name their own
     #: vendor; required for every other id, because a Groq id and an OpenRouter id are
