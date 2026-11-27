@@ -16,9 +16,8 @@ nothing left the machine. It is still wrong for `scan` to report files outside t
 asked about.
 
 These tests build the link with whatever the platform allows WITHOUT privilege -- a junction on
-Windows, a symlink elsewhere -- so they run everywhere rather than skipping. A skip here would
-also break `test_the_readmes_test_count_is_the_real_one`, which pins passed + xfailed against
-collected.
+Windows, a symlink elsewhere -- so they run everywhere rather than skipping, and the suite's
+pass and skip counts do not depend on the platform.
 """
 
 from __future__ import annotations
