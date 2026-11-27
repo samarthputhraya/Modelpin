@@ -556,3 +556,23 @@ def test_the_reported_version_matches_pyproject() -> None:
         "If this fails after a bump, reinstall the editable package rather than editing a "
         "second copy of the number."
     )
+
+
+def test_the_dev_extra_installs_the_stubs_mypy_needs() -> None:
+    """MP-294. `[M] 2026-11-27` With the PyYAML stubs absent, `mypy modelpin` reported
+    `config.py:10: error: Library stubs not installed for "yaml"` (1 error in 34 files); with
+    them, no issues. The dev extra listed mypy but not the stubs, so a contributor following
+    CONTRIBUTING.md got a failing type check on a clean checkout.
+    """
+    import tomllib
+
+    repo = Path(__file__).resolve().parents[1]
+    dev = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "optional-dependencies"
+    ]["dev"]
+    names = {re.split(r"[<>=!~;\[ ]", req, maxsplit=1)[0].lower() for req in dev}
+    assert "mypy" in names, "the dev extra no longer installs mypy; update this test"
+    assert "types-pyyaml" in names, (
+        "the dev extra installs mypy but not types-PyYAML, so `mypy modelpin` fails at "
+        "`import yaml` in a fresh dev venv. Add `types-PyYAML` to [project.optional-dependencies] dev."
+    )
