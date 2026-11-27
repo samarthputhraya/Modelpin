@@ -1625,16 +1625,46 @@ def _retirement_note(model_id: str) -> Optional[str]:
     return f"{head}{successor} `modelpin watch` shows the date and the vendor's page."
 
 
-def _already_retired(model_id: str) -> bool:
-    """True when the registry `watch` reads says ``model_id`` no longer answers (MP-316)."""
+def _retired_successor(model_id: str) -> Optional[str]:
+    """For a model the registry says no longer answers: its named replacement, or "" when the
+    vendor names none. None when the model still answers or is unknown (MP-316)."""
     from modelpin.models import ModelStatus
     from modelpin.watcher import effective_status, get_model
 
     try:
         entry = get_model(model_id)
     except RegistryError:
-        return False
-    return entry is not None and effective_status(entry) is ModelStatus.retired
+        return None
+    if entry is None or effective_status(entry) is not ModelStatus.retired:
+        return None
+    return entry.replacement_id or ""
+
+
+def _watch_remark(model: str, judge_model: str) -> str:
+    """What `modelpin watch` will answer about the models `init` just wrote, when it is not 0.
+
+    MP-316. Computed with the same `assess` and `watch_exit_code` `watch` runs, over the two
+    ids `init` wrote, so the remark appears only when it applies. Ids found by `scan` can also
+    move the exit; the remark makes no claim about them.
+    """
+    try:
+        rows = assess(
+            [
+                Declared(model, "config", "app"),
+                Declared(judge_model, "config", "judge"),
+            ],
+            load_registry(),
+        )
+    except RegistryError:
+        return ""
+    code = watch_exit_code(rows)
+    if code == 1:
+        named = next(r.id for r in rows if r.affected)
+        return f" -- exit 1 is its answer: {named} is retiring or gone"
+    if code == 3:
+        named = next(r.id for r in rows if not r.known)
+        return f" -- exit 3 is its answer: the registry does not know {named}"
+    return ""
 
 
 @app.command()
@@ -1786,9 +1816,10 @@ def init(
                 "Set `models:` in modelpin.yaml to the model your app calls; "
                 f"{_rich_escape(setup.model)} is only a placeholder."
             )
-        elif setup is not None and _already_retired(setup.model):
+        elif setup is not None and (successor := _retired_successor(setup.model)) is not None:
+            named = f" (its vendor names {_rich_escape(successor)})" if successor else ""
             steps.append(
-                "Point `models:` in modelpin.yaml at the model your app runs now: "
+                f"Point `models:` in modelpin.yaml at the model your app runs now{named}: "
                 f"{_rich_escape(setup.model)} no longer answers, so no baseline can come from it."
             )
         # Two separate ways the next command can fail before it spends anything, and the SDK
@@ -1810,9 +1841,11 @@ def init(
             )
         # MP-316: `watch` right after `init` exits 1 (a model is retiring) or 3 (one it does
         # not know, such as a Vertex `@` id) by design, and nothing said that is an answer.
+        # Said only when it applies to the models just written.
+        remark = _rich_escape(_watch_remark(setup.model, setup.judge_model)) if setup else ""
         steps.append(
-            "[bold]modelpin watch[/]               # which of your models are retiring, and when "
-            "(exit 1 or 3 is its answer, not an error)"
+            "[bold]modelpin watch[/]               # which of your models are retiring, and when"
+            + remark
         )
         steps.append(
             "[bold]modelpin baseline[/]            # record how your current model behaves"

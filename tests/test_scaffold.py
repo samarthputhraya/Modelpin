@@ -371,8 +371,34 @@ def test_a_current_model_found_in_the_code_gets_no_models_step(tmp_path, monkeyp
     assert "`models:`" not in steps, steps
 
 
-def test_the_watch_step_says_a_non_zero_exit_is_an_answer(tmp_path, monkeypatch):
+def test_the_watch_step_says_exit_1_is_an_answer_for_a_retiring_model(tmp_path, monkeypatch):
     """`[M] 2026-11-25` `watch` right after `init` exits 1 for a retiring model and 3 for one
     the registry does not know (by design: unknown is not a clearance); nothing said so."""
     steps = _next_steps(_init_output(tmp_path, monkeypatch, "claude-sonnet-4-5"))
-    assert "exit 1 or 3 is its answer, not an error" in steps, steps
+    assert "exit 1 is its answer: claude-sonnet-4-5 is retiring or gone" in steps, steps
+
+
+def test_the_watch_step_says_exit_3_is_an_answer_for_a_vertex_placeholder(tmp_path, monkeypatch):
+    for var in _ALL_CREDENTIAL_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ANTHROPIC_VERTEX_PROJECT_ID", "p")
+    result = runner.invoke(app, ["init", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    steps = _next_steps(" ".join(result.output.split()))
+    expected = "exit 3 is its answer: the registry does not know claude-haiku-4-5@20251001"
+    assert expected in steps, steps
+
+
+def test_the_watch_step_adds_nothing_when_watch_would_exit_0(tmp_path, monkeypatch):
+    """The first-run review: a remark about exits 1 and 3 over a run that exits 0 is noise."""
+    steps = _next_steps(_init_output(tmp_path, monkeypatch, "claude-sonnet-5-5"))
+    assert "is its answer" not in steps, steps
+
+
+def test_the_shut_down_step_names_the_vendors_replacement(tmp_path, monkeypatch):
+    from modelpin.watcher import get_model
+
+    successor = get_model("gpt-4-turbo").replacement_id
+    assert successor, "the registry names no replacement for gpt-4-turbo; update this test"
+    steps = _next_steps(_init_output(tmp_path, monkeypatch, "gpt-4-turbo"))
+    assert f"(its vendor names {successor})" in steps, steps
