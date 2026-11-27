@@ -46,6 +46,9 @@ dev = [
   "black>=24,<26",
   "pytest-cov>=5",
   "mypy>=1.11",
+  # MP-294. Without the stubs, a plain `mypy modelpin` in a fresh dev venv fails at
+  # `import yaml` in config.py ("Library stubs not installed").
+  "types-PyYAML>=6.0",
   "setuptools>=77",
 ]
 
