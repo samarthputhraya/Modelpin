@@ -60,6 +60,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   puts the current directory first on Python's import path, which the console scripts never
   did, so a file in your repository named like one of Modelpin's dependencies was imported in
   its place. That entry is now dropped before the CLI loads.
+- **`modelpin check` says a run cannot report a regression only when that is true of every
+  scenario it replays.** The warning before the run spends was priced on the shallowest entry
+  in the whole baseline file, including scenarios the run does not replay. A 1-run entry for a
+  deleted scenario printed "This run cannot report a regression" over a run that then reported
+  two. A baseline whose scenarios differ in depth gets the existing warning that names each
+  scenario's run count. Verdicts and exit codes are unchanged.
 
 ## [0.5.7] - 2026-11-26
 

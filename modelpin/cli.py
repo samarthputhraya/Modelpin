@@ -884,7 +884,13 @@ def _resolve_runs(
     # (`diff/__init__.py`), so warning about them under `--match subset` was simply false --
     # reproduced firing a `subset` tool-call regression in the same invocation as the warning
     # that said it could not.
-    nb = min(baseline_sizes) if baseline_sizes else n
+    #
+    # MP-124: priced on the DEEPEST replayed baseline, because each warning below is a claim
+    # about the whole run ("This run cannot report a regression"), and the floor falls as the
+    # baseline deepens, so it is true of every scenario only when it is true of the deepest.
+    # [M] Priced on `min()`, a 1-run entry printed it over a run that then reported two
+    # regressions. A run whose scenarios differ in depth gets the uniformity warning instead.
+    nb = max(baseline_sizes) if baseline_sizes else n
     floor = min_achievable_pvalue_mean(nb, n)
     if floor > ALPHA:
         console.print(
@@ -2144,8 +2150,8 @@ def check(
     # the run into a measured half and a structurally blind half, and NOTHING said so -- the
     # posted report then led with a green clearance. Reported, not raised: `load_baseline` is
     # right not to fail over a file it can use, and the user can act on this before spending.
-    # Printed BEFORE the pre-spend disclosure below, which prices the whole run off
-    # `min(baseline_sizes)` and so describes the weakest scenario, not every one.
+    # Printed BEFORE the pre-spend disclosure below, which is a claim about the whole run and
+    # so is priced on the deepest replayed baseline (MP-124): this warning covers the rest.
     _recorded_fp = load_baseline_fingerprints(from_model, store_dir)
     uneven = nonuniform_run_counts(base, [s.id for s in scenarios])
     if uneven:
@@ -2160,7 +2166,11 @@ def check(
             f"them and some may be unable to report a regression at all. Re-record with "
             f"`modelpin baseline --runs {RECOMMENDED_RUNS}` for uniform coverage."
         )
-    n = _resolve_runs(runs, cfg, mode=mode, baseline_sizes=[len(v) for v in base.values() if v])
+    # MP-124: only the scenarios this run replays. [M] Priced on every stored entry, a 1-run
+    # entry for a scenario whose file was deleted said "This run cannot report a regression"
+    # over a run that then reported two -- the scoping `nonuniform_run_counts` already has.
+    replayed = [len(base[s.id]) for s in scenarios if base.get(s.id)]
+    n = _resolve_runs(runs, cfg, mode=mode, baseline_sizes=replayed)
     effort = _resolve_reasoning_effort(reasoning_effort, cfg, prov)
     adapter = _with_reasoning_effort(_adapter(prov, fixtures), effort)
     # Only scenarios that HAVE a baseline are replayed (the rest are skipped below), so

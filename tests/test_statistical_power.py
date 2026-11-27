@@ -544,12 +544,13 @@ def test_storage_round_trips_a_heterogeneous_baseline_without_complaint(tmp_path
 
 def test_a_heterogeneous_baseline_is_disclosed_before_the_run_spends(tmp_path):
     """The user is about to pay for a run whose coverage is not what its run count suggests.
-    Printed before the ADR-0019 pre-spend line, which prices the whole run off
-    `min(baseline_sizes)` and so describes only the weakest scenario."""
+    Printed before the ADR-0019 pre-spend line, which is a claim about the WHOLE run and so,
+    since MP-124, does not fire here: 2 of these 4 scenarios are measured at 4 vs 4."""
     chk, _ = _heterogeneous_check(tmp_path)
     out = " ".join(chk.output.split())
     assert "different numbers of recorded runs per scenario" in out, chk.output
     assert "angry_customer=2" in out and "greeting=4" in out, chk.output
+    assert "cannot report a regression" not in out, chk.output
 
 
 def test_a_heterogeneous_baseline_reaches_the_partial_header_end_to_end(tmp_path):
@@ -597,6 +598,114 @@ def test_the_uniformity_warning_ignores_zero_run_entries():
     }
     assert nonuniform_run_counts(base) == {}
     assert nonuniform_run_counts(base, ["greeting", "never_recorded"]) == {}
+
+
+# --- MP-124: the pre-spend claim is about the run it prices --------------------------------
+
+
+def _check_after_editing_the_baseline(tmp_path, edit, *, check_runs=5):
+    """Record the demo at 5 runs, apply ``edit`` to the stored baseline, then check."""
+    store = str(tmp_path / "edited")
+    common = [
+        "--provider",
+        "fake",
+        "--fixtures",
+        FIXTURES,
+        "--scenarios-dir",
+        SCEN,
+        "--config",
+        CONFIG,
+        "--store-dir",
+        store,
+    ]
+    base = runner.invoke(app, ["baseline", "--model", DEMO_FROM, *common, "--runs", "5"])
+    assert base.exit_code == 0, base.output
+    recorded = load_baseline(DEMO_FROM, store)
+    edit(recorded)
+    save_baseline(
+        recorded, DEMO_FROM, store, fingerprints=load_baseline_fingerprints(DEMO_FROM, store)
+    )
+    chk = runner.invoke(
+        app, ["check", "--to", DEMO_TO, "--from", DEMO_FROM, *common, "--runs", str(check_runs)]
+    )
+    return chk, " ".join(chk.output.split())
+
+
+def test_a_stored_entry_the_run_does_not_replay_does_not_price_the_warning(tmp_path):
+    """`[M] 2026-11-27` A 1-run entry for a scenario with no file on disk printed "This run
+    cannot report a regression, whatever the models do" -- and the same run then reported two
+    regressions and exited 1. The entry is not replayed, so it says nothing about this run."""
+
+    def add_a_deleted_scenario(recorded):
+        recorded["deleted_from_disk"] = [_trace("deleted_from_disk", 0)]
+
+    chk, out = _check_after_editing_the_baseline(tmp_path, add_a_deleted_scenario)
+    assert "cannot report a regression" not in out, chk.output
+    assert "cannot reach p" not in out, chk.output
+    assert chk.exit_code == 1, chk.output  # the run is measured, and it finds the regressions
+    assert "deleted_from_disk" in out, chk.output  # still named as not checked, at the end
+
+
+def test_one_shallow_scenario_does_not_make_the_whole_run_blind(tmp_path):
+    """`[M] 2026-11-27` With `greeting` cut to 1 recorded run and the other three at 5, the
+    warning priced on `min()` said the run could not report a regression; it reported two.
+    The uniformity warning names the shallow scenario instead."""
+
+    def shorten_greeting(recorded):
+        recorded["greeting"] = recorded["greeting"][:1]
+
+    chk, out = _check_after_editing_the_baseline(tmp_path, shorten_greeting)
+    assert "cannot report a regression" not in out, chk.output
+    assert "different numbers of recorded runs per scenario" in out, chk.output
+    assert "greeting=1" in out, chk.output
+    assert chk.exit_code == 1, chk.output
+
+
+def test_the_run_wide_claim_still_fires_when_every_replayed_scenario_is_blind(tmp_path):
+    """The other direction: a 1-run baseline for EVERY scenario cannot reach ALPHA at 1 vs 5
+    (floor 1/6), so the claim is true and must still be printed before the run spends."""
+    assert min_achievable_pvalue_mean(1, 5) > ALPHA
+
+    def shorten_all(recorded):
+        for sid in recorded:
+            recorded[sid] = recorded[sid][:1]
+
+    chk, out = _check_after_editing_the_baseline(tmp_path, shorten_all)
+    assert "This run cannot report a regression" in out, chk.output
+    assert "at 1 vs 5 runs/side" in out, chk.output
+
+
+def test_a_deep_entry_the_run_does_not_replay_does_not_hide_a_true_warning(tmp_path):
+    """The scoping, from the other side: every replayed scenario is blind at 1 vs 5, and a
+    5-run entry for a deleted scenario must not lift the price to 5 vs 5 and hide that."""
+
+    def shorten_all_but_keep_a_deep_stale_entry(recorded):
+        recorded["deleted_from_disk"] = [_trace("deleted_from_disk", i) for i in range(5)]
+        for sid in list(recorded):
+            if sid != "deleted_from_disk":
+                recorded[sid] = recorded[sid][:1]
+
+    chk, out = _check_after_editing_the_baseline(tmp_path, shorten_all_but_keep_a_deep_stale_entry)
+    assert "This run cannot report a regression" in out, chk.output
+    assert "at 1 vs 5 runs/side" in out, chk.output
+
+
+def test_the_tool_signal_warning_is_also_priced_on_the_deepest_replayed_baseline(tmp_path):
+    """The equivalence-mode branch of the same claim. At `--runs 3`, a scenario recorded at 3
+    has a tool-signal floor of 0.1 (blind) and one recorded at 5 has 0.018 (measured), so
+    "the tool-call and argument signals cannot reach p <= 0.05" is false for the run when
+    any replayed scenario is at 5. Every scenario at 3 is covered by
+    `test_three_runs_warns_that_the_tool_signal_specifically_is_dead`."""
+    assert min_achievable_pvalue_distribution(3, 3) > ALPHA
+    assert min_achievable_pvalue_distribution(5, 3) < ALPHA
+
+    def shorten_greeting_to_three(recorded):
+        recorded["greeting"] = recorded["greeting"][:3]
+
+    chk, out = _check_after_editing_the_baseline(tmp_path, shorten_greeting_to_three, check_runs=3)
+    assert "tool-call and argument signals cannot reach" not in out, chk.output
+    assert "greeting=3" in out, chk.output
+    assert "only 3 runs/scenario" in out, chk.output  # the run-size note still applies
 
 
 def test_the_partial_clearance_prose_is_still_free_of_comparative_language():
