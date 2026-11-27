@@ -1625,6 +1625,18 @@ def _retirement_note(model_id: str) -> Optional[str]:
     return f"{head}{successor} `modelpin watch` shows the date and the vendor's page."
 
 
+def _already_retired(model_id: str) -> bool:
+    """True when the registry `watch` reads says ``model_id`` no longer answers (MP-316)."""
+    from modelpin.models import ModelStatus
+    from modelpin.watcher import effective_status, get_model
+
+    try:
+        entry = get_model(model_id)
+    except RegistryError:
+        return False
+    return entry is not None and effective_status(entry) is ModelStatus.retired
+
+
 @app.command()
 def init(
     directory: str = typer.Argument(".", help="Repo to scaffold."),
@@ -1764,6 +1776,21 @@ def init(
             "Put a few real cases from your app in scenarios/ "
             "(copy the starter file; one JSON file per case)."
         ]
+        # MP-316. `[M] 2026-11-25` first-run review: with no model found, the only "set yours"
+        # sat inside the Configured sentence and Next went straight to `baseline`, which then
+        # records the placeholder; for a model already shut down, the note said no baseline
+        # can be recorded and Next still listed `modelpin baseline`. Both now say to change
+        # `models:` first.
+        if setup is not None and setup.model_source.startswith("a placeholder"):
+            steps.append(
+                "Set `models:` in modelpin.yaml to the model your app calls; "
+                f"{_rich_escape(setup.model)} is only a placeholder."
+            )
+        elif setup is not None and _already_retired(setup.model):
+            steps.append(
+                "Point `models:` in modelpin.yaml at the model your app runs now: "
+                f"{_rich_escape(setup.model)} no longer answers, so no baseline can come from it."
+            )
         # Two separate ways the next command can fail before it spends anything, and the SDK
         # one comes first: a key is no use without the library that sends it. `[M]`
         # `pip install modelpin` + `modelpin init` used to promise "credentials are already
@@ -1781,8 +1808,11 @@ def init(
                 if has_credentials(setup.provider, os.environ)
                 else f"Set {CREDENTIAL_HINT[setup.provider]} in your environment."
             )
+        # MP-316: `watch` right after `init` exits 1 (a model is retiring) or 3 (one it does
+        # not know, such as a Vertex `@` id) by design, and nothing said that is an answer.
         steps.append(
-            "[bold]modelpin watch[/]               # which of your models are retiring, and when"
+            "[bold]modelpin watch[/]               # which of your models are retiring, and when "
+            "(exit 1 or 3 is its answer, not an error)"
         )
         steps.append(
             "[bold]modelpin baseline[/]            # record how your current model behaves"

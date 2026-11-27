@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`modelpin init`'s Next list fits what it just configured.** With no model in the code it
+  now says to set `models:` before `modelpin baseline`, which would otherwise record the
+  placeholder. For a model that no longer answers it says to point `models:` at the model
+  you run now, instead of suggesting a baseline that cannot be recorded. The `modelpin watch`
+  step says that exit 1 or 3 is its answer, not an error.
 - **An unknown `--provider` name is reported first.** `baseline`, `check` and `report` checked
   the name only when they built the adapter, so in a new directory `--provider mistral` said
   "no scenarios found" and suggested `modelpin init`. The name is now checked before scenarios

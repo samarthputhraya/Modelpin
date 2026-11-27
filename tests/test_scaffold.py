@@ -325,3 +325,54 @@ def test_google_credentials_match_what_the_adapter_needs(env, credentialed, name
         assert setup.provider_source == f"{named} is set in your environment"
     else:
         assert setup.provider != "google"
+
+
+# --- MP-316: the Next list fits the case init just configured ---------------------------------
+
+
+def _all_credential_vars() -> list[str]:
+    from modelpin.scaffold import PROVIDER_CREDENTIALS
+
+    names = {v for _, variables in PROVIDER_CREDENTIALS for v in variables}
+    return sorted(names | {"GOOGLE_GENAI_USE_ENTERPRISE", "GOOGLE_CLOUD_PROJECT"})
+
+
+_ALL_CREDENTIAL_VARS = _all_credential_vars()
+
+
+def _next_steps(out: str) -> str:
+    return out.split("Next:")[1]
+
+
+def test_a_placeholder_model_is_set_before_the_baseline_step(tmp_path, monkeypatch):
+    """`[M] 2026-11-25` With no model in the code, Next went straight to `modelpin baseline`,
+    which would record the placeholder."""
+    for var in _ALL_CREDENTIAL_VARS:
+        monkeypatch.delenv(var, raising=False)
+    result = runner.invoke(app, ["init", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    steps = _next_steps(" ".join(result.output.split()))
+    assert "Set `models:` in modelpin.yaml to the model your app calls" in steps, steps
+    assert "is only a placeholder" in steps
+    assert steps.index("Set `models:`") < steps.index("modelpin baseline"), steps
+
+
+def test_a_model_already_shut_down_is_replaced_before_the_baseline_step(tmp_path, monkeypatch):
+    """`[M] 2026-11-25` The note said a baseline could no longer be recorded on gpt-4-turbo,
+    and Next still listed `modelpin baseline` as if it could."""
+    steps = _next_steps(_init_output(tmp_path, monkeypatch, "gpt-4-turbo"))
+    assert "Point `models:` in modelpin.yaml at the model your app runs now" in steps, steps
+    assert "gpt-4-turbo no longer answers" in steps
+    assert steps.index("Point `models:`") < steps.index("modelpin baseline"), steps
+
+
+def test_a_current_model_found_in_the_code_gets_no_models_step(tmp_path, monkeypatch):
+    steps = _next_steps(_init_output(tmp_path, monkeypatch, "claude-sonnet-5-5"))
+    assert "`models:`" not in steps, steps
+
+
+def test_the_watch_step_says_a_non_zero_exit_is_an_answer(tmp_path, monkeypatch):
+    """`[M] 2026-11-25` `watch` right after `init` exits 1 for a retiring model and 3 for one
+    the registry does not know (by design: unknown is not a clearance); nothing said so."""
+    steps = _next_steps(_init_output(tmp_path, monkeypatch, "claude-sonnet-4-5"))
+    assert "exit 1 or 3 is its answer, not an error" in steps, steps
