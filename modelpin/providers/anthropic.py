@@ -257,6 +257,9 @@ def build_anthropic_client(max_retries: int = REPLAY_MAX_RETRIES) -> tuple[Any, 
             ) from exc
         return client, _vertex_backend(project)
 
+    # The SDK before the key, as on the Vertex path above and in `openai.py` (MP-177): the
+    # import check is free, and a missing key sends the user off to create one.
+    anthropic = _import_anthropic()
     api_key = (os.environ.get(API_KEY_ENV) or "").strip()
     if not api_key:
         raise ProviderError(
@@ -265,7 +268,6 @@ def build_anthropic_client(max_retries: int = REPLAY_MAX_RETRIES) -> tuple[Any, 
             f"instead, set {VERTEX_PROJECT_ENV} (and optionally {VERTEX_REGION_ENV}, default "
             "global) and authenticate with `gcloud auth application-default login`."
         )
-    anthropic = _import_anthropic()
     # An explicit `api_key=` makes the SDK skip its own env/profile credential chain
     # (`[M]` `_client.py`: "Explicit ctor args are total"), so the key used is the one named.
     return anthropic.Anthropic(api_key=api_key, max_retries=max_retries), _API_BACKEND

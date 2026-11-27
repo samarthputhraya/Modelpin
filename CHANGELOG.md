@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An invalid `modelpin.yaml` fails at once, even when YAML aliases make its values large.**
   The error message used to render the expanded input whole: 417 bytes of config took 12.9
   seconds to report. It now names each invalid setting and the type it got.
+- **A missing provider SDK is reported before a missing API key.** With neither installed
+  nor set, `--provider openai` (and the OpenAI-compatible hosts) and `--provider anthropic`
+  said the key was not set, and only after a key was created said the SDK was missing. The
+  free check now comes first, as it already did for `google`. The messages are unchanged.
 - **Scenarios are read only from inside the scenarios directory.** A directory link (a
   symlink, or an NTFS junction on Windows) that leads out of it is no longer followed, and a
   link back to a parent no longer makes loading walk forever.

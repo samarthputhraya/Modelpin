@@ -396,19 +396,23 @@ def build_openai_client(
     ``base_url`` points the SDK at an OpenAI-compatible endpoint (e.g. Groq/OpenRouter serving
     Llama) — they implement the same Chat Completions surface, so the whole adapter is reused.
     Raises ``ProviderError`` (never a raw traceback) if the key or SDK is missing.
+
+    The SDK is checked FIRST (MP-177): checking an import is free, while getting a key means
+    creating an account and making a billing decision. `[M] 2026-11-27` With neither present,
+    the user was sent to get a key, and only after that told to install the SDK.
     """
-    api_key = (os.environ.get(api_key_env) or "").strip()
-    if not api_key:
-        raise ProviderError(
-            f"{api_key_env} is not set. Modelpin uses YOUR own API key "
-            "(cost + provider ToS) — export it and retry."
-        )
     try:
         from openai import OpenAI
     except ImportError as exc:  # optional dependency
         raise ProviderError(
             'The OpenAI SDK is not installed. Install it with: pip install "modelpin[providers]"'
         ) from exc
+    api_key = (os.environ.get(api_key_env) or "").strip()
+    if not api_key:
+        raise ProviderError(
+            f"{api_key_env} is not set. Modelpin uses YOUR own API key "
+            "(cost + provider ToS) — export it and retry."
+        )
     kwargs: dict[str, Any] = {"api_key": api_key, "max_retries": max_retries}
     if base_url:
         kwargs["base_url"] = base_url
