@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moved, was never checked, and nothing said so. The console and the PR comment now name those
   scenarios, and the PR comment withholds "looks safe to adopt" for them. The exit code is
   unchanged.
+- **`runs` has a ceiling of 100**, in `modelpin.yaml` and on `--runs`. Every run is a paid
+  call on your key; a larger value is refused at once, before anything is planned.
 
 ### Fixed
 
