@@ -241,3 +241,33 @@ def test_the_section_carries_a_runnable_offline_reproduce_command(section):
         section
     )
     assert "ALPHA 0.05" in section and "MIN_TOOL_TVD 0.5" in section
+
+
+# --- 6. README.md, tied to the same artifacts (MP-232) ---------------------------------------
+#
+# Section 5 pins this sentence on `docs/fp-measurement.md`. README.md -- PyPI's long
+# description -- repeats it, and nothing read README for it.
+
+
+def test_the_readme_quotes_the_tool_bound_and_concentration_the_artifacts_show(summary):
+    import re
+
+    readme = " ".join((REPO / "README.md").read_text(encoding="utf-8").split())
+    t = summary["tool"]
+    live = f"{100.0 * ce.upper_bound_95(t['flagged'], t['scored']):.1f}%"
+    stale = f"{100.0 * ce.upper_bound_95(t['flagged'], t['exposed']):.1f}%"
+    alarms = "false alarm" if t["flagged"] == 1 else "false alarms"
+    assert f"{t['flagged']} {alarms} in {t['scored']} scored trials" in readme
+    assert re.search(rf"(?<![\d.]){re.escape(live)}", readme), f"README must quote {live}"
+    assert not re.search(
+        rf"(?<![\d.]){re.escape(stale)}", readme
+    ), f"README quotes {stale}, the bound over EXPOSED trials; the published one is {live}"
+    # The summary counts EXPOSED trials per scenario, not scored ones, so the scored
+    # concentration is tied to the docs page that states it rather than to the artifacts.
+    doc = " ".join(DOC.read_text(encoding="utf-8").split())
+    m = re.search(rf"of the \*\*{t['scored']} scored\*\* trials \*\*(\d+) come from", doc)
+    assert m, "docs/fp-measurement.md no longer states the scored concentration"
+    assert f"{m.group(1)} of the {t['scored']} from one scenario" in readme, (
+        f"README must state the same concentration as the docs page: {m.group(1)} of the "
+        f"{t['scored']} scored trials from one scenario"
+    )
