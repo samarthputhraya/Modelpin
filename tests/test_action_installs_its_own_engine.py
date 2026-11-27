@@ -28,17 +28,22 @@ _VERSION = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     "version"
 ]
 
-#: Records each `python -m pip ...` call (one argument per line, then a marker) and fails the
-#: one call whose arguments equal $SHIM_FAIL. Any other `python` call runs the real interpreter.
+#: Records each `python [-I] -m pip ...` call (one argument per line, then a marker) and fails
+#: the one call whose arguments equal $SHIM_FAIL. Any other mention of pip is refused (exit 97)
+#: rather than run, so a spelling the shim does not know can never install anything for real.
+#: Any other `python` call runs the real interpreter.
 _SHIM = """
 python() {
+  local isolated=""
+  if [ "$1" = "-I" ]; then isolated=1; shift; fi
   if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then
     shift 2
     printf '%s\\n' "$@" ---END--- >> "$SHIM_LOG"
     if [ -n "$SHIM_FAIL" ] && [ "$*" = "$SHIM_FAIL" ]; then return 1; fi
     return 0
   fi
-  command python "$@"
+  case " $* " in *" pip "*|*"-m pip"*) echo "shim: refusing an unrecognised pip call: $*" >&2; return 97;; esac
+  if [ -n "$isolated" ]; then command python -I "$@"; else command python "$@"; fi
 }
 """
 
@@ -84,6 +89,10 @@ def _run(
         GITHUB_ACTION_PATH=action_path.as_posix(),
         SHIM_LOG=log.as_posix(),
         SHIM_FAIL=fail,
+        # A second net under the shim: if any install ever reaches the real pip, it resolves
+        # nothing from an index and changes nothing on disk.
+        PIP_NO_INDEX="1",
+        PIP_DRY_RUN="1",
         PATH=str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", ""),
     )
     assert _BASH is not None
