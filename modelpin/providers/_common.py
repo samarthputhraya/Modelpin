@@ -67,7 +67,10 @@ _APOSTROPHE_MAP: dict[int, str] = {ord(ch): "'" for ch in _APOSTROPHE_VARIANTS}
 #: API keys, ``ya29.`` / ``AQ.`` OAuth-style tokens), Groq keys (``gsk_``), raw ``Bearer``
 #: headers, and since MP-243: AWS access key ids (``AKIA``/``ASIA``), GitHub tokens
 #: (``ghp_``/``gho_``/``ghu_``/``ghs_``/``ghr_`` and ``github_pat_``), PEM private keys —
-#: the whole block, not just its header — and Azure storage ``AccountKey=``.
+#: the whole block, not just its header — and Azure storage ``AccountKey=``; since MP-337:
+#: Together ``tgp_v1_``, Hugging Face ``hf_``, xAI ``xai-``, Stripe ``sk_live_``/``sk_test_``
+#: (and ``rk_``), Slack ``xox?-``, JWTs, Google refresh tokens ``1//0`` and
+#: ``Authorization: Basic`` headers.
 #:
 #: `[M] 2026-09-09` security review: every one of the MP-243 shapes survived scrubbing, while
 #: README said a failed call "never leaks your key". Three design constraints, all pinned in
@@ -110,7 +113,27 @@ _SECRET_RE = re.compile(
     r"|gh[pousr]_[A-Za-z0-9]{36,}"
     r"|github_pat_[A-Za-z0-9_]{22,}"
     r"|AccountKey=[A-Za-z0-9+/]{20,}={0,2}"
-    r"|Bearer\s+\S+",
+    r"|Bearer\s+\S+"
+    # MP-337. `[M] 2026-11-26` audit: these distinctive shapes survived scrubbing. Together
+    # is a supported provider. Each body length is the vendor's format, kept long enough that
+    # an identifier sharing a prefix (`hf_hub_download`, `xai-sdk`) is left alone.
+    r"|tgp_v1_[A-Za-z0-9_\-]{20,}"
+    r"|hf_[A-Za-z0-9]{30,}"
+    r"|xai-[A-Za-z0-9]{40,}"
+    r"|(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}"
+    r"|xox[abpors]-[A-Za-z0-9\-]{10,}"
+    # A JWT, header.payload.signature. Bounded and possessive (Python 3.11+): unbounded, each
+    # `eyJ` in a long run scanned to the run's end and backtracked looking for the `.`, so
+    # `[M]` 100 KB of `eyJ` took 18.4 s (FP review, 2026-11-27). A segment is never longer
+    # than these caps in practice; a longer one is left unredacted rather than slow.
+    r"|eyJ[A-Za-z0-9_\-]{8,256}+\.eyJ[A-Za-z0-9_\-]{8,8192}+\.[A-Za-z0-9_\-]{8,1024}"
+    r"|1//0[A-Za-z0-9_\-]{20,}"
+    # The header in any of the forms an error text carries it: raw (`Authorization: Basic x`),
+    # a Python repr (`'Authorization': 'Basic x'`) or JSON (`"Authorization": "Basic x"`).
+    # Anchored on the header name, because a bare `Basic` + word is ordinary prose. Each
+    # whitespace run is bounded and possessive: two adjacent `\s*` split one long run every
+    # possible way, so `[M]` "Authorization:" + 8,000 spaces took 0.37 s, x4 per doubling.
+    r"|Authorization['\"]?\s{0,16}+[:=]\s{0,16}+['\"]?\s{0,16}+Basic\s{1,16}+[A-Za-z0-9+/]{8,}={0,2}",
     re.IGNORECASE,
 )
 

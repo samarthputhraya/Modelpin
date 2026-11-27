@@ -60,6 +60,19 @@ REDACTED = {
     "Anthropic key": "sk-ant-" + "api03-A1b2C3d4E5f6G7h8",
     "Groq key": "gsk_" + "A1b2C3d4E5f6G7h8I9j0K1l2",
     "Google API key": _GOOGLE,
+    # MP-337: shapes the 2026-11 audit measured surviving the scrubber.
+    "Together key": "tgp_v1_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6",
+    "Hugging Face token": "hf_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Qr",
+    "xAI key": "xai-" + "A1b2C3d4E5f6G7h8I9j0" * 4,
+    "Stripe secret key": "sk_live_" + "A1b2C3d4E5f6G7h8I9j0K1l2",
+    "Stripe test key": "sk_test_" + "A1b2C3d4E5f6G7h8I9j0K1l2",
+    "Slack bot token": "xoxb-" + "123456789012-1234567890123-A1b2C3d4E5f6G7h8",
+    "JWT": "eyJhbGciOiJIUzI1NiJ9" + ".eyJzdWIiOiIxMjM0NTY3ODkwIn0" + ".A1b2C3d4E5f6G7h8I9j0",
+    "Google refresh token": "1//0" + "A1b2C3d4E5f6G7h8I9j0K1l2",
+    "Basic auth header": "Authorization: Basic " + "dXNlcjpwYXNzd29yZA==",
+    # The same header as a Python repr and as JSON, the forms SDK error text carries it in.
+    "Basic auth header in a repr": "{'Authorization': 'Basic " + "dXNlcjpwYXNzd29yZA==" + "'}",
+    "Basic auth header in JSON": '{"Authorization": "Basic ' + "dXNlcjpwYXNzd29yZA==" + '"}',
 }
 
 #: A key immediately after an escape sequence -- i.e. after a WORD character, where a leading
@@ -85,6 +98,12 @@ PRESERVED = {
     "public key header": "-----BEGIN PUBLIC KEY-----",
     # Case-sensitivity, NOT a word boundary, is what keeps this from reading as an AWS id.
     "a region-shaped word": "asiapacificregion1234",
+    # MP-337: identifiers that share a new prefix, and the word "Basic" in prose.
+    "a Hugging Face function name": "hf_hub_download",
+    "an xAI SDK package": "xai-sdk",
+    "a snake_case setting": "sk_live_mode",
+    "the word Basic in prose": "Basic authentication is not supported",
+    "a relative path": "1//0",
 }
 
 #: Over-redactions we KNOW about and accept, because removing them cost key coverage. They
@@ -210,3 +229,62 @@ def test_scrubbing_a_realistic_error_message_is_not_slow_enough_to_notice() -> N
         f"scrubbing one provider-sized error message took {elapsed:.3f} s; it runs on every "
         "provider error, so anything near this is user-visible."
     )
+
+
+def _scrub_eyj_seconds(count: int) -> float:
+    text = "eyJ" * count
+    t0 = time.perf_counter()
+    scrub_secrets(text)
+    return time.perf_counter() - t0
+
+
+def test_a_long_run_of_jwt_prefixes_does_not_go_quadratic() -> None:
+    """MP-337. `[M] 2026-11-27` FP review: the first draft of the JWT pattern left its
+    segments unbounded, and every `eyJ` in one long run scanned to the run's end and
+    backtracked looking for the `.`: 100 KB of `eyJ` took 18.4 s, quadrupling per doubling.
+    Segments are now capped and possessive. Measured as a growth RATIO, for the reason the
+    PEM test above gives: 4x the input costs ~4x linear and ~16x quadratic."""
+    small = _scrub_eyj_seconds(5_000)
+    large = _scrub_eyj_seconds(20_000)
+    assert small > 1e-3, f"5,000 prefixes scrubbed in {small:.6f} s -- too fast to time a ratio"
+    ratio = large / small
+    assert ratio < 8.0, (
+        f"scrubbing 4x the `eyJ` run cost {ratio:.1f}x the time ({small:.3f} s -> "
+        f"{large:.3f} s). Linear is ~4x and quadratic is ~16x: the JWT pattern lost its caps."
+    )
+
+
+def test_a_basic_auth_credential_is_removed_in_every_form_it_appears_in() -> None:
+    """The shape test above checks the whole sample string; this checks the credential itself
+    is gone, in the raw header, a Python repr and JSON. Prose stays untouched."""
+    credential = "dXNlcjpwYXNzd29yZA=="
+    for text in (
+        f"Authorization: Basic {credential}",
+        f"{{'Authorization': 'Basic {credential}'}}",
+        f'{{"Authorization": "Basic {credential}"}}',
+        f"headers={{'authorization': 'basic {credential}'}}",
+    ):
+        assert credential not in scrub_secrets(text), text
+    prose = "Basic authentication is not supported by this endpoint"
+    assert scrub_secrets(prose) == prose
+
+
+def _scrub_auth_spaces_seconds(count: int) -> float:
+    text = "Authorization:" + " " * count + "x"
+    t0 = time.perf_counter()
+    scrub_secrets(text)
+    return time.perf_counter() - t0
+
+
+def test_a_long_whitespace_run_after_the_header_name_does_not_go_quadratic() -> None:
+    """MP-337. `[M] 2026-11-27` security review: two adjacent `\\s*` in the Basic-auth pattern
+    split one long whitespace run every possible way; "Authorization:" + 8,000 spaces took
+    0.37 s, quadrupling per doubling. Each run is now bounded and possessive. A growth ratio,
+    for the reason the PEM test gives."""
+    small = _scrub_auth_spaces_seconds(25_000)
+    large = _scrub_auth_spaces_seconds(100_000)
+    if small < 1e-3:
+        small = 1e-3  # too fast to time: the bound below is then on `large` alone
+    assert (
+        large / small < 8.0
+    ), f"4x the spaces cost {large / small:.1f}x ({small:.4f} -> {large:.4f} s)"

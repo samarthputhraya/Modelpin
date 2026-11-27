@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged.
 - **`runs` has a ceiling of 100**, in `modelpin.yaml` and on `--runs`. Every run is a paid
   call on your key; a larger value is refused at once, before anything is planned.
+- **More key shapes are redacted.** Together `tgp_v1_`, Hugging Face `hf_`, xAI `xai-`, Stripe
+  `sk_live_`/`sk_test_`, Slack `xoxb-`-style tokens, JWTs, Google refresh tokens and
+  `Authorization: Basic` headers are now recognised where Modelpin redacts: provider error
+  messages, the example runs reports quote, and `modelpin draft` input. The baseline warning
+  recognises them too.
 
 ### Fixed
 
