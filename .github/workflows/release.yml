@@ -93,9 +93,10 @@ jobs:
         with:
           # github.sha, NOT the tag name. For a release event GITHUB_SHA is "Last commit in the
           # tagged release", frozen in the event payload at run creation; a tag name is a
-          # mutable pointer that each job would re-resolve at its own runtime. Tags are
-          # completely unprotected on this repo (zero rulesets), so re-resolving would let a
-          # tag force-moved between two jobs ship bytes that no gate ever saw.
+          # mutable pointer that each job would re-resolve at its own runtime. When this was
+          # written tags were unprotected; rulesets 27901107 and 28192564 now stop anyone but an
+          # admin moving a release tag or `v1` (ADR-0052, ADR-0054). Pinning to the sha still
+          # means a tag moved between two jobs could never ship bytes that no gate saw.
           ref: ${{ github.sha }}
           # `merge-base --is-ancestor` and `rev-parse v1^{commit}` need real objects. At the
           # default fetch-depth 1 they die with "Not a valid object name" inside a step whose
@@ -228,12 +229,15 @@ jobs:
               print("")
               print("RECOVERY — re-running THIS run cannot help: a re-run reuses the original")
               print("event's GITHUB_SHA and GITHUB_REF, so it re-reads the same commit.")
-              print("  1. land the version fix on main and wait for CI green on that commit")
-              print("  2. gh release delete <tag> --cleanup-tag")
-              print("  3. git tag -a <tag> <fixed commit>   (and move v1 to the same commit)")
-              print("  4. git push origin <tag>; git push origin v1 --force")
+              print("Release tags are immutable (rulesets 27901107 and 28192564, ADR-0052), so")
+              print("this tag cannot be fixed in place: skip to the next version.")
+              print("  1. gh release delete <tag>   (the release only; the tag stays, unpublished)")
+              print("  2. on main, bump pyproject.toml, CHANGELOG.md and README.md to the next")
+              print("     patch version and wait for CI green on that commit")
+              print("  3. tag that commit with the next version and push the tag")
+              print("  4. move v1 to that commit (admin only; the release skill does this)")
               print("  5. publish a new GitHub Release against the new tag")
-              print("Do not move the tag to match a stale file.")
+              print("Never re-point a release tag to match a stale file.")
               sys.exit(1)
           print(f"version gate ok: {ver} == pyproject == __version__ == CHANGELOG == README")
           PY
@@ -252,7 +256,8 @@ jobs:
       #   - ancestry: proves it is on main. But with a non-squash merge, every commit of a
       #     branch becomes an ancestor of main while only the branch HEAD was ever checked.
       # Together they are a real release gate. Branch protection alone is not: it does not
-      # cover tags, this repo has zero rulesets, and enforce_admins is false.
+      # cover tags, and enforce_admins is false. The tag rulesets (27901107, 28192564) stop a
+      # tag being moved, not a wrong commit being tagged, so these two checks still matter.
       - name: Gate — the tagged commit is on main AND passed the four required checks
         env:
           EVENT_SHA: ${{ github.sha }}
