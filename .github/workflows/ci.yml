@@ -52,6 +52,28 @@ jobs:
       - name: Tests (offline — fake provider, no API calls)
         run: pytest -q
 
+  # MP-12. Type checking ran only on a developer's machine (`/verify` step 5), so a type error
+  # could reach `main` through any PR that skipped it. One job, on the Python floor: mypy's
+  # verdict does not depend on the interpreter the tests run on, and a cold run takes minutes.
+  types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Install (with providers + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[providers,dev]"
+
+      - name: Type check (mypy)
+        run: mypy modelpin --ignore-missing-imports
+
   # MP-01 / #28. The `test` job above installs with `-e` and runs from the checkout, which
   # removes BOTH preconditions of the bug it failed to catch: an editable install resolves
   # repo-root paths, and cwd supplies examples/ and data/. This bug class is invisible to
