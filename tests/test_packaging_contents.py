@@ -576,3 +576,22 @@ def test_the_dev_extra_installs_the_stubs_mypy_needs() -> None:
         "the dev extra installs mypy but not types-PyYAML, so `mypy modelpin` fails at "
         "`import yaml` in a fresh dev venv. Add `types-PyYAML` to [project.optional-dependencies] dev."
     )
+
+
+def test_ci_type_checks_the_package() -> None:
+    """MP-12. Type checking ran only in the local gate, so CI could merge a type error.
+
+    `[M] 2026-11-27` `grep -c mypy .github/workflows/*.yml` found it in none of them, while
+    `mypy modelpin --ignore-missing-imports` was clean (0 issues in 34 files). CI now runs the
+    same command the local gate runs.
+    """
+    import yaml
+
+    ci = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+    if not ci.is_file():  # an unpacked sdist ships no `.github/` (see MANIFEST.in)
+        pytest.skip("no .github/workflows/ci.yml in this tree")
+    jobs = yaml.safe_load(ci.read_text("utf-8"))["jobs"]
+    runs = [str(step.get("run", "")) for job in jobs.values() for step in job.get("steps", [])]
+    assert any(
+        "mypy modelpin --ignore-missing-imports" in r for r in runs
+    ), "no ci.yml job type-checks the package; add a step running the local gate's mypy command"
