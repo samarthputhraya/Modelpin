@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`modelpin watch` knows six more models.** Claude 3.7 Sonnet
+  (`claude-3-7-sonnet-20250219`), Claude 3.5 Haiku (`claude-3-5-haiku-20241022`) and Claude 3
+  Haiku (`claude-3-haiku-20240307`), all retired, and Gemini 4 Neon, Carbon and Argon
+  (`gemini-4-neon`, `gemini-4-carbon`, `gemini-4-argon`), all active. Each used to be
+  reported as unknown.
+- **The registry was re-read on 27 Nov 2026.** For 60 entries, the retirement date, the notice
+  date where the page states one, and the replacement are unchanged on the OpenAI, Anthropic
+  and Vertex AI pages. `gemini-3.7-flash` now names the Vertex AI page its retirement date
+  comes from.
 - **The report now says when the semantic judge gave no clear verdict.** The judge reads a reply
   with no verdict as "same meaning", so a judge outage cannot fail every build. That covers an
   empty or filtered reply, a refusal, unreadable text, or a reply whose verdicts contradict
