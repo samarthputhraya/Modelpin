@@ -1,9 +1,12 @@
 """MP-248: no scenario in a SCORED set declares a per-scenario `match` mode.
 
-`[M] 2026-09-12` FP review: a `match: subset` on a scored scenario makes the tool channel read
-`unchanged @ 1.000`, `scripts/fp_measurement.py` classifies that as *could not have fired*, and
-ADR-0022 drops it from the denominator. The published false-positive rate would improve with
-no engine change -- the `0/0` shape ADR-0041 D2 exists to prevent, reached from the corpus side.
+`[M] 2026-09-12` FP review: on the CLI path, which honours a scenario's `match`, a
+`match: subset` makes the tool channel read `unchanged @ 1.000`. A trial that reads that way is
+what `scripts/fp_measurement.py` classifies as *could not have fired*, and ADR-0022 drops it
+from the denominator. The published false-positive rate would improve with no engine change --
+the `0/0` shape ADR-0041 D2 exists to prevent, reached from the corpus side. (`[M] 2026-11-27`
+the measurement script itself scores in `strict` mode today and does not read `match`; this
+guard keeps the scored corpus safe for every path that does.)
 
 `tests/test_mp227_per_scenario_match.py` guarded `fp-suite-v2` and `report-suite` by name; the
 other scored sets were open. This derives the list from `examples/roles.json`, which every new
