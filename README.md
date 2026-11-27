@@ -54,9 +54,14 @@ ships, so it is only as current as the release you installed (`--registry <path>
 newer file). Registry re-read against the vendors' deprecation pages on 22 Nov 2026 and against
 Anthropic's again on 26 Nov 2026: 45 of its 100 entries carry one of those two dates (each entry's
 `fetched_at` gives its date). Azure OpenAI and Amazon Bedrock set their own dates, which can
-differ: o3's retirement date is 19 Nov 2026 on Azure but 11 Dec 2026 on OpenAI; Claude Sonnet
-4.5's is 30 Nov 2026 on the Anthropic API and Vertex AI, but it reaches end-of-life on Bedrock on
-8 Apr 2027. Modelpin does not open pull requests on its
+differ: o3's retirement date was 19 Nov 2026 on Azure but is 11 Dec 2026 on OpenAI; Claude
+Sonnet 4.5 retires on the Anthropic API and Vertex AI on 30 Nov 2026, but reaches end-of-life on
+Bedrock on 8 Apr 2027 in commercial regions and 27 Apr 2027 in its us-gov regions. Sources:
+Azure's
+[retirement schedule](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule)
+and Bedrock's
+[model lifecycle page](https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle-legacy.html),
+both read 27 Nov 2026. Modelpin does not open pull requests on its
 own: you choose the candidate model,
 and a scheduled workflow can re-check it on your clock.
 
