@@ -222,3 +222,76 @@ def test_the_page_says_the_hard_bound_has_no_tool_channel_exposure():
     for channel, n in exposed.items():
         assert f"`{channel}`" in block, f"{channel} is not named in the per-channel table"
         assert str(n) in block
+
+
+# --- MP-232: the same invariants on README.md ----------------------------------------------
+#
+# `[M] 2026-09-08` Every guard above reads `docs/fp-measurement.md`. README.md -- the page that
+# becomes PyPI's immutable long description at upload -- once led with the pooled bound while
+# the guarded page led with the hard one (ADR-0042 D1), and nothing failed. These re-derive the
+# README's numbers from the same artifacts.
+
+README = REPO / "README.md"
+
+
+def _severity() -> dict:
+    _, paths = _artifacts()
+    return agg.summarise([str(p) for p in paths])["pooled"]
+
+
+def test_the_readme_quotes_the_hard_bound_with_its_distinct_shape_bound():
+    """ADR-0042 D1 + D3, on README: the hard fraction, its trial bound and its shape bound."""
+    pooled = _severity()
+    sev = pooled["severity"]
+    readme = " ".join(README.read_text(encoding="utf-8").split())
+    k, n, shapes = sev["hard_fp"], sev["hard_scored"], len(sev["hard_shapes"])
+    assert f"{k} false alarms in {n}" in readme, f"README must state the hard fraction {k}/{n}"
+    assert f"{upper_bound_95(k, n):.1%}" in readme, "README must carry the hard trial bound"
+    assert f"{upper_bound_95(k, shapes):.1%}" in readme and f"{shapes} distinct" in readme, (
+        f"README must carry the hard bound over its {shapes} distinct scenarios "
+        f"({upper_bound_95(k, shapes):.1%}) beside the trial bound"
+    )
+    could_not = pooled["reached_verdict"] - pooled["scored"]
+    assert (
+        f"{could_not} of the {pooled['reached_verdict']}" in readme
+    ), "README must say how many trials that reached a verdict could not have fired"
+
+
+def test_the_readme_never_quotes_a_bound_without_the_one_that_constrains_it():
+    """D1: the pooled bound may appear only after the hard one. D3: a trial-count bound for
+    either severity only with its distinct-shape bound."""
+    pooled = _severity()
+    sev = pooled["severity"]
+    readme = " ".join(README.read_text(encoding="utf-8").split())
+
+    def at(pct: str) -> int:
+        """Where ``pct`` first appears as a whole number (so 7.4% is not found in 17.4%)."""
+        m = re.search(rf"(?<![\d.]){re.escape(pct)}", readme)
+        return m.start() if m else -1
+
+    hard = f"{upper_bound_95(sev['hard_fp'], sev['hard_scored']):.1%}"
+    pooled_bound = f"{upper_bound_95(pooled['false_positives'], pooled['scored']):.1%}"
+    if at(pooled_bound) >= 0:
+        assert 0 <= at(hard) < at(pooled_bound), (
+            f"README quotes the pooled bound {pooled_bound} before (or without) the hard "
+            f"bound {hard}; ADR-0042 D1 says the hard one is read first"
+        )
+    for severity in ("hard", "advisory"):
+        k, n = sev[f"{severity}_fp"], sev[f"{severity}_scored"]
+        trial = f"{upper_bound_95(k, n):.1%}"
+        shape = f"{upper_bound_95(k, len(sev[f'{severity}_shapes'])):.1%}"
+        if at(trial) >= 0:
+            assert at(shape) >= 0, (
+                f"README quotes the {severity} trial bound {trial} without its distinct-shape "
+                f"bound {shape} (ADR-0042 D3)"
+            )
+
+
+def test_the_readme_says_the_hard_bound_has_no_tool_channel_exposure():
+    """D4 on README: the tool channel had no exposure inside the hard bound."""
+    exposed = _severity()["severity"]["exposed_by_channel"]
+    assert exposed["tool"] == 0, "tool exposure exists now; publish it and update this test"
+    readme = " ".join(README.read_text(encoding="utf-8").split())
+    assert (
+        "none was on tool calls" in readme
+    ), "README must say none of the hard-bound trials was on tool calls"
