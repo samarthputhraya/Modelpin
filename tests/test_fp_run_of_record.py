@@ -287,11 +287,13 @@ def test_the_readme_never_quotes_a_bound_without_the_one_that_constrains_it():
             )
 
 
-def test_the_readme_says_the_hard_bound_has_no_tool_channel_exposure():
-    """D4 on README: the tool channel had no exposure inside the hard bound."""
+def test_the_readme_gives_the_hard_bounds_channel_breakdown():
+    """D4 on README: the channels inside the hard bound, and that the tool channel had none."""
     exposed = _severity()["severity"]["exposed_by_channel"]
     assert exposed["tool"] == 0, "tool exposure exists now; publish it and update this test"
     readme = " ".join(README.read_text(encoding="utf-8").split())
     assert (
         "none was on tool calls" in readme
     ), "README must say none of the hard-bound trials was on tool calls"
+    breakdown = f"{exposed['semantic']} on judged meaning and {exposed['refusal']} on refusals"
+    assert breakdown in readme, f"README must give the hard bound's breakdown: {breakdown!r}"
