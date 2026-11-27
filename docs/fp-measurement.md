@@ -703,6 +703,51 @@ not over tool use in general. Two models from one vendor are two models. The poo
 every trial that reached a verdict, including the control's 40, which the per-channel rows
 exclude.
 
+### Exact rates under a constructed null (2026-11-27)
+
+The rate above was measured on one corpus. This is its complement, computed exactly rather than
+sampled: `scripts/tool_null_rates.py` drives the real `diff_scenario` with the same model on both
+sides, identical answers and no judge, so only the tool-call trajectory can fire and every
+`regression` is a false alarm. Each run follows one of two trajectories (`lookup`, or `lookup`
+then `notify`) or one of three (no tool call as well), at random with fixed probabilities. Every
+possible baseline and candidate sample at 5 runs a side, matched `strict` (the default), is
+enumerated and weighted by its probability, so each figure is exact for the probabilities it
+names. "Per check" means one scenario: one set of candidate runs against one recorded baseline.
+
+`[M] 2026-11-27`, `python scripts/tool_null_rates.py`:
+
+| Same-model false alarms per check, highest over a 0.05 grid of probabilities | 2 trajectories | 3 trajectories |
+|---|---|---|
+| First sample | **2.15%** (50/50) | **2.76%** (0.45 / 0.1 / 0.45) |
+| After the confirmation replay (on by default) | **0.25%** (50/50) | **0.38%** (0.3 / 0.35 / 0.35) |
+
+- **Per scenario, not per suite.** Ten such scenarios, each at the 0.38% grid maximum, give at
+  most about a 3.7% chance of at least one confirmed false alarm per check, if they are
+  independent.
+- **One unlucky baseline repeats.** Confirmation replays the candidate only, so a baseline that
+  happens to be unrepresentative stays that way. For a model that takes each of two trajectories
+  half the time, a baseline that recorded only `lookup` (a 3.12% chance; 6.25% for either
+  trajectory alone) makes **18.75%** of checks flag before confirmation and **3.52%** after, on
+  every check until the baseline is re-recorded. With three equally likely trajectories, a
+  baseline with all 5 runs on one named trajectory (a 0.41% chance; 1.23% for any one) makes
+  **46.09%** flag and **21.24%** after confirmation.
+- **A deeper baseline lowers the typical rate, not the damage of a bad one.** With 10 baseline
+  runs and 5 candidate runs, the highest per-check rates fall to 1.47% and 0.15% (two
+  trajectories) and 2.58% and 0.26% (three). A one-trajectory baseline becomes much rarer (0.10%
+  for one named trajectory of two, about 0.002% of three) but is worse when it happens: 50.00% of
+  checks flag and 25.00% after confirmation (two trajectories), 79.01% and 62.43% (three).
+  `[M] 2026-11-27`, `python scripts/tool_null_rates.py --baseline-runs 10` (about 40 s); these
+  figures are not re-derived by the test.
+- **The exact test stays under its 5% level.** Pool the 5 baseline and 5 candidate runs of a
+  model with two trajectories: however the 10 runs split between the trajectories, at most
+  **12 of the 252** ways to divide them into 5 and 5 would flag (4.76%). That bounds the
+  first-sample rate when both sides come from the same distribution, before confirmation.
+
+**What this does not say.** These are constructed models: real tool use is rarely a fixed coin
+flip, and the measured exposure above is one corpus's result for the models on it. The figures
+cover the tool-call channel alone. `tests/test_tool_null_rates.py` re-derives the 5-run figures
+in this section from the engine on every test run.
+
 ## The assertion channel (2026-09-08) — measured for FALSE POSITIVES for the first time, in either direction
 
 `[M]` **1 false alarm in 30 scored assertion-exposed trials = 3.3%, one-sided 95% upper bound
