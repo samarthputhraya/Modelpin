@@ -80,6 +80,29 @@ def test_claude_on_vertex_uses_the_dated_vertex_id():
     assert setup.judge_model == "claude-sonnet-5-5"
 
 
+_VERTEX_ONLY = {"ANTHROPIC_API_KEY": " ", "ANTHROPIC_VERTEX_PROJECT_ID": "p"}
+
+
+@pytest.mark.parametrize(
+    "env, named",
+    [
+        ({"ANTHROPIC_VERTEX_PROJECT_ID": "p"}, "ANTHROPIC_VERTEX_PROJECT_ID"),
+        ({"ANTHROPIC_API_KEY": "x"}, "ANTHROPIC_API_KEY"),
+        (_VERTEX_ONLY, "ANTHROPIC_VERTEX_PROJECT_ID"),
+        ({"GOOGLE_API_KEY": "x"}, "GOOGLE_API_KEY"),
+        ({"GOOGLE_GENAI_USE_VERTEXAI": "true"}, "GOOGLE_GENAI_USE_VERTEXAI"),
+        ({"GEMINI_API_KEY": "x", "GOOGLE_API_KEY": "y"}, "GEMINI_API_KEY"),
+    ],
+)
+def test_the_chosen_comment_names_the_variable_that_is_actually_set(env, named):
+    """MP-315. `[M] 2026-11-25` With only ANTHROPIC_VERTEX_PROJECT_ID set, the written config
+    said `chosen: ANTHROPIC_API_KEY is set in your environment`; Google's second and third
+    variables were misnamed the same way."""
+    setup = infer_setup([], env=env)
+    assert setup.provider_source == f"{named} is set in your environment"
+    assert f"chosen: {named} is set in your environment" in render_config(setup)
+
+
 @pytest.mark.parametrize("provider", sorted(JUDGE_MODEL))
 def test_every_scaffolded_config_loads_and_routes_its_judge(provider, tmp_path):
     setup = infer_setup([], env={})
@@ -254,3 +277,16 @@ def test_init_says_nothing_about_retirement_for_a_current_model(tmp_path, monkey
     out = _init_output(tmp_path, monkeypatch, "claude-sonnet-5-5")
     assert "retire" not in out.split("Next:")[0] and "shut down" not in out, out
     assert "modelpin watch" in out.split("Next:")[1]
+
+
+def test_the_credential_hint_names_every_variable_the_adapter_reads():
+    """MP-315. The comment above `providers:` named GEMINI_API_KEY only, while the Google
+    adapter also reads GOOGLE_API_KEY, and `init` could choose Google on that variable alone."""
+    from modelpin.providers.google import _API_KEY_ENVS
+    from modelpin.scaffold import CREDENTIAL_HINT, PROVIDER_CREDENTIALS
+
+    for provider, variables in PROVIDER_CREDENTIALS:
+        for var in variables:
+            assert var in CREDENTIAL_HINT[provider], (provider, var)
+    for var in _API_KEY_ENVS:
+        assert var in CREDENTIAL_HINT["google"], var
