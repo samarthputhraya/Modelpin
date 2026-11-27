@@ -51,8 +51,8 @@ from OpenAI, Anthropic and Google's own deprecation and model pages, not from th
 of OpenAI-compatible
 hosts. **Nothing in Modelpin polls provider feeds**: the registry is refreshed when a release
 ships, so it is only as current as the release you installed (`--registry <path>` points at a
-newer file). Registry re-read against the vendors' deprecation pages on 22 Nov 2026 and against
-Anthropic's again on 26 Nov 2026: 45 of its 100 entries carry one of those two dates (each entry's
+newer file). Registry re-read against OpenAI's and Anthropic's deprecation pages and Google's
+Vertex AI lifecycle table on 27 Nov 2026: 67 of its 106 entries carry that date (each entry's
 `fetched_at` gives its date). Azure OpenAI and Amazon Bedrock set their own dates, which can
 differ: o3's retirement date was 19 Nov 2026 on Azure but is 11 Dec 2026 on OpenAI; Claude
 Sonnet 4.5 retires on the Anthropic API and Vertex AI on 30 Nov 2026, but reaches end-of-life on
