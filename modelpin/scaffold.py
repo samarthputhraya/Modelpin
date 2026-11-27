@@ -118,10 +118,37 @@ def provider_for_model(model: str) -> Optional[str]:
     return None
 
 
+def _google_vertex_flag(env: Mapping[str, str]) -> Optional[str]:
+    """The variable that selects Google's Vertex backend in ``env``, or None.
+
+    Read exactly as `providers/google.py` reads it: the first of its `_VERTEX_ENVS` that is
+    set decides, and only a truthy value selects Vertex.
+    """
+    from modelpin.providers.google import _VERTEX_ENVS, _truthy
+
+    for name in _VERTEX_ENVS:
+        raw = env.get(name)
+        if raw is not None and raw.strip():
+            return name if _truthy(raw) else None
+    return None
+
+
+def _set(env: Mapping[str, str], name: str) -> bool:
+    return bool((env.get(name) or "").strip())
+
+
 def has_credentials(provider: str, env: Mapping[str, str]) -> bool:
+    if provider == "google":
+        # MP-341: `[M] 2026-11-27` `GOOGLE_GENAI_USE_VERTEXAI=true` alone made `init` say
+        # "Credentials for google are already set", and the adapter then refused to build a
+        # client without GOOGLE_CLOUD_PROJECT. Once Vertex is selected the adapter ignores any
+        # API key, so the project is what counts.
+        if _google_vertex_flag(env):
+            return _set(env, "GOOGLE_CLOUD_PROJECT")
+        return _set(env, "GEMINI_API_KEY") or _set(env, "GOOGLE_API_KEY")
     for name, variables in PROVIDER_CREDENTIALS:
         if name == provider:
-            return any((env.get(v) or "").strip() for v in variables)
+            return any(_set(env, v) for v in variables)
     return False
 
 
@@ -137,8 +164,12 @@ def _credential_found(provider: str, env: Mapping[str, str]) -> str:
     `chosen: ANTHROPIC_API_KEY is set in your environment`, because the comment took the first
     word of `CREDENTIAL_HINT` whichever variable had matched.
     """
+    if provider == "google" and (flag := _google_vertex_flag(env)):
+        return flag
     variables = dict(PROVIDER_CREDENTIALS)[provider]
-    return next((v for v in variables if (env.get(v) or "").strip()), variables[0])
+    if provider == "google":
+        variables = tuple(v for v in variables if v.endswith("_API_KEY"))
+    return next((v for v in variables if _set(env, v)), variables[0])
 
 
 #: The import each provider adapter needs. The OpenAI-compatible hosts all speak through the
