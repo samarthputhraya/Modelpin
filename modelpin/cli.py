@@ -848,6 +848,33 @@ def _resolve_provider(provider: Optional[str], cfg: ModelpinConfig) -> str:
     return provider or (cfg.providers[0] if cfg.providers else DEFAULT_PROVIDER)
 
 
+def _unknown_provider(provider: str, *, from_config: Optional[str] = None) -> Optional[str]:
+    """The error for a provider name no adapter serves, or None. By name only (MP-156).
+
+    The same names, compared the same way (lower-cased), as `get_adapter`, which raises this
+    message when it is finally asked to build the adapter; `test_provider_name_check.py` keeps
+    the two in step. Checking the name costs nothing, so the commands do it before reading
+    any file. `[M] 2026-11-27` Checked only at adapter time, `--provider mistral` in an empty
+    directory reported "no scenarios found ... run `modelpin init`" instead: the user
+    scaffolded and recorded before learning the name was never valid.
+
+    ``from_config`` names the config file when the name came from its `providers:` list
+    rather than `--provider`, so a user who never typed the name knows where it is.
+    """
+    from modelpin.providers import LIVE_PROVIDERS
+
+    known = {"fake", *LIVE_PROVIDERS, *OPENAI_COMPATIBLE_PROVIDERS}
+    if provider.lower() in known:
+        return None
+    where = f" (from `providers:` in {from_config})" if from_config else ""
+    return f"Unknown provider: {provider}{where}. Valid: {provider_help()}"
+
+
+def _provider_source(provider: Optional[str], config_path: str) -> Optional[str]:
+    """For `_unknown_provider`: the config file, when `--provider` was not given."""
+    return None if provider else config_path
+
+
 def _resolve_runs(
     runs: Optional[int],
     cfg: ModelpinConfig,
@@ -1914,6 +1941,11 @@ def baseline(
 ) -> None:
     """Record current model behavior for your scenarios (N runs)."""
     cfg = _load_config_or_fail(config_path)
+    # MP-156: the name first, before any file is read. Every later setup failure here also
+    # exits 4, so failing earlier changes which message is shown, never the exit code.
+    prov = _resolve_provider(provider, cfg)
+    if unknown := _unknown_provider(prov, from_config=_provider_source(provider, config_path)):
+        _fail(unknown)
     src_dir = scenarios_dir or cfg.scenarios_dir
     scenarios = _load_scenarios_or_fail(
         src_dir,
@@ -1924,7 +1956,6 @@ def baseline(
     if not from_model:
         _fail("no model to baseline. Pass --model or set `models:` in modelpin.yaml.")
     n = _resolve_runs(runs, cfg)
-    prov = _resolve_provider(provider, cfg)
     adapter = _with_reasoning_effort(
         _adapter(prov, fixtures), _resolve_reasoning_effort(reasoning_effort, cfg, prov)
     )
@@ -2090,6 +2121,15 @@ def check(
     # user-facing surface gets the answer.
     mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
+    # Resolved ABOVE the baseline load so the abstain branch below can publish an artifact.
+    prov = _resolve_provider(provider, cfg)
+    # MP-156: the name is checked before any file is read, so an empty directory cannot hide
+    # it behind "no scenarios found". It is PRINTED here, but the run still stops where it
+    # always did -- at the latest, just before the adapter is built -- so every exit code is
+    # unchanged, including the abstain (3) for a missing baseline.
+    unknown = _unknown_provider(prov, from_config=_provider_source(provider, config_path))
+    if unknown:
+        console.print(f"[red]error:[/] {_rich_escape(unknown)}")
     src_dir = scenarios_dir or cfg.scenarios_dir
     scenarios = _load_scenarios_or_fail(
         src_dir,
@@ -2099,8 +2139,6 @@ def check(
     from_model = from_ or (cfg.models[0] if cfg.models else None)
     if not from_model:
         _fail("no baseline model. Pass --from or set `models:` in modelpin.yaml.")
-    # Resolved ABOVE the baseline load so the abstain branch below can publish an artifact.
-    prov = _resolve_provider(provider, cfg)
     try:
         base = load_baseline(from_model, store_dir)
     except (FileNotFoundError, BaselineError) as e:
@@ -2171,6 +2209,8 @@ def check(
     # over a run that then reported two -- the scoping `nonuniform_run_counts` already has.
     replayed = [len(base[s.id]) for s in scenarios if base.get(s.id)]
     n = _resolve_runs(runs, cfg, mode=mode, baseline_sizes=replayed)
+    if unknown:  # already printed above; `_adapter` below used to fail with the same exit
+        raise typer.Exit(code=EXIT_SETUP_FAILED)
     effort = _resolve_reasoning_effort(reasoning_effort, cfg, prov)
     adapter = _with_reasoning_effort(_adapter(prov, fixtures), effort)
     # Only scenarios that HAVE a baseline are replayed (the rest are skipped below), so
@@ -2742,6 +2782,10 @@ def report(
     """
     mode = _resolve_match_mode(mode)
     cfg = _load_config_or_fail(config_path)
+    # MP-156, as in `baseline`: every later setup failure here also exits 4.
+    prov = _resolve_provider(provider, cfg)
+    if unknown := _unknown_provider(prov, from_config=_provider_source(provider, config_path)):
+        _fail(unknown)
     scenarios = _load_scenarios_or_fail(suite_dir, source="suite", config_path=config_path)
     # `mode=` is passed for the same reason `check` passes it, and MP-140 makes it
     # load-bearing: the Report now publishes an `underpowered` list computed with the mode,
@@ -2749,7 +2793,6 @@ def report(
     # document it is about to write goes on to disclose. Both sides are replayed here at
     # `n`, so `baseline_sizes` correctly defaults to it.
     n = _resolve_runs(runs, cfg, mode=mode)
-    prov = _resolve_provider(provider, cfg)
     adapter = _adapter(prov, fixtures)
     # Both sides are replayed live here, so the REPLAYS are twice a `check` over the same
     # suite. The JUDGE axis is not -- `check` reads its reference side off disk, so its judge

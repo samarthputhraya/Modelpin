@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An unknown `--provider` name is reported first.** `baseline`, `check` and `report` checked
+  the name only when they built the adapter, so in a new directory `--provider mistral` said
+  "no scenarios found" and suggested `modelpin init`. The name is now checked before any file
+  is read, and a name from `providers:` in `modelpin.yaml` says so. `check` still names any
+  other problem it finds after that, and every exit code is unchanged.
 - **`modelpin scan` is linear on long lines of Claude-shaped text.** The pattern for Vertex's
   `claude-...@YYYYMMDD` spelling backtracked across a whole line. A 200 KB one-line file took
   27 seconds to scan; it is now found with the same results in linear time.
