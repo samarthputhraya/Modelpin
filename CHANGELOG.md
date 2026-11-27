@@ -24,11 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The scan behind both warnings now reads every string at any depth:** nested tool
   arguments, tool names and Gemini-style message parts.
 - **The console shows control characters as text.** This covers model output, tool names,
-  scenario ids, registry text and `judge_model`. A control character in any of them (ESC
-  sequences included) now prints as `\xNN` instead of reaching the terminal.
-- **`judge_model` is printed as text, not markup.**
-- **`modelpin watch` quotes a model id in a suggested command** when the id has characters a
-  shell would read. Real model ids print unchanged.
+  scenario ids, registry text and `judge_model`, which is also printed as text rather than
+  markup. Any control character except tab and newline (ESC sequences included) now prints
+  as `\xNN` instead of reaching the terminal.
+- **`modelpin watch` shell-quotes the model id and the provider in its suggested command**
+  when they have characters a shell would read. Real names print unchanged.
 - **`modelpin check` names baselined scenarios that are missing from the run.** A scenario
   that is in the baseline but not in this run's scenarios, because it was deleted, renamed or
   moved, was never checked, and nothing said so. The console and the PR comment now name those
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`runs` has a ceiling of 100**, in `modelpin.yaml` and on `--runs`. Every run is a paid
   call on your key; a larger value is refused at once, before anything is planned.
 - **More key shapes are redacted.** Together `tgp_v1_`, Hugging Face `hf_`, xAI `xai-`, Stripe
-  `sk_live_`/`sk_test_`, Slack `xoxb-`-style tokens, JWTs, Google refresh tokens and
+  `sk_`/`rk_` live and test keys, Slack `xox`-prefixed tokens, JWTs, Google refresh tokens and
   `Authorization: Basic` headers are now recognised where Modelpin redacts: provider error
   messages, the example runs reports quote, and `modelpin draft` input. The baseline warning
   recognises them too.
@@ -47,14 +47,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`modelpin init`'s Next list fits what it just configured.** With no model in the code it
   now says to set `models:` before `modelpin baseline`, which would otherwise record the
   placeholder. For a model that no longer answers it says to point `models:` at the model
-  you run now, and names the vendor's replacement, instead of suggesting a baseline that
-  cannot be recorded. When `modelpin watch` will exit 1 or 3 on the models `init` wrote, the
-  `watch` step says so and names the model, so the exit reads as an answer, not an error.
+  you run now, and names the vendor's replacement when the registry has one, instead of
+  suggesting a baseline that cannot be recorded. When `modelpin watch` will exit 1 or 3 on the
+  models `init` wrote, the `watch` step says so and names the model, so the exit reads as an
+  answer, not an error.
 - **An unknown `--provider` name is reported first.** `baseline`, `check` and `report` checked
   the name only when they built the adapter, so in a new directory `--provider mistral` said
   "no scenarios found" and suggested `modelpin init`. The name is now checked before scenarios
-  or baselines are read, and a name from `providers:` in `modelpin.yaml` says so. `check` still names any
-  other problem it finds after that, and every exit code is unchanged.
+  or baselines are read, and a name from `providers:` in `modelpin.yaml` says so. `check`
+  still names any other problem it finds after that, and every exit code is unchanged.
 - **`modelpin scan` is linear on long lines of Claude-shaped text.** The pattern for Vertex's
   `claude-...@YYYYMMDD` spelling backtracked across a whole line. A 200 KB one-line file took
   27 seconds to scan; it is now found with the same results in linear time.
@@ -64,8 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A missing provider SDK is reported before a missing API key.** With neither installed
   nor set, `--provider openai` (and the OpenAI-compatible hosts) and `--provider anthropic`
   said the key was not set, and only after a key was created said the SDK was missing. The
-  free check now comes first, as it already did for `google`. The messages are unchanged.
-- **Scenarios are read only from inside the scenarios directory.** A directory link (a
+  free check now comes first, as it already did for `google`, and the same order applies to
+  the semantic judge's client. The messages are unchanged.
+- **Scenarios are read only from inside the scenarios directory.** A directory or file link (a
   symlink, or an NTFS junction on Windows) that leads out of it is no longer followed, and a
   link back to a parent no longer makes loading walk forever.
 - **`modelpin init` writes starter scenarios only inside the current directory.** If an
