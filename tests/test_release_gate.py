@@ -158,9 +158,8 @@ def test_the_gate_accepts_a_tree_prepared_for_the_declared_version(tmp_path: Pat
     #
     # Deliberately an extra assertion rather than a second test with a `pytest.skip`. A skip
     # would make the suite's pass/skip counts depend on where in the release cycle it runs,
-    # and `tests/test_recall_arm.py::test_the_readmes_test_count_is_the_real_one` pins those
-    # counts in README.md — so a conditional skip would turn a published number into
-    # something that silently changes twice per release. One test, always run, no skip.
+    # and those counts are quoted by the gate and in pull requests -- a conditional skip
+    # would make them change silently twice per release. One test, always run, no skip.
     if _repo_is_release_ready():
         real = _run_gate(_tree(tmp_path, "real"), version)
         assert real.returncode == 0, (

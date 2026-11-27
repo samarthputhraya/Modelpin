@@ -5,9 +5,8 @@ scan boundary (MP-241) uses it to refuse to follow an NTFS junction out of the r
 the detector needs its own reading of the reparse tag -- and that reading must agree with the
 standard library's wherever both exist.
 
-These tests never skip. `tests/test_recall_arm.py::test_the_readmes_test_count_is_the_real_one`
-pins passed + xfailed against collected, so a platform skip here would turn a published number
-into one that depends on which machine ran the suite. Each test builds whatever link the
+These tests never skip, so the suite's pass and skip counts do not depend on which machine ran
+it (the counts the gate and pull requests quote). Each test builds whatever link the
 platform allows without privilege -- a junction on Windows, a symlink elsewhere -- exactly as
 `tests/test_scan_boundary.py` does, and asserts the answer both with and without the 3.12 helper.
 """
