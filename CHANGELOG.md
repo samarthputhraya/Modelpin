@@ -65,6 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`modelpin init` writes starter scenarios only inside the current directory.** If an
   existing `modelpin.yaml` sets `scenarios_dir` to a path outside it, `init` now stops with an
   error instead.
+- **`modelpin init` names the credential it actually found.** With only
+  `ANTHROPIC_VERTEX_PROJECT_ID` set, the written `modelpin.yaml` said `ANTHROPIC_API_KEY is set
+  in your environment`; `GOOGLE_API_KEY` and `GOOGLE_GENAI_USE_VERTEXAI` were misnamed as
+  `GEMINI_API_KEY` the same way. The comment now names the variable that is set, and the
+  comment above `providers:` lists `GOOGLE_API_KEY` beside `GEMINI_API_KEY`.
 - **`python -m modelpin` imports the same modules as the `modelpin` command.** `python -m`
   puts the current directory first on Python's import path, which the console scripts never
   did, so a file in your repository named like one of Modelpin's dependencies was imported in

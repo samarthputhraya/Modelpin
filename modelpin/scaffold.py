@@ -81,7 +81,9 @@ _JUDGE_PROVIDER_REQUIRED = frozenset({"groq", "openrouter", "together", "cerebra
 CREDENTIAL_HINT: dict[str, str] = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY (or ANTHROPIC_VERTEX_PROJECT_ID for Claude on Vertex AI)",
-    "google": "GEMINI_API_KEY (or GOOGLE_GENAI_USE_VERTEXAI=true + GOOGLE_CLOUD_PROJECT)",
+    # Both key variables, as `providers/google.py` reads them (MP-315).
+    "google": "GEMINI_API_KEY or GOOGLE_API_KEY (or GOOGLE_GENAI_USE_VERTEXAI=true + "
+    "GOOGLE_CLOUD_PROJECT)",
     "groq": "GROQ_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
     "together": "TOGETHER_API_KEY",
@@ -125,6 +127,18 @@ def has_credentials(provider: str, env: Mapping[str, str]) -> bool:
 
 def _credentialed_providers(env: Mapping[str, str]) -> list[str]:
     return [name for name, _ in PROVIDER_CREDENTIALS if has_credentials(name, env)]
+
+
+def _credential_found(provider: str, env: Mapping[str, str]) -> str:
+    """The first of ``provider``'s credential variables that is set, by the same test as
+    `has_credentials`.
+
+    MP-315: `[M] 2026-11-25` with only ANTHROPIC_VERTEX_PROJECT_ID set, the written config said
+    `chosen: ANTHROPIC_API_KEY is set in your environment`, because the comment took the first
+    word of `CREDENTIAL_HINT` whichever variable had matched.
+    """
+    variables = dict(PROVIDER_CREDENTIALS)[provider]
+    return next((v for v in variables if (env.get(v) or "").strip()), variables[0])
 
 
 #: The import each provider adapter needs. The OpenAI-compatible hosts all speak through the
@@ -204,7 +218,7 @@ def infer_setup(hits: list[dict], env: Optional[Mapping[str, str]] = None) -> Se
         provider = credentialed[0]
         model = _vertex_claude_id(DEFAULT_MODEL[provider], env)
         model_source = "a placeholder: no model id was found in your code -- set yours"
-        provider_source = f"{CREDENTIAL_HINT[provider].split(' ')[0]} is set in your environment"
+        provider_source = f"{_credential_found(provider, env)} is set in your environment"
     else:
         provider = "openai"
         model = DEFAULT_MODEL[provider]
