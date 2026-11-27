@@ -60,7 +60,7 @@ def test_the_most_used_runnable_model_wins():
         ({"OPENAI_API_KEY": "x"}, "openai"),
         ({"ANTHROPIC_API_KEY": "x"}, "anthropic"),
         ({"GEMINI_API_KEY": "x"}, "google"),
-        ({"GOOGLE_GENAI_USE_VERTEXAI": "true"}, "google"),
+        ({"GOOGLE_GENAI_USE_VERTEXAI": "true", "GOOGLE_CLOUD_PROJECT": "p"}, "google"),
         ({"GROQ_API_KEY": "x"}, "groq"),
     ],
 )
@@ -81,6 +81,7 @@ def test_claude_on_vertex_uses_the_dated_vertex_id():
 
 
 _VERTEX_ONLY = {"ANTHROPIC_API_KEY": " ", "ANTHROPIC_VERTEX_PROJECT_ID": "p"}
+_GOOGLE_VERTEX = {"GOOGLE_GENAI_USE_VERTEXAI": "true", "GOOGLE_CLOUD_PROJECT": "p"}
 
 
 @pytest.mark.parametrize(
@@ -90,7 +91,7 @@ _VERTEX_ONLY = {"ANTHROPIC_API_KEY": " ", "ANTHROPIC_VERTEX_PROJECT_ID": "p"}
         ({"ANTHROPIC_API_KEY": "x"}, "ANTHROPIC_API_KEY"),
         (_VERTEX_ONLY, "ANTHROPIC_VERTEX_PROJECT_ID"),
         ({"GOOGLE_API_KEY": "x"}, "GOOGLE_API_KEY"),
-        ({"GOOGLE_GENAI_USE_VERTEXAI": "true"}, "GOOGLE_GENAI_USE_VERTEXAI"),
+        (_GOOGLE_VERTEX, "GOOGLE_GENAI_USE_VERTEXAI"),
         ({"GEMINI_API_KEY": "x", "GOOGLE_API_KEY": "y"}, "GEMINI_API_KEY"),
     ],
 )
@@ -290,3 +291,37 @@ def test_the_credential_hint_names_every_variable_the_adapter_reads():
             assert var in CREDENTIAL_HINT[provider], (provider, var)
     for var in _API_KEY_ENVS:
         assert var in CREDENTIAL_HINT["google"], var
+
+
+# --- MP-341: Google counts as credentialed only when its adapter could build a client --------
+
+
+@pytest.mark.parametrize(
+    "env, credentialed, named",
+    [
+        ({"GOOGLE_GENAI_USE_VERTEXAI": "true"}, False, None),
+        ({"GOOGLE_GENAI_USE_VERTEXAI": "true", "GEMINI_API_KEY": "x"}, False, None),
+        (_GOOGLE_VERTEX, True, "GOOGLE_GENAI_USE_VERTEXAI"),
+        (
+            {"GOOGLE_GENAI_USE_ENTERPRISE": "true", "GOOGLE_CLOUD_PROJECT": "p"},
+            True,
+            "GOOGLE_GENAI_USE_ENTERPRISE",
+        ),
+        ({"GOOGLE_GENAI_USE_VERTEXAI": "false", "GEMINI_API_KEY": "x"}, True, "GEMINI_API_KEY"),
+        ({"GOOGLE_GENAI_USE_VERTEXAI": "false"}, False, None),
+    ],
+)
+def test_google_credentials_match_what_the_adapter_needs(env, credentialed, named):
+    """`[M] 2026-11-27` With only GOOGLE_GENAI_USE_VERTEXAI=true set, `init` said "Credentials
+    for google are already set"; `providers/google.py` then refused to build a client without
+    GOOGLE_CLOUD_PROJECT. Once Vertex is selected the adapter ignores an API key, so a key does
+    not rescue a missing project; a false flag sends it to the key path."""
+    from modelpin.scaffold import has_credentials
+
+    assert has_credentials("google", env) is credentialed
+    setup = infer_setup([], env=env)
+    if credentialed:
+        assert setup.provider == "google"
+        assert setup.provider_source == f"{named} is set in your environment"
+    else:
+        assert setup.provider != "google"

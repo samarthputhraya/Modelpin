@@ -70,6 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in your environment`; `GOOGLE_API_KEY` and `GOOGLE_GENAI_USE_VERTEXAI` were misnamed as
   `GEMINI_API_KEY` the same way. The comment now names the variable that is set, and the
   comment above `providers:` lists `GOOGLE_API_KEY` beside `GEMINI_API_KEY`.
+- **`modelpin init` counts Google's Vertex backend as set up only with a project.** With
+  `GOOGLE_GENAI_USE_VERTEXAI=true` and no `GOOGLE_CLOUD_PROJECT`, `init` said the credentials
+  for google were already set, and `baseline` then stopped because the project was missing.
+  It now reads the Vertex switches the way the Google adapter does, including
+  `GOOGLE_GENAI_USE_ENTERPRISE` and a switch set to false.
 - **`python -m modelpin` imports the same modules as the `modelpin` command.** `python -m`
   puts the current directory first on Python's import path, which the console scripts never
   did, so a file in your repository named like one of Modelpin's dependencies was imported in
