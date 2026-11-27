@@ -26,6 +26,12 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # MP-235. `test_the_version_is_not_one_that_was_already_published` compares
+          # pyproject.toml's version with `git tag`. The default checkout is one commit deep
+          # and fetches no tags, so that guard passed on every run whatever the version said.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0

@@ -441,6 +441,11 @@ def test_the_version_is_not_one_that_was_already_published() -> None:
         pytest.skip("not a git checkout")
 
     tags = {t.strip().lstrip("v") for t in proc.stdout.splitlines() if t.strip()}
+    if not tags:
+        # MP-235. A tagless checkout (CI's default shallow clone, `git clone --depth 1`) has
+        # nothing to compare against, and an empty set made this pass whatever pyproject said.
+        # Skipped, not passed, so the report shows the guard did not run.
+        pytest.skip("this checkout has no tags; fetch them (`git fetch --tags`) to run this")
     version = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"][
         "version"
     ]
@@ -461,6 +466,39 @@ def test_the_version_is_not_one_that_was_already_published() -> None:
         "is published. Bump it before building, or PyPI will reject the upload and any "
         "breaking change in it will have been filed under a spent version number."
     )
+
+
+def test_ci_fetches_the_tags_the_version_guard_compares_against() -> None:
+    """MP-235. The guard above can only fire where `git tag` lists the released versions.
+
+    `[M] 2026-11-27` In a clone made the way CI's checkout makes one (`--depth 1`, no tags),
+    `git tag` listed 0 tags and the guard passed with pyproject.toml set back to the published
+    `0.5.7`; a full clone (20 tags) failed it. So every CI job that runs pytest must check out
+    the whole history with its tags.
+    """
+    import yaml
+
+    ci = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+    if not ci.is_file():  # an unpacked sdist ships no `.github/` (see MANIFEST.in)
+        pytest.skip("no .github/workflows/ci.yml in this tree")
+    workflow = yaml.safe_load(ci.read_text("utf-8"))
+    pytest_jobs = {
+        name: job
+        for name, job in workflow["jobs"].items()
+        if any("pytest" in str(step.get("run", "")) for step in job.get("steps", []))
+    }
+    assert pytest_jobs, "no job in ci.yml runs pytest -- this guard is checking nothing"
+    for name, job in pytest_jobs.items():
+        checkouts = [
+            s for s in job["steps"] if str(s.get("uses", "")).startswith("actions/checkout@")
+        ]
+        assert checkouts, f"ci.yml job {name!r} runs pytest without a checkout step"
+        with_ = checkouts[0].get("with") or {}
+        assert with_.get("fetch-tags") is True and with_.get("fetch-depth") == 0, (
+            f"ci.yml job {name!r} runs pytest on a checkout without its tags "
+            f"(with: {with_}); the version guard then compares against nothing. Set "
+            "`fetch-depth: 0` and `fetch-tags: true` on its actions/checkout step."
+        )
 
 
 def test_the_sdist_ships_the_actions_docs_its_own_tests_read() -> None:
